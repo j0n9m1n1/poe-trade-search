@@ -60,6 +60,7 @@ struct SearchRequest {
 
     QString indexed; // "" = any
     OptDouble priceMin;
+    bool collapse = false; // 계정별 묶기
     QString saleType; // "" = 거래소 기본(즉시구매/고정가)
 };
 

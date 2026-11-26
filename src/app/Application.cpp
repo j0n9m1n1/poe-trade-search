@@ -364,6 +364,7 @@ void Application::onHotkey(int id)
 ParseOptions Application::parseOptions() const
 {
     ParseOptions o;
+    o.statRangePct = m_cfg.searchStatRange;
     o.autoSelectPseudo = m_cfg.autoSelectPseudo;
     o.autoCheckTotalRes = m_cfg.autoCheckTotalres;
     o.autoCheckUnique = m_cfg.autoCheckUnique;
@@ -443,7 +444,7 @@ void Application::openTrade()
 
     RequestContext ctx;
     ctx.server = server;
-    ctx.status = m_cfg.tradeStatus;
+    ctx.status = m_popup->tradeStatus();
     ctx.indexed = QueryBuilder::indexedFromDays(m_cfg.searchBeforeDay);
     ctx.forBrowser = true;
     QString warn;
@@ -476,6 +477,54 @@ QString Application::currencyName(Game g, Lang l, const QString& id) const
     return id;
 }
 
+// ------------------------------------------------------------ 환율
+
+Rates Application::ratesFor(Game g, const QString& league) const
+{
+    return m_rates.value(gameKey(g) + QLatin1Char('|') + league).rates;
+}
+
+void Application::ensureRates(Game g, Lang server, const QString& league, std::function<void()> then)
+{
+    const QString key = gameKey(g) + QLatin1Char('|') + league;
+    RateState& rs = m_rates[key];
+    if (rs.rates.fresh()) {
+        then();
+        return;
+    }
+    rs.waiters.push_back(std::move(then));
+    if (rs.loading)
+        return;
+    rs.loading = true;
+
+    // 기준 화폐로 디바인(과 보조 화폐)을 사는 일괄 교환 시세의 중앙값
+    const QString base = Rates::baseFor(g);
+    const QStringList targets = {QStringLiteral("divine"),
+                                 g == Game::Poe1 ? QStringLiteral("exalted") : QStringLiteral("chaos")};
+    auto fresh = std::make_shared<Rates>();
+    fresh->base = base;
+    auto remaining = std::make_shared<int>(targets.size());
+    for (const QString& t : targets) {
+        m_client->exchange(g, server, league, base, t, [this, key, t, fresh, remaining](const TradeClient::ExchangeResult& r) {
+            const double ratio = medianRatio(r.listings); // 기준 화폐 몇 개 = t 1개
+            if (ratio > 0)
+                fresh->toBase.insert(t, ratio);
+            if (--(*remaining) > 0)
+                return;
+            RateState& st = m_rates[key];
+            fresh->at = QDateTime::currentDateTimeUtc();
+            st.rates = *fresh;
+            st.loading = false;
+            const auto waiters = st.waiters;
+            st.waiters.clear();
+            for (const auto& w : waiters)
+                w();
+        });
+    }
+}
+
+// ------------------------------------------------------------ 시세
+
 void Application::priceCheck()
 {
     if (!m_popup->hasItem())
@@ -488,83 +537,130 @@ void Application::priceCheck()
     const Game g = it.game;
     const QString league = m_cfg.leagueFor(g);
     const Lang server = m_popup->server();
+    m_popup->priceBusy(QStringLiteral("시세 확인중..."));
 
-    const QString want = m_popup->exchangeWant();
-    if (!want.isEmpty()) {
-        m_popup->priceBusy(QStringLiteral("교환 시세 확인중..."));
-        const QString haveName = currencyName(g, server, it.exchangeId);
-        const QString wantName = currencyName(g, server, want);
-        m_client->exchange(
-            g, server, league, it.exchangeId, want,
-            [this, token, haveName, wantName](const TradeClient::ExchangeResult& r) {
+    // 환율 먼저 (30분에 한 번, 일괄 교환 요청 2개)
+    ensureRates(g, server, league, [this, token, it, g, league, server]() {
+        if (token != m_priceToken)
+            return;
+        const Rates rates = ratesFor(g, league);
+        const QString want = m_popup->exchangeWant();
+
+        // ---- 일괄 교환
+        if (!want.isEmpty()) {
+            const QString haveName = currencyName(g, server, it.exchangeId);
+            const QString wantName = currencyName(g, server, want);
+            m_popup->priceStatus(QStringLiteral("교환 시세 확인중..."));
+            m_client->exchange(
+                g, server, league, it.exchangeId, want,
+                [this, token, haveName, wantName, want, rates](const TradeClient::ExchangeResult& r) {
+                    if (token != m_priceToken)
+                        return;
+                    if (!r.error.isEmpty()) {
+                        m_popup->priceIdle(QStringLiteral("교환 시세 실패: %1 (클릭해서 다시)").arg(r.error));
+                        return;
+                    }
+                    m_popup->priceColumns({QStringLiteral("1개당"), QStringLiteral("환산"), QStringLiteral("재고"),
+                                           QStringLiteral("등록"), QStringLiteral("판매자")});
+                    // 나한테 좋은(1개당 많이 주는) 순서. 중앙값 절반도 안 되는 미끼 매물은 흐리게
+                    QVector<Listing> rows = r.listings;
+                    std::stable_sort(rows.begin(), rows.end(),
+                                     [](const Listing& a, const Listing& b) { return a.amount > b.amount; });
+                    QVector<double> perOne;
+                    for (const Listing& l : rows)
+                        perOne << l.amount;
+                    const double mid = perOne.isEmpty() ? 0 : perOne[perOne.size() / 2];
+                    for (const Listing& l : rows) {
+                        m_popup->priceAddRow({PriceSummary::formatAmount(l.amount) + QLatin1Char(' ') + wantName,
+                                              formatConversion(l.amount, want, rates), QString::number(l.stock),
+                                              PriceSummary::ago(l.indexed), l.account},
+                                             l.amount < mid * 0.5, l.online,
+                                             QStringLiteral("%1 %2 → %3 %4")
+                                                 .arg(PriceSummary::formatAmount(l.payAmount), haveName,
+                                                      PriceSummary::formatAmount(l.getAmount), wantName));
+                    }
+                    QString summary = QStringLiteral("해당 교환 매물 없음");
+                    if (!perOne.isEmpty()) {
+                        // 상위 5개 중앙값
+                        const QVector<double> top = perOne.mid(0, 5);
+                        const double med = top[top.size() / 2];
+                        double conv = 0;
+                        summary = QStringLiteral("1개 ≈ %1 %2").arg(PriceSummary::formatAmount(med), wantName);
+                        if (rates.convert(med, want, &conv) && want != rates.base)
+                            summary += QStringLiteral(" (%1)").arg(formatValue(conv, rates));
+                        summary += QStringLiteral(" · 매물 %1").arg(r.total);
+                    }
+                    m_popup->priceDone(summary, QStringLiteral("%1/%2 건").arg(r.listings.size()).arg(r.total));
+                },
+                token);
+            return;
+        }
+
+        // ---- 일반 시세
+        RequestContext ctx;
+        ctx.server = server;
+        ctx.status = m_popup->tradeStatus();
+        ctx.indexed = QueryBuilder::indexedFromDays(m_cfg.searchBeforeDay);
+        ctx.priceMin = m_popup->priceMin();
+        ctx.collapse = m_popup->collapse();
+        ctx.forBrowser = false;
+        const SearchRequest req = makeRequest(it, m_popup->collectState(), m_kw, &m_dbs[gi(g)], ctx);
+        const QJsonObject q = QueryBuilder::build(req, &m_dbs[gi(g)][req.lang]);
+        const Lang lang = req.lang;
+
+        // 가격 / 환산 / ilvl / 퀄 / DPS / 등록 / 판매자
+        QVector<int> hidden;
+        if (!rates.valid() || rates.toBase.isEmpty())
+            hidden << 1;
+        if (!it.isWeapon)
+            hidden << 4;
+        if (!(it.isGear || it.isJewel || it.isFlask))
+            hidden << 2;
+        m_popup->priceColumns({QStringLiteral("가격"), QStringLiteral("환산"), QStringLiteral("ilvl"), QStringLiteral("퀄"),
+                               QStringLiteral("DPS"), QStringLiteral("등록"), QStringLiteral("판매자")},
+                              hidden);
+        m_popup->priceStatus(QStringLiteral("시세 확인중..."));
+        m_client->priceCheck(
+            g, lang, league, q, m_popup->listCount(),
+            [this, token, g, lang, rates](const TradeClient::PriceProgress& p) {
                 if (token != m_priceToken)
                     return;
-                if (!r.error.isEmpty()) {
-                    m_popup->priceIdle(QStringLiteral("교환 시세 실패: %1 (클릭해서 다시)").arg(r.error));
+                const QDateTime now = QDateTime::currentDateTimeUtc();
+                for (const Listing& l : p.listings) {
+                    const bool stale = l.indexed.isValid() && l.indexed.daysTo(now) >= 3;
+                    m_popup->priceAddRow({PriceSummary::formatAmount(l.amount) + QLatin1Char(' ') +
+                                              shortCurrencyName(l.currency).replace(QStringLiteral("-"), QStringLiteral(" ")),
+                                          formatConversion(l.amount, l.currency, rates),
+                                          l.ilvl >= 0 ? QString::number(l.ilvl) : QString(),
+                                          l.quality >= 0 ? QString::number(l.quality) : QString(),
+                                          l.dps > 0 ? QString::number(l.dps, 'f', 1) : QString(),
+                                          PriceSummary::ago(l.indexed), l.account},
+                                         stale, l.online, currencyName(g, lang, l.currency));
+                }
+                m_popup->priceStatus(QStringLiteral("시세 확인중... %1/%2").arg(p.fetched).arg(p.requested));
+            },
+            [this, token, g, lang, it, rates](const TradeClient::PriceProgress& all, const QString& error) {
+                if (token != m_priceToken)
+                    return;
+                learnIcon(it, all.listings);
+                if (!error.isEmpty()) {
+                    m_popup->priceIdle(QStringLiteral("시세 조회 실패: %1 (클릭해서 다시)").arg(error));
                     return;
                 }
-                QStringList lines;
-                double best = 0, worst = 0;
-                for (const Listing& l : r.listings) {
-                    lines << QStringLiteral("1 %1 → %2 %3   [%4]  재고 %5")
-                                 .arg(haveName, PriceSummary::formatAmount(l.amount), wantName, l.account)
-                                 .arg(l.stock);
-                    best = best == 0 ? l.amount : qMax(best, l.amount);
-                    worst = worst == 0 ? l.amount : qMin(worst, l.amount);
+                const QString dist =
+                    PriceSummary::summarize(all.listings, [this, g, lang](const QString& id) { return currencyName(g, lang, id); });
+                QString summary;
+                if (all.listings.isEmpty()) {
+                    summary = all.total == 0 ? QStringLiteral("해당 물품의 거래가 없음") : QStringLiteral("가격 붙은 매물 없음");
+                } else {
+                    const Estimate e = estimatePrice(all.listings, rates);
+                    summary = e.ok ? formatEstimate(e, rates, all.total) : dist;
                 }
-                m_popup->priceAppend(lines);
-                const QString summary =
-                    r.listings.isEmpty()
-                        ? QStringLiteral("해당 교환 매물 없음")
-                        : QStringLiteral("1개당 %1 ~ %2 %3")
-                              .arg(PriceSummary::formatAmount(best), PriceSummary::formatAmount(worst), wantName);
-                m_popup->priceDone(summary, QStringLiteral("%1/%2 건").arg(r.listings.size()).arg(r.total));
+                m_popup->priceDone(summary, QStringLiteral("%1/%2 검색").arg(all.listings.size()).arg(all.total),
+                                   dist.isEmpty() ? QString() : QStringLiteral("분포: ") + dist);
             },
             token);
-        return;
-    }
-
-    RequestContext ctx;
-    ctx.server = server;
-    ctx.status = m_cfg.tradeStatus;
-    ctx.indexed = QueryBuilder::indexedFromDays(m_cfg.searchBeforeDay);
-    ctx.priceMin = m_popup->priceMin();
-    ctx.forBrowser = false;
-    const SearchRequest req = makeRequest(it, m_popup->collectState(), m_kw, &m_dbs[gi(g)], ctx);
-    const QJsonObject q = QueryBuilder::build(req, &m_dbs[gi(g)][req.lang]);
-
-    m_popup->priceBusy(QStringLiteral("시세 확인중..."));
-    const Lang lang = req.lang;
-    m_client->priceCheck(
-        g, lang, league, q, m_popup->listCount(),
-        [this, token, g, lang](const TradeClient::PriceProgress& p) {
-            if (token != m_priceToken)
-                return;
-            QStringList lines;
-            for (const Listing& l : p.listings) {
-                lines << QStringLiteral("%1 %2   [%3]  %4")
-                             .arg(PriceSummary::formatAmount(l.amount), currencyName(g, lang, l.currency), l.account,
-                                  PriceSummary::ago(l.indexed));
-            }
-            m_popup->priceAppend(lines);
-            m_popup->priceStatus(QStringLiteral("시세 확인중... %1/%2").arg(p.fetched).arg(p.requested));
-        },
-        [this, token, g, lang, it](const TradeClient::PriceProgress& all, const QString& error) {
-            if (token != m_priceToken)
-                return;
-            learnIcon(it, all.listings);
-            if (!error.isEmpty()) {
-                m_popup->priceIdle(QStringLiteral("시세 조회 실패: %1 (클릭해서 다시)").arg(error));
-                return;
-            }
-            const QString summary =
-                all.listings.isEmpty()
-                    ? (all.total == 0 ? QStringLiteral("해당 물품의 거래가 없음") : QStringLiteral("가격 붙은 매물 없음"))
-                    : PriceSummary::summarize(all.listings,
-                                              [this, g, lang](const QString& id) { return currencyName(g, lang, id); });
-            m_popup->priceDone(summary, QStringLiteral("%1/%2 검색").arg(all.listings.size()).arg(all.total));
-        },
-        token);
+    });
 }
 
 // ------------------------------------------------------------ 아이콘

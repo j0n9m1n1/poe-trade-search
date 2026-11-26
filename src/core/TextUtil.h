@@ -28,6 +28,13 @@ QString stripMarkup(const QString& s);
 // Ctrl+Alt+C 고급 설명의 "+52(40-59)" -> "+52"
 QString stripAdvancedRanges(const QString& s);
 
+// 고급 설명 줄의 숫자마다 붙은 범위. stripAdvancedRanges() 한 텍스트의 tokens() 와 순서가 같음
+struct NumRange {
+    bool has = false;
+    double lo = 0, hi = 0;
+};
+QVector<NumRange> numberRanges(const QString& raw);
+
 // "— Unscalable Value" 같은 꼬리 제거
 QString stripDashSuffix(const QString& s);
 

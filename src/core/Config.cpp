@@ -105,6 +105,8 @@ bool Config::load(const QString& path, QString* error)
     tradeStatus = s("trade_status", d.tradeStatus);
     dataMaxAgeDays = i("data_max_age_days", d.dataMaxAgeDays);
     autoPriceCheck = b("auto_price_check", searchAutoDelay > 0);
+    searchStatRange = qBound(0, i("search_stat_range", d.searchStatRange), 50);
+    collapseListings = b("collapse_listings", d.collapseListings);
 
     shortcuts.clear();
     const QJsonValue sv = root.value(QStringLiteral("shortcuts"));
@@ -138,6 +140,8 @@ bool Config::save(const QString& path, QString* error) const
     o.insert(QStringLiteral("search_auto_delay"), searchAutoDelay);
     o.insert(QStringLiteral("auto_price_check"), autoPriceCheck);
     o.insert(QStringLiteral("search_list_count"), searchListCount);
+    o.insert(QStringLiteral("search_stat_range"), searchStatRange);
+    o.insert(QStringLiteral("collapse_listings"), collapseListings);
     o.insert(QStringLiteral("search_price_minimum"), searchPriceMinimum);
     o.insert(QStringLiteral("search_before_day"), searchBeforeDay);
     o.insert(QStringLiteral("auto_check_unique"), autoCheckUnique);

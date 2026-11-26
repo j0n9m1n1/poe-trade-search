@@ -7,6 +7,7 @@
 #include <QDateTime>
 #include <QObject>
 #include <QString>
+#include <QUrl>
 #include <functional>
 
 namespace pts {
@@ -22,6 +23,7 @@ public:
     DataManager(const QString& dataDir, TradeClient* client, QObject* parent = nullptr);
 
     static QStringList kinds();
+    static QUrl matcherUrl(Game g, Lang l);
     QString cacheDir(Game g, Lang l) const;
     bool hasCache(Game g) const;
     QDateTime updatedAt(Game g) const;

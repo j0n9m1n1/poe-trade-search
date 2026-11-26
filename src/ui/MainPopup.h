@@ -11,11 +11,10 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
-class QListWidget;
 class QPushButton;
 class QTabWidget;
+class QTableWidget;
 class QVBoxLayout;
-class QWidget;
 
 namespace pts {
 
@@ -29,26 +28,30 @@ class MainPopup : public QWidget {
 public:
     explicit MainPopup(const Keywords& kw, QWidget* parent = nullptr);
 
-    void showItem(const ParsedItem& it, const GameDb* gdb, const Config& cfg, Lang server);
+    void showItem(const ParsedItem& parsed, const GameDb* gdb, const Config& cfg, Lang server);
     bool hasItem() const { return m_hasItem; }
+    const ParsedItem& parsedItem() const { return m_parsed; }
 
     ParsedItem collectItem() const; // UI 에서 고친 값 반영
     ItemFilterState collectState() const;
     Lang server() const;
     OptDouble priceMin() const;
     int listCount() const;
+    bool collapse() const;
+    QString tradeStatus() const;
 
     // 일괄 교환: 선택된 받을 화폐 static id (없으면 빈 문자열)
     QString exchangeWant() const;
-    QString exchangeHave() const { return m_item.exchangeId; }
+    QString exchangeHave() const { return m_parsed.exchangeId; }
 
     void setIcon(const QString& imagePath);
 
     // 시세 표시
-    void priceBusy(const QString& msg);   // 새 조회 시작 (목록 비움)
+    void priceBusy(const QString& msg);   // 새 조회 시작 (표 비움)
     void priceStatus(const QString& msg); // 진행 문구만 바꿈
-    void priceAppend(const QStringList& lines);
-    void priceDone(const QString& summary, const QString& count);
+    void priceColumns(const QStringList& headers, const QVector<int>& hidden = {});
+    void priceAddRow(const QStringList& cells, bool dim, int online, const QString& tooltip = QString());
+    void priceDone(const QString& summary, const QString& count, const QString& tooltip = QString());
     void priceIdle(const QString& msg);
 
     void setLeagueTitle(const QString& league);
@@ -71,14 +74,22 @@ private:
     void clearRows();
     void installActivator(QWidget* w);
     void markStale();
+    void applyPresetAndRender();
+    void renderRows();
+    void renderMisc(const ItemFilterState& st);
+    int rangePct() const;
 
     const Keywords& m_kw;
     const GameDb* m_gdb = nullptr;
-    ParsedItem m_item;
+    ParsedItem m_parsed; // 파서 결과 그대로
+    ParsedItem m_item;   // 프리셋/범위 적용된 것 (행 렌더 기준)
     bool m_hasItem = false;
     QString m_idleText;
+    int m_cfgRange = 10;
 
     QComboBox* m_rarity;
+    QComboBox* m_preset;
+    QComboBox* m_range;
     QComboBox* m_server;
     QPushButton* m_settings;
     QLabel* m_icon;
@@ -119,9 +130,11 @@ private:
     QCheckBox* m_byCategory;
 
     QPushButton* m_price;
-    QListWidget* m_prices;
+    QTableWidget* m_prices;
     QLineEdit* m_priceMin;
     QComboBox* m_listCount;
+    QComboBox* m_status;
+    QCheckBox* m_collapse;
     QLabel* m_priceCount;
 
     QPushButton* m_search;

@@ -148,9 +148,9 @@ QString ItemParser::resolveCategory(const ParsedItem& it, const TradeDb& db) con
     return {};
 }
 
-ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const QVector<StatMatch>& ms,
-                               const CleanLine& first, const QString& raw, const ParseOptions& opt,
-                               bool* optionStatSeen) const
+ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const MatcherDb& md,
+                               const QVector<StatMatch>& ms, const CleanLine& first, const QString& raw,
+                               const QString& rangeSrc, const ParseOptions& opt, bool* optionStatSeen) const
 {
     const bool localContext =
         (it.top == QStringLiteral("weapon") || it.top == QStringLiteral("armour")) &&
@@ -253,13 +253,20 @@ ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const QV
 
     const StatEntry& pe = db.stat(mod.cands[primary].entry);
     QVector<double> values;
+    QVector<int> hashIdx;
     for (const auto& m : ms) {
         if (m.entry == mod.cands[primary].entry) {
             values = m.values;
+            hashIdx = m.hashIdx;
             break;
         }
     }
     mod.statKey = pe.key;
+    // 좋은 방향: 매처 데이터 > 원본 역방향 목록 > 높을수록 좋음
+    if (const auto b = md.betterOf(pe.key))
+        mod.better = *b;
+    else
+        mod.better = m_kw.isReverse(pe.key) ? -1 : 1;
 
     // pseudo 후보 추가
     if (findGroup(QStringLiteral("pseudo")) < 0) {
@@ -304,19 +311,41 @@ ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const QV
         mod.checked = true;
         if (optionStatSeen)
             *optionStatSeen = true;
-    } else {
-        if (!values.isEmpty())
-            mod.min = values[0];
-        if (values.size() >= 2)
-            mod.max = values[1];
-        // "# to #" / "#~#" 범위형은 평균값을 최소로
+    } else if (!values.isEmpty()) {
+        // 고급 설명 범위 (줄의 n번째 숫자 -> 범위)
+        const QVector<text::NumRange> ranges = rangeSrc.isEmpty() ? QVector<text::NumRange>() : text::numberRanges(rangeSrc);
+        auto rangeAt = [&](int k) -> const text::NumRange* {
+            if (k < 0 || k >= hashIdx.size())
+                return nullptr;
+            const int ti = hashIdx[k];
+            return ti >= 0 && ti < ranges.size() && ranges[ti].has ? &ranges[ti] : nullptr;
+        };
         static const QRegularExpression rangeRe(QStringLiteral("#\\s*(?:to|~|-)\\s*#"));
-        if (mod.min && mod.max && rangeRe.match(pe.text).hasMatch()) {
-            mod.min = std::trunc((*mod.min + *mod.max) / 2.0 * 10.0) / 10.0;
-            mod.max.reset();
+        if (values.size() >= 2 && rangeRe.match(pe.text).hasMatch()) {
+            // "# to #" / "#~#" 범위형은 평균
+            mod.value = std::trunc((values[0] + values[1]) / 2.0 * 10.0) / 10.0;
+            const auto* a = rangeAt(0);
+            const auto* b = rangeAt(1);
+            if (a && b) {
+                mod.rollLo = (a->lo + b->lo) / 2.0;
+                mod.rollHi = (a->hi + b->hi) / 2.0;
+            }
+        } else {
+            // 첫 번째 # 이 검색 값 (나머지 #은 원본처럼 max 로 쓰지 않음 - 다른 의미의 수치라서)
+            mod.value = values[0];
+            if (const auto* a = rangeAt(0)) {
+                // 매처 negate 로 부호가 뒤집힌 경우 범위도 뒤집음
+                const bool neg = values[0] < 0 && a->lo >= 0;
+                mod.rollLo = neg ? -a->hi : a->lo;
+                mod.rollHi = neg ? -a->lo : a->hi;
+            }
         }
-        if (m_kw.isReverse(pe.key))
-            std::swap(mod.min, mod.max);
+        if (mod.value && mod.rollLo && mod.rollHi) {
+            const double lo = *mod.rollLo, hi = *mod.rollHi;
+            double pct = hi > lo ? (*mod.value - lo) / (hi - lo) * 100.0 : 100.0;
+            pct = qBound(0.0, pct, 100.0);
+            mod.rollPct = mod.better < 0 ? 100.0 - pct : pct;
+        }
     }
 
     QString t = pe.text;
@@ -373,6 +402,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
 
     const GameDb& gdb = m_dbs[gi(game)];
     const TradeDb& db = gdb[L];
+    const MatcherDb& md = gdb.matchers[li(L)];
     if (!db.isLoaded())
         return fail(QStringLiteral("data not loaded"));
 
@@ -643,9 +673,11 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                 if (x.modType.isEmpty())
                     x.modType = hdrType;
                 x.tier = hdrTier;
-                t = text::stripDashSuffix(text::stripAdvancedRanges(t)).trimmed();
+                const QString withRanges = text::stripDashSuffix(t).trimmed();
+                t = text::stripAdvancedRanges(withRanges).trimmed();
                 const QString al = m_kw.alias(L, t);
                 x.text = al.isEmpty() ? t : al;
+                x.rangeSrc = al.isEmpty() ? withRanges : QString();
                 cl.push_back(x);
             }
 
@@ -658,6 +690,28 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
             for (int i = 0; i < cl.size();) {
                 int consumed = 0;
                 QVector<StatMatch> ms = db.match(texts, i, &consumed);
+                if (ms.isEmpty() && md.isLoaded()) {
+                    // 매처: 숫자 없는 100% 문구, "감소" 표기 등 게임 문구 -> 거래소 stat
+                    const QVector<MatcherHit> hits = md.match(texts, i, &consumed);
+                    if (!hits.isEmpty()) {
+                        const MatcherHit& h = hits.first();
+                        const MatcherStat& st = md.stat(h.stat);
+                        QVector<double> vals = h.values;
+                        if (st.inverted) {
+                            for (double& v : vals)
+                                v = -v;
+                        }
+                        for (const auto& grp : st.ids) {
+                            for (const QString& id : grp.second) {
+                                const int e = db.findStat(id);
+                                if (e >= 0) {
+                                    ms.push_back({e, vals, h.hashIdx});
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
                 if (ms.isEmpty() && L == Lang::En && !texts[i].contains(QRegularExpression(QStringLiteral("\\d")))) {
                     // "Blind Enemies on Hit" 처럼 100% 라 숫자가 빠진 줄 -> "#% chance to ..."
                     QStringList t2 = texts;
@@ -678,10 +732,15 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                     ++i;
                     continue;
                 }
-                QStringList raws;
-                for (int k = i; k < i + consumed; ++k)
+                QStringList raws, rsrc;
+                bool rangesOk = true;
+                for (int k = i; k < i + consumed; ++k) {
                     raws << cl[k].raw;
-                secMods.push_back(buildMod(it, db, ms, cl[i], raws.join(QLatin1Char('\n')), opt, &optionStatSeen));
+                    rsrc << cl[k].rangeSrc;
+                    rangesOk = rangesOk && !cl[k].rangeSrc.isEmpty();
+                }
+                secMods.push_back(buildMod(it, db, md, ms, cl[i], raws.join(QLatin1Char('\n')),
+                                           rangesOk ? rsrc.join(QLatin1Char('\n')) : QString(), opt, &optionStatSeen));
                 ++matched;
                 i += consumed;
             }
@@ -813,12 +872,12 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         text::firstNumber(props.value(QStringLiteral("attacks_per_second")), &aps);
         double speedIncr = 0, physIncr = 0;
         for (const auto& m : it.mods) {
-            if (!m.min)
+            if (!m.value || m.unmatched)
                 continue;
             if (m.statKey == m_kw.localAttackSpeed())
-                speedIncr += *m.min;
+                speedIncr += *m.value;
             else if (m.statKey == m_kw.physicalDamageIncrease())
-                physIncr += *m.min;
+                physIncr += *m.value;
         }
         if (speedIncr > 0 && aps > 0) {
             double base = aps / (speedIncr / 100.0 + 1.0);
@@ -836,7 +895,50 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         it.hasDps = aps > 0 && (phys + ele + chaos) > 0;
     }
 
+    applyStatRanges(it, opt.statRangePct);
     return it;
+}
+
+bool exactValuesOnly(const ParsedItem& it)
+{
+    // APT: 미러/타락 매직은 더 못 바꾸니 정확값
+    return it.mirrored || (it.corrupted && it.rarityId == QStringLiteral("magic"));
+}
+
+void applyStatRange(ParsedMod& m, int pct, bool unique)
+{
+    if (!m.value || m.optionStat || m.unmatched)
+        return;
+    const double v = *m.value;
+    double delta = 0;
+    if (pct > 0) {
+        if (unique && m.rollLo && m.rollHi && *m.rollHi > *m.rollLo)
+            delta = (*m.rollHi - *m.rollLo) * pct / 100.0; // 고유: 롤 범위 폭 기준
+        else
+            delta = std::fabs(v) * pct / 100.0;
+        const bool integral = std::fabs(v - std::round(v)) < 1e-9;
+        delta = integral ? std::floor(delta) : std::floor(delta * 10.0) / 10.0; // 작은 정수(소켓 수 등)는 그대로
+        if (unique && m.rollPct && *m.rollPct >= 99.999)
+            delta = 0; // 최대 롤 고유는 정확값
+    }
+    m.min.reset();
+    m.max.reset();
+    if (m.better > 0) {
+        m.min = v - delta;
+    } else if (m.better < 0) {
+        m.max = v + delta;
+    } else {
+        m.min = v - delta;
+        m.max = v + delta;
+    }
+}
+
+void applyStatRanges(ParsedItem& it, int pct)
+{
+    const bool unique = it.rarityId == QStringLiteral("unique");
+    const int p = exactValuesOnly(it) ? 0 : pct;
+    for (ParsedMod& m : it.mods)
+        applyStatRange(m, p, unique);
 }
 
 } // namespace pts

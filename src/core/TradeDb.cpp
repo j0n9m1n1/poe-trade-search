@@ -205,17 +205,23 @@ QString TradeDb::groupLabel(const QString& id) const
     return id;
 }
 
-bool TradeDb::verify(const StatEntry& e, const QString& raw, QVector<double>* values)
+bool TradeDb::verify(const QVector<text::Token>& pattern, const QString& raw, QVector<double>* values,
+                     QVector<int>* hashIdx)
 {
     const QVector<text::Token> t = text::tokens(raw);
-    if (t.size() != e.toks.size())
+    if (t.size() != pattern.size())
         return false;
     values->clear();
+    if (hashIdx)
+        hashIdx->clear();
     for (int i = 0; i < t.size(); ++i) {
-        if (e.toks[i].hash)
+        if (pattern[i].hash) {
             values->push_back(t[i].value);
-        else if (qAbs(qAbs(t[i].value) - qAbs(e.toks[i].value)) > 1e-6)
+            if (hashIdx)
+                hashIdx->push_back(i);
+        } else if (qAbs(qAbs(t[i].value) - qAbs(pattern[i].value)) > 1e-6) {
             return false;
+        }
     }
     return true;
 }
@@ -240,13 +246,14 @@ QVector<StatMatch> TradeDb::match(const QStringList& lines, int start, int* cons
             if (text::normalizeStat(joined) != e.norm)
                 continue;
             QVector<double> vals;
-            if (!verify(e, joined, &vals))
+            QVector<int> hidx;
+            if (!verify(e.toks, joined, &vals, &hidx))
                 continue;
             if (e.lines > bestN) {
                 out.clear();
                 bestN = e.lines;
             }
-            out.push_back({idx, vals});
+            out.push_back({idx, vals, hidx});
         }
     }
 
@@ -256,8 +263,9 @@ QVector<StatMatch> TradeDb::match(const QStringList& lines, int start, int* cons
         if (it != m_byNorm.constEnd()) {
             for (int idx : *it) {
                 QVector<double> vals;
-                if (verify(m_stats[idx], lines[start], &vals))
-                    out.push_back({idx, vals});
+                QVector<int> hidx;
+                if (verify(m_stats[idx].toks, lines[start], &vals, &hidx))
+                    out.push_back({idx, vals, hidx});
             }
         }
     }

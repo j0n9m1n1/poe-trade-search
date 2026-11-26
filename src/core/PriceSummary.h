@@ -17,6 +17,12 @@ struct Listing {
     QString icon;
     QString itemName;
     QString baseType;
+    // 시세 표 컬럼
+    int ilvl = -1;
+    int quality = -1;
+    double dps = 0;
+    int online = -1; // 0 오프라인 / 1 온라인 / 2 자리비움(afk)
+    int stack = 0;
     // 일괄 교환용
     double payAmount = 0; // 내가 내는 양 (have)
     double getAmount = 0; // 받는 양 (want)

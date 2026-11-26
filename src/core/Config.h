@@ -40,6 +40,8 @@ struct Config {
     QString tradeStatus = QStringLiteral("available");
     int dataMaxAgeDays = 7;
     bool autoPriceCheck = false; // 창 뜰 때 바로 시세 조회 (원본: search_auto_delay > 0)
+    int searchStatRange = 10;    // 옵션 최소값을 값의 N% 낮춰서 채움 (0 = 정확값)
+    bool collapseListings = true; // 시세 조회 시 계정별 묶기
 
     QVector<Shortcut> shortcuts;
 

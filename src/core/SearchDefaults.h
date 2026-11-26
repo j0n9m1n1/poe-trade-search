@@ -31,11 +31,19 @@ struct ItemFilterState {
 
 ItemFilterState defaultFilterState(const ParsedItem& it);
 
+// 프리셋 (APT 참고)
+//  기본: 파서 결과 그대로 (pseudo 우선, 자동 체크)
+//  정확: pseudo 대신 원래 옵션, T1~T2 만 체크 (등급 모르면 일반 옵션 전부), 정확값
+//  베이스: 옵션 전부 해제, 아이템 레벨/영향 위주
+enum class Preset { Default = 0, Exact = 1, Base = 2 };
+ParsedItem applyPreset(const ParsedItem& parsed, Preset p, int rangePct, ItemFilterState* st);
+
 struct RequestContext {
     Lang server = Lang::En;
     QString status = QStringLiteral("available");
     QString indexed;
     OptDouble priceMin;
+    bool collapse = false;  // 계정별 묶기
     bool forBrowser = true; // false 면 꺼진 옵션은 아예 안 보냄 (시세 조회용)
 };
 

@@ -74,6 +74,27 @@ QString stripAdvancedRanges(const QString& s)
     return t;
 }
 
+QVector<NumRange> numberRanges(const QString& raw)
+{
+    static const QRegularExpression re(QStringLiteral(
+        "[+\\-]?\\d+(?:\\.\\d+)?(?:\\(\\s*([+\\-]?\\d+(?:\\.\\d+)?)\\s*(?:[-~–—]\\s*([+\\-]?\\d+(?:\\.\\d+)?))?\\s*\\))?"));
+    QVector<NumRange> out;
+    auto it = re.globalMatch(raw);
+    while (it.hasNext()) {
+        const auto m = it.next();
+        NumRange r;
+        if (m.capturedLength(1) > 0) {
+            r.has = true;
+            r.lo = m.captured(1).toDouble();
+            r.hi = m.capturedLength(2) > 0 ? m.captured(2).toDouble() : r.lo;
+            if (r.lo > r.hi)
+                std::swap(r.lo, r.hi);
+        }
+        out.push_back(r);
+    }
+    return out;
+}
+
 QString stripDashSuffix(const QString& s)
 {
     static const QRegularExpression re(QStringLiteral("\\s+—\\s+.*$"));

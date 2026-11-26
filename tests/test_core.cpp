@@ -9,6 +9,7 @@
 #include "core/ItemParser.h"
 #include "core/JsonUtil.h"
 #include "core/Keywords.h"
+#include "core/PriceEstimate.h"
 #include "core/PriceSummary.h"
 #include "core/QueryBuilder.h"
 #include "core/TextUtil.h"
@@ -423,6 +424,132 @@ private slots:
         // 매칭 못 한 줄은 검색 요청에 안 들어감
         const SearchRequest r = makeRequest(*it, defaultFilterState(*it), kw, &dbs[0], RequestContext{});
         QCOMPARE(r.stats.size(), 2);
+    }
+
+    void matcherNegateAndRoll()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        QVERIFY2(dbs[0].matchers[li(Lang::En)].isLoaded(), "matchers.ndjson 필요");
+        auto it = parse(QStringLiteral("poe1_en_reduced.txt"), Game::Poe1);
+        QVERIFY(it);
+        const ParsedMod* attr = findMod(*it, QStringLiteral("stat_3639275092"));
+        QVERIFY2(attr, "reduced -> increased 의 음수 (매처 negate)");
+        QCOMPARE(*attr->value, -32.0);
+        QCOMPARE(attr->better, -1);
+        QVERIFY(!attr->min);
+        QCOMPARE(*attr->max, -32.0);
+        for (const auto& m : it->mods)
+            QVERIFY2(!m.unmatched, qPrintable(m.raw));
+
+        auto adv = parse(QStringLiteral("poe1_en_advanced.txt"), Game::Poe1);
+        QVERIFY(adv);
+        const ParsedMod* life = findMod(*adv, QStringLiteral("stat_3299347043"));
+        QVERIFY(life && life->rollPct);
+        QVERIFY(qAbs(*life->rollPct - 44.4) < 0.1); // 64 in 60-69
+        QCOMPARE(*life->rollLo, 60.0);
+        QCOMPARE(*life->rollHi, 69.0);
+    }
+
+    void statRanges()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        ParseOptions o;
+        o.statRangePct = 10;
+        auto it = parse(QStringLiteral("poe1_en_rare_ring.txt"), Game::Poe1, o);
+        QVERIFY(it);
+        QCOMPARE(*findMod(*it, QStringLiteral("stat_3299347043"))->min, 37.0); // 41 - floor(4.1)
+        QCOMPARE(*findMod(*it, QStringLiteral("stat_3372524247"))->min, 35.0); // 38 - floor(3.8)
+        QCOMPARE(*findMod(*it, QStringLiteral("stat_4277795662"))->min, 14.0);
+
+        // 고유: 롤 범위 폭 기준
+        ParsedMod m;
+        m.value = 55;
+        m.rollLo = 40;
+        m.rollHi = 60;
+        m.rollPct = 75;
+        applyStatRange(m, 10, true);
+        QCOMPARE(*m.min, 53.0);
+        // 최대 롤 고유는 정확값
+        m.value = 60;
+        m.rollPct = 100;
+        applyStatRange(m, 10, true);
+        QCOMPARE(*m.min, 60.0);
+        // 낮을수록 좋은 것은 max 쪽으로
+        ParsedMod r;
+        r.value = 40;
+        r.better = -1;
+        applyStatRange(r, 10, false);
+        QVERIFY(!r.min);
+        QCOMPARE(*r.max, 44.0);
+    }
+
+    void presets()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        auto it = parse(QStringLiteral("poe1_en_advanced.txt"), Game::Poe1);
+        QVERIFY(it);
+        ItemFilterState st;
+        const ParsedItem ex = applyPreset(*it, Preset::Exact, 10, &st);
+        const ParsedMod* ms = findMod(ex, QStringLiteral("stat_2250533757"));
+        QVERIFY(ms->checked);                                    // T1
+        QCOMPARE(ms->current()->group, QStringLiteral("explicit")); // pseudo 아님
+        QVERIFY(!findMod(ex, QStringLiteral("stat_3299347043"))->checked); // T5
+        QCOMPARE(*findMod(ex, QStringLiteral("stat_3299347043"))->min, 64.0); // 정확값
+
+        const ParsedItem base = applyPreset(*it, Preset::Base, 10, &st);
+        for (const auto& m : base.mods)
+            QVERIFY(!m.checked);
+        QVERIFY(st.useLevel);
+        QCOMPARE(*st.levelMin, 86.0);
+        QCOMPARE(st.rarity, QStringLiteral("nonunique"));
+    }
+
+    void estimate()
+    {
+        Rates r;
+        r.base = QStringLiteral("chaos");
+        r.toBase.insert(QStringLiteral("divine"), 200);
+        QVector<Listing> v;
+        for (double a : {150.0, 160.0, 170.0, 180.0})
+            v.push_back([&] { Listing l; l.amount = a; l.currency = QStringLiteral("chaos"); return l; }());
+        for (double a : {1.0, 1.0, 1.0, 1.1, 1.2, 2.0})
+            v.push_back([&] { Listing l; l.amount = a; l.currency = QStringLiteral("divine"); return l; }());
+        Listing unknown;
+        unknown.amount = 3;
+        unknown.currency = QStringLiteral("mirror-shard");
+        v.push_back(unknown);
+        const Estimate e = estimatePrice(v, r);
+        QVERIFY(e.ok);
+        QCOMPARE(e.used, 10);
+        QCOMPARE(e.value, 200.0);
+
+        // 덤핑 매물 제외: 1,1,2 카오스는 무시하고 10 근처
+        QVector<Listing> dump;
+        for (double a : {1.0, 1.0, 2.0, 5.0, 8.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 11.0}) {
+            Listing l;
+            l.amount = a;
+            l.currency = QStringLiteral("chaos");
+            dump.push_back(l);
+        }
+        const Estimate d = estimatePrice(dump, r);
+        QCOMPARE(d.value, 10.0);
+        QVERIFY(d.lo >= 5.0);
+        QCOMPARE(formatValue(e.value, r), QStringLiteral("1 디바인"));
+        QCOMPARE(formatValue(150, r), QStringLiteral("150 카오스"));
+        QVERIFY(formatEstimate(e, r, 54).startsWith(QStringLiteral("≈ 1 디바인")));
+        // 실측 형태: 순서 뒤섞임 + 미끼 매물(1 카오스에 1 디바인)
+        QVector<Listing> offers;
+        for (double pay : {214.0, 170.0, 1.0, 190.0, 165.0, 170.0, 208.0, 170.0, 188.0, 170.0}) {
+            Listing o;
+            o.payAmount = pay;
+            o.getAmount = 1;
+            offers.push_back(o);
+        }
+        QCOMPARE(medianRatio(offers), 170.0); // 165,170,170,170,170
+
     }
 
     void poe2RareArmour()

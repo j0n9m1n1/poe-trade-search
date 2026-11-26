@@ -52,6 +52,74 @@ ItemFilterState defaultFilterState(const ParsedItem& it)
     return s;
 }
 
+ParsedItem applyPreset(const ParsedItem& parsed, Preset p, int rangePct, ItemFilterState* st)
+{
+    ParsedItem it = parsed;
+    switch (p) {
+    case Preset::Default:
+        applyStatRanges(it, rangePct);
+        if (st)
+            *st = defaultFilterState(it);
+        break;
+    case Preset::Exact: {
+        bool anyTier = false;
+        for (const ParsedMod& m : it.mods)
+            anyTier = anyTier || m.tier > 0;
+        for (ParsedMod& m : it.mods) {
+            if (m.unmatched)
+                continue;
+            // pseudo 말고 원래 그룹
+            int sel = -1;
+            for (int i = 0; i < m.cands.size(); ++i) {
+                const QString& g = m.cands[i].group;
+                if (!m.modType.isEmpty() && g == m.modType) {
+                    sel = i;
+                    break;
+                }
+                if (sel < 0 && g != QStringLiteral("pseudo"))
+                    sel = i;
+                if (m.modType.isEmpty() && g == QStringLiteral("explicit")) {
+                    sel = i;
+                    break;
+                }
+            }
+            if (sel >= 0)
+                m.selected = sel;
+            const bool explicitLike = m.modType.isEmpty() || m.modType == QStringLiteral("fractured");
+            if (m.lockedOff)
+                m.checked = false;
+            else if (anyTier)
+                m.checked = explicitLike && m.tier >= 1 && m.tier <= 2;
+            else
+                m.checked = explicitLike || m.optionStat;
+        }
+        applyStatRanges(it, 0);
+        if (st)
+            *st = defaultFilterState(it);
+        break;
+    }
+    case Preset::Base:
+        for (ParsedMod& m : it.mods)
+            m.checked = false;
+        applyStatRanges(it, rangePct);
+        if (st) {
+            *st = defaultFilterState(it);
+            if (it.itemLevel > 0 && levelKindFor(it) == SearchRequest::LevelKind::ItemLevel) {
+                st->useLevel = true;
+                st->levelMin = it.itemLevel;
+                st->levelMax.reset();
+            }
+            st->useQuality = false;
+            st->useSockets = false;
+            st->byCategory = false;
+            if (it.rarityId != QStringLiteral("unique"))
+                st->rarity = QStringLiteral("nonunique");
+        }
+        break;
+    }
+    return it;
+}
+
 SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const Keywords& kw, const GameDb* gdb,
                           const RequestContext& ctx, QString* warning)
 {
@@ -61,6 +129,7 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
     r.status = ctx.status;
     r.indexed = ctx.indexed;
     r.priceMin = ctx.priceMin;
+    r.collapse = ctx.collapse;
     r.includeDisabledStats = ctx.forBrowser;
 
     r.name = it.name;

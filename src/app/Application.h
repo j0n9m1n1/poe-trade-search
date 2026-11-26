@@ -5,6 +5,7 @@
 #include "core/Config.h"
 #include "core/ItemParser.h"
 #include "core/Keywords.h"
+#include "core/PriceEstimate.h"
 #include "core/TradeDb.h"
 
 #include <QObject>
@@ -22,7 +23,6 @@ namespace pts {
 class DataManager;
 class HotkeyManager;
 class IconCache;
-struct Listing;
 class MainPopup;
 class TradeClient;
 
@@ -49,6 +49,10 @@ private:
     void openTrade();
     void priceCheck();
     void openSettings();
+
+    // 환율 (거래소 일괄 교환 API 로 계산, 30분 캐시)
+    void ensureRates(Game g, Lang server, const QString& league, std::function<void()> then);
+    Rates ratesFor(Game g, const QString& league) const;
 
     // 아이콘
     static QString iconKey(const ParsedItem& it);
@@ -103,6 +107,13 @@ private:
     Game m_lastGame = Game::Poe1;
     quint64 m_priceToken = 0;
     QPoint m_popupPos;
+
+    struct RateState {
+        Rates rates;
+        bool loading = false;
+        QVector<std::function<void()>> waiters;
+    };
+    QHash<QString, RateState> m_rates; // "poe1|League"
 };
 
 } // namespace pts

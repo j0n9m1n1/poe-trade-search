@@ -94,6 +94,16 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_priceMin->setValue(cfg.searchPriceMinimum);
     f->addRow(QStringLiteral("시세 최소 가격 (0 = 전부):"), m_priceMin);
 
+    m_statRange = new QSpinBox(basic);
+    m_statRange->setRange(0, 50);
+    m_statRange->setSuffix(QStringLiteral("%"));
+    m_statRange->setValue(cfg.searchStatRange);
+    m_statRange->setToolTip(QStringLiteral("옵션 최소값을 값의 N% 만큼 낮춰서 채움 (0 = 정확값). 고유는 롤 범위 폭 기준"));
+    f->addRow(QStringLiteral("옵션 값 완화:"), m_statRange);
+    m_collapse = new QCheckBox(QStringLiteral("시세 조회 시 계정별로 묶기 (한 사람 도배 방지)"), basic);
+    m_collapse->setChecked(cfg.collapseListings);
+    f->addRow(m_collapse);
+
     m_autoPrice = new QCheckBox(QStringLiteral("창이 뜨면 바로 시세 조회 (레이트 리밋 주의)"), basic);
     m_autoPrice->setChecked(cfg.autoPriceCheck);
     f->addRow(m_autoPrice);
@@ -261,6 +271,8 @@ Config SettingsDialog::result() const
     c.searchBeforeDay = m_beforeDay->currentData().toInt();
     c.searchListCount = m_listCount->currentData().toInt();
     c.searchPriceMinimum = m_priceMin->value();
+    c.searchStatRange = m_statRange->value();
+    c.collapseListings = m_collapse->isChecked();
     c.autoPriceCheck = m_autoPrice->isChecked();
     c.searchAutoDelay = c.autoPriceCheck ? qMax(c.searchAutoDelay, 1) : 0;
     c.autoCheckUnique = m_unique->isChecked();

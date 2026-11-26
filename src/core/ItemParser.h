@@ -31,7 +31,11 @@ struct ParsedMod {
     QString statKey; // "stat_123" (자동 체크 / pseudo / 저항 판별 키)
     QVector<ModCandidate> cands;
     int selected = 0;
-    OptDouble min, max;
+    OptDouble value;          // 대표값 (범위형 "# to #" 은 평균)
+    OptDouble rollLo, rollHi; // 고급 설명의 롤 범위
+    OptDouble rollPct;        // 롤 % (0~100, 좋은 방향 기준)
+    int better = 1;           // 1 높을수록 좋음 / -1 낮을수록 좋음 / 0 비교 불가
+    OptDouble min, max;       // 검색 값 (범위 채우기 결과, UI 에서 수정)
     bool optionStat = false; // min/max 대신 option 값으로 검색 (성단 주얼 인챈트 등)
     bool resistance = false; // 저항 합산 가능
     bool totalRes = false;   // 저항 합산 체크
@@ -109,12 +113,19 @@ struct ParsedItem {
 };
 
 struct ParseOptions {
+    int statRangePct = 0; // 최소값을 값의 N% 만큼 낮춤 (0 = 정확값). 앱 기본 10
     bool autoSelectPseudo = true;
     bool autoCheckTotalRes = true;
     bool autoCheckUnique = true;
     QString autoSelectCorrupt; // "", "yes", "no"
     QStringList autoSelectByType;
 };
+
+// 검색 범위 채우기 (APT 방식): 좋은 방향 쪽으로 값의 pct% 만큼 완화.
+// 고유는 롤 범위 폭의 pct%, 최대 롤 고유/미러/타락 매직은 정확값. better=0 은 min/max 둘 다.
+void applyStatRange(ParsedMod& m, int pct, bool unique);
+void applyStatRanges(ParsedItem& it, int pct);
+bool exactValuesOnly(const ParsedItem& it);
 
 class ItemParser {
 public:
@@ -132,14 +143,16 @@ private:
     struct CleanLine {
         QString text;
         QString raw;
+        QString rangeSrc; // 범위 뽑을 텍스트 (별칭 치환된 줄은 빈 문자열)
         QString modType;
         int tier = 0;
     };
 
     QString resolveCategory(const ParsedItem& it, const TradeDb& db) const;
     QString findBaseInName(const TradeDb& db, const QString& s) const;
-    ParsedMod buildMod(const ParsedItem& it, const TradeDb& db, const QVector<StatMatch>& ms, const CleanLine& first,
-                       const QString& raw, const ParseOptions& opt, bool* optionStatSeen) const;
+    ParsedMod buildMod(const ParsedItem& it, const TradeDb& db, const MatcherDb& md, const QVector<StatMatch>& ms,
+                       const CleanLine& first, const QString& raw, const QString& rangeSrc, const ParseOptions& opt,
+                       bool* optionStatSeen) const;
 
     const Keywords& m_kw;
     const GameDb* m_dbs;

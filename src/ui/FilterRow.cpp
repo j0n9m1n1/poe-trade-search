@@ -9,6 +9,7 @@
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QRegularExpressionValidator>
+#include <cmath>
 
 namespace pts {
 
@@ -57,6 +58,10 @@ FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
     m_text->setWordWrap(true); // 긴 옵션은 줄바꿈
     m_text->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::MinimumExpanding);
     m_text->setTextInteractionFlags(Qt::NoTextInteraction);
+    m_roll = new QLabel(this);
+    m_roll->setFixedWidth(36);
+    m_roll->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_roll->setToolTip(QStringLiteral("롤 % (Ctrl+Alt+C 고급 설명의 범위 기준, 좋은 방향 100%)"));
     m_res = new QCheckBox(this);
     m_res->setToolTip(QStringLiteral("저항 합산 검색"));
     m_min = new QLineEdit(this);
@@ -73,6 +78,7 @@ FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
 
     lay->addWidget(m_type);
     lay->addWidget(m_text, 1);
+    lay->addWidget(m_roll);
     lay->addWidget(m_res);
     lay->addWidget(m_min);
     lay->addWidget(m_max);
@@ -106,6 +112,16 @@ void FilterRow::setMod(const ParsedMod& m)
     m_optionStat = m.optionStat;
     m_remembered = m.autoChecked;
 
+    if (m.rollPct) {
+        const int p = static_cast<int>(std::lround(*m.rollPct));
+        m_roll->setText(QStringLiteral("%1%").arg(p));
+        const QString col = p >= 90 ? QStringLiteral("#2e9e5b") : (p < 40 ? QStringLiteral("#9a9a9a") : QString());
+        m_roll->setStyleSheet(col.isEmpty() ? QString() : QStringLiteral("color:%1;").arg(col));
+        if (m.rollLo && m.rollHi)
+            m_roll->setToolTip(QStringLiteral("롤 %1% (범위 %2~%3)").arg(p).arg(*m.rollLo).arg(*m.rollHi));
+    } else {
+        m_roll->clear();
+    }
     m_res->setVisible(m.resistance);
     m_res->setChecked(m.totalRes);
     m_min->setText(fromOpt(m.min));

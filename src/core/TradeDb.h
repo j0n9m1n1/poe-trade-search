@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "core/MatcherDb.h"
 #include "core/TextUtil.h"
 #include "core/Types.h"
 
@@ -58,6 +59,7 @@ struct FilterOption {
 struct StatMatch {
     int entry = -1;
     QVector<double> values; // '#' 자리 값
+    QVector<int> hashIdx;   // 각 값이 줄의 몇 번째 숫자였는지 (고급 설명 범위 찾기용)
 };
 
 // 거래소 /api/trade(2)/data/* 응답 하나(게임 x 언어)를 들고 있는 DB
@@ -102,8 +104,10 @@ public:
     // leagues
     const QVector<FilterOption>& leagues() const { return m_leagues; }
 
+    static bool verify(const QVector<text::Token>& pattern, const QString& raw, QVector<double>* values,
+                       QVector<int>* hashIdx);
+
 private:
-    static bool verify(const StatEntry& e, const QString& raw, QVector<double>* values);
 
     bool m_loaded = false;
     QString m_dir;
@@ -129,7 +133,8 @@ private:
 
 // 한 게임의 한/영 DB 묶음
 struct GameDb {
-    TradeDb db[2]; // [ko, en]
+    TradeDb db[2];          // [ko, en]
+    MatcherDb matchers[2];  // APT/EE2 매처 (없어도 동작)
     const TradeDb& operator[](Lang l) const { return db[li(l)]; }
     TradeDb& operator[](Lang l) { return db[li(l)]; }
     bool loaded(Lang l) const { return db[li(l)].isLoaded(); }

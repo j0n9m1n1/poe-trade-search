@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "net/TradeClient.h"
 
+#include "core/TextUtil.h"
 #include "net/Endpoints.h"
 
 #include <QDateTime>
@@ -194,6 +195,27 @@ void TradeClient::priceCheck(Game g, Lang server, const QString& league, const Q
                                 x.icon = item.value(QStringLiteral("icon")).toString();
                                 x.itemName = item.value(QStringLiteral("name")).toString();
                                 x.baseType = item.value(QStringLiteral("baseType")).toString();
+                                x.ilvl = item.value(QStringLiteral("ilvl")).toInt(-1);
+                                x.stack = item.value(QStringLiteral("stackSize")).toInt(0);
+                                x.dps = item.value(QStringLiteral("extended")).toObject().value(QStringLiteral("dps")).toDouble(0);
+                                for (const auto& pv : item.value(QStringLiteral("properties")).toArray()) {
+                                    const QJsonObject p = pv.toObject();
+                                    const QString pn = p.value(QStringLiteral("name")).toString();
+                                    if (p.value(QStringLiteral("type")).toInt(-1) == 6 || pn == QStringLiteral("Quality") ||
+                                        pn == QStringLiteral("퀄리티")) {
+                                        const QJsonArray vals = p.value(QStringLiteral("values")).toArray();
+                                        if (!vals.isEmpty()) {
+                                            double q = 0;
+                                            if (text::firstNumber(vals[0].toArray().at(0).toString(), &q))
+                                                x.quality = static_cast<int>(q);
+                                        }
+                                    }
+                                }
+                                const QJsonValue on = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("online"));
+                                if (on.isObject())
+                                    x.online = on.toObject().value(QStringLiteral("status")).toString() == QStringLiteral("afk") ? 2 : 1;
+                                else
+                                    x.online = 0;
                                 if (x.amount > 0)
                                     step.listings.push_back(x);
                             }
@@ -245,6 +267,9 @@ void TradeClient::exchange(Game g, Lang server, const QString& league, const QSt
                      const QJsonObject l = v.toObject().value(QStringLiteral("listing")).toObject();
                      const QString account = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("name")).toString();
                      const QDateTime indexed = parseTime(l.value(QStringLiteral("indexed")).toString());
+                     const QJsonValue on = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("online"));
+                     const int online =
+                         on.isObject() ? (on.toObject().value(QStringLiteral("status")).toString() == QStringLiteral("afk") ? 2 : 1) : 0;
                      for (const auto& ov : l.value(QStringLiteral("offers")).toArray()) {
                          const QJsonObject off = ov.toObject();
                          const QJsonObject pay = off.value(QStringLiteral("exchange")).toObject();
@@ -252,6 +277,7 @@ void TradeClient::exchange(Game g, Lang server, const QString& league, const QSt
                          Listing x;
                          x.account = account;
                          x.indexed = indexed;
+                         x.online = online;
                          x.payAmount = pay.value(QStringLiteral("amount")).toDouble();
                          x.getAmount = get.value(QStringLiteral("amount")).toDouble();
                          x.stock = get.value(QStringLiteral("stock")).toInt();

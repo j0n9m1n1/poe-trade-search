@@ -39,6 +39,7 @@ private:
 
     QComboBox* m_type;
     QLabel* m_text;
+    QLabel* m_roll;
     QCheckBox* m_res;
     QLineEdit* m_min;
     QLineEdit* m_max;

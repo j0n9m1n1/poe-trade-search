@@ -1,0 +1,20 @@
+Item Class: Thrusting One Hand Swords
+Rarity: Rare
+Corpse Gutter
+Jewelled Foil
+--------
+Requirements:
+Level: 68
+--------
+Item Level: 85
+--------
++25% to Global Critical Strike Multiplier (implicit)
+--------
+{ Suffix Modifier "of the Prodigy" (Tier: 2) — Attribute }
+32(28-32)% reduced Attribute Requirements
+{ Prefix Modifier "Cremating" (Tier: 3) — Damage, Elemental, Fire, Attack }
+Adds 17(15-20) to 39(31-35) Fire Damage
+{ Suffix Modifier "of Celebration" (Tier: 4) — Attack, Speed }
+26(23-25)% increased Attack Speed
+10% reduced Enemy Stun Threshold
+8% reduced Movement Speed

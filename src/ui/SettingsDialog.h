@@ -49,6 +49,8 @@ private:
     QComboBox* m_beforeDay;
     QComboBox* m_listCount;
     QSpinBox* m_priceMin;
+    QSpinBox* m_statRange;
+    QCheckBox* m_collapse;
     QSpinBox* m_timeout;
     QSpinBox* m_dataAge;
     QCheckBox* m_autoPrice;

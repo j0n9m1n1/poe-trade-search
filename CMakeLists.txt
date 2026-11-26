@@ -25,6 +25,8 @@ add_library(pts_core STATIC
     src/core/Config.h src/core/Config.cpp
     src/core/PriceSummary.h src/core/PriceSummary.cpp
     src/core/SearchDefaults.h src/core/SearchDefaults.cpp
+    src/core/MatcherDb.h src/core/MatcherDb.cpp
+    src/core/PriceEstimate.h src/core/PriceEstimate.cpp
     src/net/Endpoints.h src/net/Endpoints.cpp
     src/net/RateLimiter.h src/net/RateLimiter.cpp
     src/net/TradeClient.h src/net/TradeClient.cpp

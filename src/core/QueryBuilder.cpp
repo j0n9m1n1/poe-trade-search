@@ -33,8 +33,10 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("indexed"), QStringLiteral("trade_filters")},
         {QStringLiteral("sale_type"), QStringLiteral("trade_filters")},
         {QStringLiteral("price"), QStringLiteral("trade_filters")},
+        {QStringLiteral("collapse"), QStringLiteral("trade_filters")},
     };
     static const QHash<QString, QString> p2 = {
+        {QStringLiteral("collapse"), QStringLiteral("trade_filters")},
         {QStringLiteral("category"), QStringLiteral("type_filters")},
         {QStringLiteral("rarity"), QStringLiteral("type_filters")},
         {QStringLiteral("ilvl"), QStringLiteral("type_filters")},
@@ -176,6 +178,8 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
         fs.add(QStringLiteral("indexed"), option(r.indexed));
     if (!r.saleType.isEmpty())
         fs.add(QStringLiteral("sale_type"), option(r.saleType));
+    if (r.collapse)
+        fs.add(QStringLiteral("collapse"), option(QStringLiteral("true")));
     if (r.priceMin && *r.priceMin > 0)
         fs.add(QStringLiteral("price"), minMax(r.priceMin, std::nullopt));
 
