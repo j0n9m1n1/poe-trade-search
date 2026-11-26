@@ -1,0 +1,240 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "net/Updater.h"
+
+#include "core/JsonUtil.h"
+
+#include <QCoreApplication>
+#include <QCryptographicHash>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QProcess>
+#include <QVersionNumber>
+#include <memory>
+
+namespace pts {
+
+namespace {
+
+const QString kZipName = QStringLiteral("PoeTradeSearch-win64.zip");
+
+QNetworkRequest request(const QUrl& url, int timeoutMs)
+{
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("PoeTradeSearchQt/%1").arg(QStringLiteral(PTS_VERSION)));
+    req.setRawHeader("Accept", "application/vnd.github+json, application/octet-stream;q=0.9, */*;q=0.8");
+    req.setTransferTimeout(timeoutMs);
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    return req;
+}
+
+// 압축을 풀어 실행 폴더에 덮어쓰고 재실행. 실패해도 기존 버전으로 다시 켬
+const char* kScript = R"PS1(param([int]$ProcId, [string]$Zip, [string]$Dest, [string]$Exe, [string]$Log)
+function Log($m) { Add-Content -LiteralPath $Log -Value ("{0} {1}" -f (Get-Date -Format s), $m) }
+try {
+    Log "waiting for process $ProcId"
+    try { Wait-Process -Id $ProcId -Timeout 30 -ErrorAction Stop } catch {}
+    Start-Sleep -Milliseconds 500
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("pts_update_" + [guid]::NewGuid().ToString("N"))
+    Expand-Archive -LiteralPath $Zip -DestinationPath $tmp -Force
+    $src = $tmp
+    $items = @(Get-ChildItem -LiteralPath $tmp)
+    if ($items.Count -eq 1 -and $items[0].PSIsContainer) { $src = $items[0].FullName }
+    Copy-Item -Path (Join-Path $src '*') -Destination $Dest -Recurse -Force
+    Remove-Item -LiteralPath $tmp -Recurse -Force
+    Remove-Item -LiteralPath $Zip -Force
+    Log "updated"
+    Start-Process -FilePath $Exe -ArgumentList '--updated','--wait-shutdown'
+} catch {
+    Log ("failed: " + $_)
+    Start-Process -FilePath $Exe -ArgumentList '--update-failed','--wait-shutdown'
+}
+)PS1";
+
+} // namespace
+
+Updater::Updater(const QString& repo, const QString& workDir, QObject* parent)
+    : QObject(parent), m_nam(new QNetworkAccessManager(this)), m_repo(repo), m_dir(workDir)
+{
+}
+
+QString Updater::currentVersion()
+{
+    return QStringLiteral(PTS_VERSION);
+}
+
+bool Updater::isNewer(const QString& current, const QString& candidate)
+{
+    auto strip = [](QString v) {
+        if (v.startsWith(QLatin1Char('v')) || v.startsWith(QLatin1Char('V')))
+            v.remove(0, 1);
+        return QVersionNumber::fromString(v); // "0.2.0-ci.5" -> 0.2.0
+    };
+    const QVersionNumber a = strip(current);
+    const QVersionNumber b = strip(candidate);
+    if (b.isNull())
+        return false;
+    return QVersionNumber::compare(b, a) > 0;
+}
+
+bool Updater::canSelfInstall(QString* why)
+{
+#if defined(Q_OS_WIN) && defined(PTS_RELEASE_BUILD)
+    const QString dir = QCoreApplication::applicationDirPath();
+    QFile probe(QDir(dir).filePath(QStringLiteral(".update_write_test")));
+    if (!probe.open(QIODevice::WriteOnly)) {
+        if (why)
+            *why = QStringLiteral("실행 폴더에 쓸 수 없음 (Program Files 등)");
+        return false;
+    }
+    probe.close();
+    probe.remove();
+    return true;
+#else
+    if (why)
+        *why = QStringLiteral("직접 빌드한 개발 버전이라 자동 설치 안 함");
+    return false;
+#endif
+}
+
+QString Updater::logPath() const
+{
+    return QDir(m_dir).filePath(QStringLiteral("update.log"));
+}
+
+void Updater::check(std::function<void(const Release*, const QString&)> cb)
+{
+    if (!enabled()) {
+        cb(nullptr, QStringLiteral("업데이트 저장소가 설정 안 됨"));
+        return;
+    }
+    const QUrl url(QStringLiteral("https://api.github.com/repos/%1/releases/latest").arg(m_repo));
+    QNetworkReply* r = m_nam->get(request(url, 15000));
+    connect(r, &QNetworkReply::finished, this, [r, cb]() {
+        r->deleteLater();
+        const int status = r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (status == 404) {
+            cb(nullptr, QString()); // 릴리즈 아직 없음
+            return;
+        }
+        if (r->error() != QNetworkReply::NoError) {
+            cb(nullptr, r->errorString());
+            return;
+        }
+        const QJsonObject o = QJsonDocument::fromJson(r->readAll()).object();
+        Release rel;
+        rel.tag = o.value(QStringLiteral("tag_name")).toString();
+        rel.version = rel.tag.startsWith(QLatin1Char('v')) ? rel.tag.mid(1) : rel.tag;
+        rel.page = o.value(QStringLiteral("html_url")).toString();
+        for (const auto& av : o.value(QStringLiteral("assets")).toArray()) {
+            const QJsonObject a = av.toObject();
+            const QString name = a.value(QStringLiteral("name")).toString();
+            const QString url = a.value(QStringLiteral("browser_download_url")).toString();
+            if (name == kZipName)
+                rel.zipUrl = url;
+            else if (name == kZipName + QStringLiteral(".sha256"))
+                rel.shaUrl = url;
+        }
+        if (o.value(QStringLiteral("draft")).toBool() || o.value(QStringLiteral("prerelease")).toBool() ||
+            !isNewer(currentVersion(), rel.tag)) {
+            cb(nullptr, QString());
+            return;
+        }
+        cb(&rel, QString());
+    });
+}
+
+void Updater::download(const Release& rel, std::function<void(const QString&, const QString&)> cb)
+{
+    if (m_busy) {
+        cb(QString(), QStringLiteral("이미 받는 중"));
+        return;
+    }
+    if (rel.zipUrl.isEmpty() || rel.shaUrl.isEmpty()) {
+        cb(QString(), QStringLiteral("릴리즈에 %1 / .sha256 파일이 없음").arg(kZipName));
+        return;
+    }
+    m_busy = true;
+    QDir().mkpath(m_dir);
+    const QString zipPath = QDir(m_dir).filePath(kZipName);
+
+    QNetworkReply* shaReply = m_nam->get(request(QUrl(rel.shaUrl), 30000));
+    connect(shaReply, &QNetworkReply::finished, this, [this, shaReply, rel, zipPath, cb]() {
+        shaReply->deleteLater();
+        const QByteArray expected = shaReply->readAll().trimmed().split(' ').value(0).toLower();
+        if (shaReply->error() != QNetworkReply::NoError || expected.size() != 64) {
+            m_busy = false;
+            cb(QString(), QStringLiteral("체크섬 파일을 못 받음: %1").arg(shaReply->errorString()));
+            return;
+        }
+        QNetworkReply* zr = m_nam->get(request(QUrl(rel.zipUrl), 300000));
+        connect(zr, &QNetworkReply::finished, this, [this, zr, expected, zipPath, cb]() {
+            zr->deleteLater();
+            m_busy = false;
+            const QByteArray data = zr->readAll();
+            if (zr->error() != QNetworkReply::NoError || data.isEmpty()) {
+                cb(QString(), QStringLiteral("업데이트 파일을 못 받음: %1").arg(zr->errorString()));
+                return;
+            }
+            const QByteArray got = QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex();
+            if (got != expected) {
+                cb(QString(), QStringLiteral("체크섬이 안 맞음 (받다가 깨졌거나 파일이 바뀜)"));
+                return;
+            }
+            QString err;
+            if (!json::writeRaw(zipPath, data, &err)) {
+                cb(QString(), err);
+                return;
+            }
+            cb(zipPath, QString());
+        });
+    });
+}
+
+bool Updater::install(const QString& zipPath, QString* error)
+{
+    QString why;
+    if (!canSelfInstall(&why)) {
+        if (error)
+            *error = why;
+        return false;
+    }
+    const QString script = QDir(m_dir).filePath(QStringLiteral("apply-update.ps1"));
+    QString err;
+    if (!json::writeRaw(script, QByteArray(kScript), &err)) {
+        if (error)
+            *error = err;
+        return false;
+    }
+    const QStringList args = {QStringLiteral("-NoProfile"),
+                              QStringLiteral("-ExecutionPolicy"),
+                              QStringLiteral("Bypass"),
+                              QStringLiteral("-WindowStyle"),
+                              QStringLiteral("Hidden"),
+                              QStringLiteral("-File"),
+                              QDir::toNativeSeparators(script),
+                              QStringLiteral("-ProcId"),
+                              QString::number(QCoreApplication::applicationPid()),
+                              QStringLiteral("-Zip"),
+                              QDir::toNativeSeparators(zipPath),
+                              QStringLiteral("-Dest"),
+                              QDir::toNativeSeparators(QCoreApplication::applicationDirPath()),
+                              QStringLiteral("-Exe"),
+                              QDir::toNativeSeparators(QCoreApplication::applicationFilePath()),
+                              QStringLiteral("-Log"),
+                              QDir::toNativeSeparators(logPath())};
+    if (!QProcess::startDetached(QStringLiteral("powershell.exe"), args)) {
+        if (error)
+            *error = QStringLiteral("PowerShell 을 실행 못 함");
+        return false;
+    }
+    return true;
+}
+
+} // namespace pts

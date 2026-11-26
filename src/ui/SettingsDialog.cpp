@@ -139,6 +139,14 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_redirect->setChecked(cfg.serverRedirect);
     f->addRow(m_redirect);
 
+    m_appUpdate = new QComboBox(basic);
+    m_appUpdate->addItem(QStringLiteral("새 버전 알림만"), QStringLiteral("notify"));
+    m_appUpdate->addItem(QStringLiteral("자동으로 받아서 설치"), QStringLiteral("auto"));
+    m_appUpdate->addItem(QStringLiteral("확인 안 함"), QStringLiteral("off"));
+    m_appUpdate->setCurrentIndex(qMax(0, m_appUpdate->findData(cfg.appUpdate)));
+    m_appUpdate->setToolTip(QStringLiteral("GitHub Release 기준. 자동 설치는 배포 빌드에서만 동작"));
+    f->addRow(QStringLiteral("프로그램 업데이트:"), m_appUpdate);
+
     m_updates = new QCheckBox(QStringLiteral("시작 시 거래소 데이터 오래됐으면 자동 갱신"), basic);
     m_updates->setChecked(cfg.checkUpdates);
     f->addRow(m_updates);
@@ -291,6 +299,7 @@ Config SettingsDialog::result() const
     c.serverTimeout = m_timeout->value();
     c.serverRedirect = m_redirect->isChecked();
     c.checkUpdates = m_updates->isChecked();
+    c.appUpdate = m_appUpdate->currentData().toString();
     c.dataMaxAgeDays = m_dataAge->value();
     c.shortcuts.clear();
     for (int r = 0; r < m_shortcuts->rowCount(); ++r) {

@@ -8,6 +8,7 @@
 #include "net/Endpoints.h"
 #include "net/IconCache.h"
 #include "net/TradeClient.h"
+#include "net/Updater.h"
 #include "platform/HotkeyManager.h"
 #include "platform/Platform.h"
 #include "ui/MainPopup.h"
@@ -99,6 +100,7 @@ bool Application::start(QString* error)
     m_client = new TradeClient(this);
     m_data = new DataManager(m_dataDir, m_client, this);
     m_icons = new IconCache(QDir(m_dataDir).filePath(QStringLiteral("cache/icons")), this);
+    m_updater = new Updater(QStringLiteral(PTS_UPDATE_REPO), QDir(m_dataDir).filePath(QStringLiteral("update")), this);
     m_parser = std::make_unique<ItemParser>(m_kw, m_dbs, &m_checked);
     m_hotkeys = new HotkeyManager(this);
     connect(m_hotkeys, &HotkeyManager::activated, this, &Application::onHotkey);
@@ -142,6 +144,13 @@ bool Application::start(QString* error)
     m_pauseAction->setCheckable(true);
     connect(m_pauseAction, &QAction::toggled, this, [this](bool on) { m_paused = on; });
     m_menu->addSeparator();
+    m_updateAction = m_menu->addAction(QStringLiteral("업데이트 확인 (현재 %1)").arg(Updater::currentVersion()));
+    connect(m_updateAction, &QAction::triggered, this, [this]() {
+        if (m_newTag.isEmpty())
+            checkForUpdate(true);
+        else
+            installUpdate();
+    });
     m_menu->addAction(QStringLiteral("재시작"), this, &Application::restart);
     m_menu->addAction(QStringLiteral("종료"), qApp, &QApplication::quit);
     m_tray->setContextMenu(m_menu);
@@ -167,6 +176,24 @@ bool Application::start(QString* error)
     connect(&m_expectTimer, &QTimer::timeout, this, [this]() { m_expect = Expect::None; });
 
     applyConfig();
+
+    // ---- 프로그램 업데이트: 시작 15초 뒤 한 번, 이후 6시간마다
+    m_updateTimer.setSingleShot(true);
+    connect(&m_updateTimer, &QTimer::timeout, this, [this]() {
+        checkForUpdate(false);
+        m_updateTimer.start(6 * 60 * 60 * 1000);
+    });
+    m_updateTimer.start(15000);
+    const QStringList args = QCoreApplication::arguments();
+    if (args.contains(QStringLiteral("--updated"))) {
+        notify(QStringLiteral("%1 버전으로 업데이트됨").arg(Updater::currentVersion()));
+        return true;
+    }
+    if (args.contains(QStringLiteral("--update-failed"))) {
+        notify(QStringLiteral("업데이트 실패해서 기존 버전으로 켰음. 로그: %1").arg(QDir::toNativeSeparators(m_updater->logPath())),
+               QSystemTrayIcon::Warning);
+        return true;
+    }
 
     QString hint = QStringLiteral("프로그램을 시작합니다.\n사용법: 아이템 위에서 Ctrl + C\n종료: 트레이 아이콘 우클릭");
     if (!platform::isAdministrator())
@@ -547,6 +574,94 @@ QString Application::currencyName(Game g, Lang l, const QString& id) const
     if (const StaticEntry* s = db.staticById(id))
         return s->text;
     return id;
+}
+
+// ------------------------------------------------------------ 프로그램 업데이트
+
+void Application::checkForUpdate(bool manual)
+{
+    if (!manual && m_cfg.appUpdate == QStringLiteral("off"))
+        return;
+    if (!m_updater->enabled() || m_updater->busy())
+        return;
+    m_updater->check([this, manual](const Updater::Release* rel, const QString& error) {
+        if (!error.isEmpty()) {
+            qWarning() << "update check failed" << error;
+            if (manual)
+                notify(QStringLiteral("업데이트 확인 실패: %1").arg(error), QSystemTrayIcon::Warning);
+            return;
+        }
+        if (!rel) {
+            if (manual)
+                notify(QStringLiteral("최신 버전임 (%1)").arg(Updater::currentVersion()));
+            return;
+        }
+        const bool firstSeen = m_newTag != rel->tag;
+        m_newTag = rel->tag;
+        m_newPage = rel->page;
+        m_newZipUrl = rel->zipUrl;
+        m_newShaUrl = rel->shaUrl;
+        QString why;
+        const bool canInstall = Updater::canSelfInstall(&why);
+        m_updateAction->setText(canInstall ? QStringLiteral("업데이트 설치 (%1 → %2)").arg(Updater::currentVersion(), rel->tag)
+                                           : QStringLiteral("새 버전 %1 릴리즈 페이지 열기").arg(rel->tag));
+        if (canInstall && m_cfg.appUpdate == QStringLiteral("auto") && !manual) {
+            installUpdate();
+            return;
+        }
+        if (firstSeen || manual) {
+            notify(canInstall ? QStringLiteral("새 버전 %1 있음. 트레이 메뉴 '업데이트 설치' 로 설치").arg(rel->tag)
+                              : QStringLiteral("새 버전 %1 있음 (%2). 트레이 메뉴에서 릴리즈 페이지 열기").arg(rel->tag, why));
+        }
+        if (manual)
+            installUpdate();
+    });
+}
+
+void Application::installUpdate()
+{
+    if (m_newTag.isEmpty())
+        return;
+    QString why;
+    if (!Updater::canSelfInstall(&why)) {
+        QDesktopServices::openUrl(QUrl(m_newPage));
+        return;
+    }
+    if (!m_downloadedZip.isEmpty()) {
+        applyDownloadedUpdate();
+        return;
+    }
+    Updater::Release rel;
+    rel.tag = m_newTag;
+    rel.page = m_newPage;
+    rel.zipUrl = m_newZipUrl;
+    rel.shaUrl = m_newShaUrl;
+    notify(QStringLiteral("%1 받는 중...").arg(rel.tag));
+    m_updater->download(rel, [this](const QString& zip, const QString& error) {
+        if (!error.isEmpty()) {
+            notify(QStringLiteral("업데이트 받기 실패: %1").arg(error), QSystemTrayIcon::Warning);
+            return;
+        }
+        m_downloadedZip = zip;
+        applyDownloadedUpdate();
+    });
+}
+
+void Application::applyDownloadedUpdate()
+{
+    // 팝업 보는 중이면 닫힐 때까지 기다렸다가 교체
+    if (m_popup->isVisible()) {
+        QTimer::singleShot(2000, this, &Application::applyDownloadedUpdate);
+        return;
+    }
+    notify(QStringLiteral("%1 로 업데이트하고 다시 켬").arg(m_newTag));
+    QString err;
+    if (!m_updater->install(m_downloadedZip, &err)) {
+        notify(QStringLiteral("업데이트 설치 실패: %1").arg(err), QSystemTrayIcon::Warning);
+        return;
+    }
+    m_hotkeys->clear();
+    qApp->quit();
 }
 
 // ------------------------------------------------------------ 환율

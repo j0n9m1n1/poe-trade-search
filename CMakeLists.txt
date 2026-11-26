@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(PoeTradeSearch VERSION 0.1.0 LANGUAGES CXX)
+project(PoeTradeSearch VERSION 0.2.0 LANGUAGES CXX)
+
+set(PTS_VERSION "${PROJECT_VERSION}" CACHE STRING "앱 버전 (CI 가 태그로 덮어씀)")
+option(PTS_RELEASE_BUILD "배포 빌드: 자동 업데이트로 스스로 교체 가능" OFF)
+set(PTS_UPDATE_REPO "j0n9m1n1/poe-trade-search" CACHE STRING "업데이트 확인할 GitHub 저장소 owner/repo (비우면 끔)")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,14 +36,19 @@ add_library(pts_core STATIC
     src/net/TradeClient.h src/net/TradeClient.cpp
     src/net/DataManager.h src/net/DataManager.cpp
     src/net/IconCache.h src/net/IconCache.cpp
+    src/net/Updater.h src/net/Updater.cpp
     resources/resources.qrc
 )
 target_include_directories(pts_core PUBLIC src)
 target_link_libraries(pts_core PUBLIC Qt6::Core Qt6::Network)
 target_compile_definitions(pts_core PUBLIC
-    PTS_VERSION="${PROJECT_VERSION}"
+    PTS_VERSION="${PTS_VERSION}"
+    PTS_UPDATE_REPO="${PTS_UPDATE_REPO}"
     QT_NO_CAST_FROM_ASCII
 )
+if(PTS_RELEASE_BUILD)
+    target_compile_definitions(pts_core PUBLIC PTS_RELEASE_BUILD=1)
+endif()
 if(MSVC)
     target_compile_options(pts_core PUBLIC /W4 /utf-8 /permissive-)
 else()

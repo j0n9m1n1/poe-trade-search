@@ -47,6 +47,26 @@ cmake -S . -B build -DPTS_BUILD_TOOLS=ON && cmake --build build --target make_ic
 QT_QPA_PLATFORM=offscreen ./build/make_icon resources/app.svg resources/app.ico resources/app.png
 ```
 
+## 설치 / 업데이트
+
+[Releases](https://github.com/j0n9m1n1/poe-trade-search/releases) 에서 `PoeTradeSearch-win64.zip` 받아서 아무 폴더에 풀고 `PoeTradeSearch.exe` 실행.
+
+- 프로그램 업데이트는 GitHub Release 기준. 시작 15초 뒤 + 6시간마다 확인
+- 설정 > 프로그램 업데이트: **새 버전 알림만**(기본) / 자동으로 받아서 설치 / 확인 안 함
+- 설치는 트레이 메뉴 "업데이트 설치". SHA256 검증 후 PowerShell 로 압축 풀어 덮어쓰고 다시 켬. `data\` (설정/캐시) 는 그대로
+- 자동 설치는 Release 로 받은 배포 빌드에서만 됨 (직접 빌드한 건 알림만). Program Files 처럼 쓰기 막힌 폴더면 릴리즈 페이지만 열어줌
+- 실패하면 기존 버전으로 다시 켜지고 `data\update\update.log` 에 사유 남음
+
+### 릴리즈 만들기 (관리자용)
+
+master 푸시/PR 은 GitHub Actions 가 Windows 빌드 + 테스트만 함 (결과물은 Actions 아티팩트). 릴리즈는 태그 붙일 때만:
+
+```sh
+# CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올려두면 개발 빌드 버전 표시가 맞음
+git tag v0.2.1
+git push origin v0.2.1
+```
+
 ## 빌드 (Windows)
 
 필요: Qt 6.5 이상 (MSVC 2022 64bit 또는 MinGW 64bit), CMake 3.21+, Ninja 권장

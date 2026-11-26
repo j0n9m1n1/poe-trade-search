@@ -60,6 +60,7 @@ private:
     QCheckBox* m_pseudo;
     QCheckBox* m_totalres;
     QCheckBox* m_updates;
+    QComboBox* m_appUpdate;
     QCheckBox* m_redirect;
     QLineEdit* m_corrupt;
     QLineEdit* m_byType;

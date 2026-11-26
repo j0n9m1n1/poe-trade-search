@@ -117,6 +117,9 @@ bool Config::load(const QString& path, QString* error)
     autoPriceCheck = b("auto_price_check", d.autoPriceCheck);
     popupNearCursor = b("popup_near_cursor", d.popupNearCursor);
     closeOnOutsideClick = b("close_on_outside_click", d.closeOnOutsideClick);
+    appUpdate = s("app_update", d.appUpdate);
+    if (appUpdate != QStringLiteral("auto") && appUpdate != QStringLiteral("off"))
+        appUpdate = QStringLiteral("notify");
     searchStatRange = qBound(0, i("search_stat_range", d.searchStatRange), 50);
     collapseListings = b("collapse_listings", d.collapseListings);
 
@@ -153,6 +156,7 @@ bool Config::save(const QString& path, QString* error) const
     o.insert(QStringLiteral("auto_price_check"), autoPriceCheck);
     o.insert(QStringLiteral("popup_near_cursor"), popupNearCursor);
     o.insert(QStringLiteral("close_on_outside_click"), closeOnOutsideClick);
+    o.insert(QStringLiteral("app_update"), appUpdate);
     o.insert(QStringLiteral("search_list_count"), searchListCount);
     o.insert(QStringLiteral("search_stat_range"), searchStatRange);
     o.insert(QStringLiteral("collapse_listings"), collapseListings);

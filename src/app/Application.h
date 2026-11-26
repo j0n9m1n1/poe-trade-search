@@ -24,6 +24,7 @@ namespace pts {
 class DataManager;
 class HotkeyManager;
 class IconCache;
+class Updater;
 class MainPopup;
 class TradeClient;
 
@@ -54,6 +55,11 @@ private:
     void openTrade();
     void priceCheck();
     void openSettings();
+
+    // 프로그램 업데이트 (GitHub Release)
+    void checkForUpdate(bool manual);
+    void installUpdate();
+    void applyDownloadedUpdate();
 
     // 환율 (거래소 일괄 교환 API 로 계산, 30분 캐시)
     void ensureRates(Game g, Lang server, const QString& league, std::function<void()> then);
@@ -94,6 +100,11 @@ private:
     TradeClient* m_client = nullptr;
     DataManager* m_data = nullptr;
     IconCache* m_icons = nullptr;
+    Updater* m_updater = nullptr;
+    QAction* m_updateAction = nullptr;
+    QTimer m_updateTimer;
+    QString m_newTag, m_newPage, m_newZipUrl, m_newShaUrl; // 찾은 새 버전
+    QString m_downloadedZip;
     std::unique_ptr<ItemParser> m_parser;
     MainPopup* m_popup = nullptr;
     QSystemTrayIcon* m_tray = nullptr;

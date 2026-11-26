@@ -16,6 +16,7 @@
 #include "net/DataManager.h"
 #include "net/Endpoints.h"
 #include "net/RateLimiter.h"
+#include "net/Updater.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -130,6 +131,16 @@ private slots:
         RateLimiter r3;
         r3.update(P, [&](const QByteArray& k) { return h3.value(k); }, t);
         QVERIFY(r3.waitMs(P, t) >= 59000);
+    }
+
+    void updaterVersions()
+    {
+        QVERIFY(Updater::isNewer(QStringLiteral("0.2.0"), QStringLiteral("v0.2.1")));
+        QVERIFY(Updater::isNewer(QStringLiteral("0.2.0-ci.15"), QStringLiteral("v0.3.0")));
+        QVERIFY(!Updater::isNewer(QStringLiteral("0.2.0"), QStringLiteral("v0.2.0")));
+        QVERIFY(!Updater::isNewer(QStringLiteral("0.2.0-ci.15"), QStringLiteral("v0.2.0")));
+        QVERIFY(!Updater::isNewer(QStringLiteral("0.10.0"), QStringLiteral("v0.9.9")));
+        QVERIFY(!Updater::isNewer(QStringLiteral("0.2.0"), QStringLiteral("nightly")));
     }
 
     void endpointsUrls()
