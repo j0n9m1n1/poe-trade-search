@@ -19,12 +19,13 @@ namespace {
 
 const QString kSep = QStringLiteral("--------");
 
-// 원본 color 규칙: 고정=진빨강, 제작/인챈트=파랑, 스컬지=주황
+// 옵션 종류별 색 키 (UI 에서 게임 글씨 색으로 바꿈). "" = 일반 옵션
 QString colorForType(const QString& t)
 {
     static const QSet<QString> colored = {QStringLiteral("implicit"), QStringLiteral("crafted"),
                                           QStringLiteral("enchant"),  QStringLiteral("scourge"),
-                                          QStringLiteral("rune"),     QStringLiteral("desecrated")};
+                                          QStringLiteral("rune"),     QStringLiteral("desecrated"),
+                                          QStringLiteral("fractured")};
     return colored.contains(t) ? t : QString();
 }
 
@@ -461,7 +462,9 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         QStringLiteral("heist_target"),     QStringLiteral("ultimatum_challenge"), QStringLiteral("ultimatum_reward"),
         QStringLiteral("monster_genus"),    QStringLiteral("monster_group"),   QStringLiteral("physical_damage"),
         QStringLiteral("elemental_damage"), QStringLiteral("chaos_damage"),    QStringLiteral("attacks_per_second"),
-        QStringLiteral("stack_size")};
+        QStringLiteral("stack_size"),       QStringLiteral("armour"),          QStringLiteral("evasion"),
+        QStringLiteral("energy_shield"),    QStringLiteral("ward"),            QStringLiteral("block"),
+        QStringLiteral("spirit")};
     QHash<QString, QString> keyOf; // 실제 텍스트 -> 키
     for (const QString& k : propKeys) {
         for (const QString& s : m_kw.kw(k).t[li(L)])
@@ -642,6 +645,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         for (int s = modStartSection; s < sections.size(); ++s) {
             QVector<CleanLine> cl;
             QString hdrType;
+            QString hdrAffix;
             int hdrTier = 0;
             for (const QString& l : sections[s]) {
                 if (l.isEmpty())
@@ -653,6 +657,11 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                     const auto tm = tierRe.match(h);
                     if (tm.hasMatch())
                         hdrTier = tm.captured(1).toInt();
+                    hdrAffix = h.contains(QStringLiteral("Prefix")) || h.contains(QStringLiteral("접두어"))
+                                   ? QStringLiteral("prefix")
+                                   : (h.contains(QStringLiteral("Suffix")) || h.contains(QStringLiteral("접미어"))
+                                          ? QStringLiteral("suffix")
+                                          : QString());
                     if (h.contains(QStringLiteral("Implicit")) || h.contains(QStringLiteral("고정")))
                         hdrType = QStringLiteral("implicit");
                     else if (h.contains(QStringLiteral("Crafted")) || h.contains(QStringLiteral("제작")))
@@ -688,8 +697,10 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                 if (x.modType.isEmpty())
                     x.modType = hdrType;
                 x.tier = hdrTier;
+                x.affix = hdrAffix;
                 const QString withRanges = text::stripDashSuffix(t).trimmed();
                 t = text::stripAdvancedRanges(withRanges).trimmed();
+                x.display = t;
                 const QString al = m_kw.alias(L, t);
                 x.text = al.isEmpty() ? t : al;
                 x.rangeSrc = al.isEmpty() ? withRanges : QString();
@@ -740,6 +751,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                     u.text = cl[i].text;
                     u.modType = cl[i].modType;
                     u.tier = cl[i].tier;
+                    u.affix = cl[i].affix;
+                    u.shown = cl[i].display;
                     u.unmatched = true;
                     u.lockedOff = true;
                     u.color = colorForType(u.modType);
@@ -747,15 +760,18 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                     ++i;
                     continue;
                 }
-                QStringList raws, rsrc;
+                QStringList raws, rsrc, shown;
                 bool rangesOk = true;
                 for (int k = i; k < i + consumed; ++k) {
                     raws << cl[k].raw;
                     rsrc << cl[k].rangeSrc;
+                    shown << cl[k].display;
                     rangesOk = rangesOk && !cl[k].rangeSrc.isEmpty();
                 }
                 secMods.push_back(buildMod(it, db, md, ms, cl[i], raws.join(QLatin1Char('\n')),
                                            rangesOk ? rsrc.join(QLatin1Char('\n')) : QString(), opt, &optionStatSeen));
+                secMods.back().shown = shown.join(QStringLiteral(" / "));
+                secMods.back().affix = cl[i].affix;
                 ++matched;
                 i += consumed;
             }
@@ -917,6 +933,53 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         it.edps = ele / 2.0 * aps;
         it.cdps = chaos / 2.0 * aps;
         it.hasDps = aps > 0 && (phys + ele + chaos) > 0;
+        if (it.hasDps) {
+            it.props.push_back({QStringLiteral("dps"), it.pdps + it.edps + it.cdps});
+            if (it.pdps > 0)
+                it.props.push_back({QStringLiteral("pdps"), it.pdps});
+            if (it.edps > 0)
+                it.props.push_back({QStringLiteral("edps"), it.edps});
+        }
+    }
+
+    // 방어 속성: 거래소는 퀄리티 20% 기준 값으로 검색 (APT calc-q20 와 같음)
+    if (it.isGear && !it.unidentified) {
+        // 로컬 "% 증가" 옵션 (방어구 전용, 혼합형 포함)
+        static const QHash<QString, QString> incrOf = {
+            {QStringLiteral("stat_1062208444"), QStringLiteral("ar")},  {QStringLiteral("stat_124859000"), QStringLiteral("ev")},
+            {QStringLiteral("stat_4015621042"), QStringLiteral("es")},  {QStringLiteral("stat_2451402625"), QStringLiteral("ar,ev")},
+            {QStringLiteral("stat_3321629045"), QStringLiteral("ar,es")}, {QStringLiteral("stat_1999113824"), QStringLiteral("ev,es")},
+            {QStringLiteral("stat_3523867985"), QStringLiteral("ar,ev,es")},
+        };
+        QHash<QString, double> incr;
+        for (const auto& m : it.mods) {
+            if (!m.value || m.unmatched)
+                continue;
+            const QString t = incrOf.value(m.statKey);
+            for (const QString& k : t.split(QLatin1Char(','), Qt::SkipEmptyParts))
+                incr[k] += *m.value;
+        }
+        const double q = it.quality < 0 ? 0 : it.quality;
+        const QList<QPair<QString, QString>> defs = {{QStringLiteral("armour"), QStringLiteral("ar")},
+                                                     {QStringLiteral("evasion"), QStringLiteral("ev")},
+                                                     {QStringLiteral("energy_shield"), QStringLiteral("es")},
+                                                     {QStringLiteral("ward"), QStringLiteral("ward")}};
+        for (const auto& d : defs) {
+            double v = 0;
+            if (!text::firstNumber(props.value(d.first), &v) || v <= 0)
+                continue;
+            if (q < 20) {
+                const double inc = incr.value(d.second);
+                v = v * (inc + 120.0) / (inc + q + 100.0);
+            }
+            it.props.push_back({d.second, v});
+        }
+        for (const auto& d : {qMakePair(QStringLiteral("block"), QStringLiteral("block")),
+                              qMakePair(QStringLiteral("spirit"), QStringLiteral("spirit"))}) {
+            double v = 0;
+            if (text::firstNumber(props.value(d.first), &v) && v > 0)
+                it.props.push_back({d.second, v});
+        }
     }
 
     applyStatRanges(it, opt.statRangePct);

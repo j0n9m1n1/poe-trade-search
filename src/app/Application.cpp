@@ -571,6 +571,23 @@ QString Application::currencyName(Game g, Lang l, const QString& id) const
     return id;
 }
 
+void Application::loadCurrencyIcons(Game g, Lang l, const QStringList& ids)
+{
+    const TradeDb& db = m_dbs[gi(g)][l];
+    for (const QString& id : ids) {
+        const StaticEntry* s = db.staticById(id);
+        if (!s || s->image.isEmpty())
+            continue;
+        const QString shortName = shortCurrencyName(id), fullName = s->text;
+        m_icons->get(s->image, [this, shortName, fullName](const QString& path) {
+            if (path.isEmpty())
+                return;
+            m_popup->setUnitIcon(shortName, path);
+            m_popup->setUnitIcon(fullName, path);
+        });
+    }
+}
+
 // ------------------------------------------------------------ 프로그램 업데이트
 
 void Application::checkForUpdate(bool manual)
@@ -715,6 +732,8 @@ void Application::priceCheck()
     const QString league = m_cfg.leagueFor(g);
     const Lang server = m_popup->server();
     m_popup->priceBusy(QStringLiteral("시세 확인중..."));
+    loadCurrencyIcons(g, server, {QStringLiteral("chaos"), QStringLiteral("divine"), QStringLiteral("exalted"),
+                                  QStringLiteral("mirror")});
 
     // 환율 먼저 (30분에 한 번, 일괄 교환 요청 2개)
     ensureRates(g, server, league, [this, token, it, g, league, server]() {
@@ -727,6 +746,7 @@ void Application::priceCheck()
         if (!want.isEmpty()) {
             const QString haveName = currencyName(g, server, it.exchangeId);
             const QString wantName = currencyName(g, server, want);
+            loadCurrencyIcons(g, server, {want});
             m_popup->priceStatus(QStringLiteral("교환 시세 확인중..."));
             m_client->exchange(
                 g, server, league, it.exchangeId, want,
@@ -804,6 +824,12 @@ void Application::priceCheck()
                 if (token != m_priceToken)
                     return;
                 const QDateTime now = QDateTime::currentDateTimeUtc();
+                QStringList curs;
+                for (const Listing& l : p.listings) {
+                    if (!curs.contains(l.currency))
+                        curs << l.currency;
+                }
+                loadCurrencyIcons(g, lang, curs); // 처음 보는 화폐면 받아서 나중에 칸에 붙음
                 for (const Listing& l : p.listings) {
                     const bool stale = l.indexed.isValid() && l.indexed.daysTo(now) >= 3;
                     m_popup->priceAddRow({PriceSummary::formatAmount(l.amount) + QLatin1Char(' ') +

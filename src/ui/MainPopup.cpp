@@ -6,6 +6,7 @@
 #include "core/TradeDb.h"
 #include "platform/Platform.h"
 #include "ui/FilterRow.h"
+#include "ui/ToggleLabel.h"
 
 #include <QCheckBox>
 #include <QCloseEvent>
@@ -14,6 +15,12 @@
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QHash>
+#include <QIcon>
+#include <QUrl>
+#include <QRegularExpression>
+#include <QStyledItemDelegate>
+#include <QSet>
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QLabel>
@@ -23,7 +30,6 @@
 #include <QPushButton>
 #include <QRegularExpressionValidator>
 #include <QScrollArea>
-#include <QTabWidget>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
@@ -93,17 +99,29 @@ QColor rarityColor(const ParsedItem& it)
         return QColor(0x88, 0x88, 0xff);
     return QColor(0xc8, 0xc8, 0xc8); // 일반
 }
+// 표 칸 아이콘을 글자 오른쪽에 ("1 [카오스]")
+class IconRightDelegate : public QStyledItemDelegate {
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+
+protected:
+    void initStyleOption(QStyleOptionViewItem* o, const QModelIndex& idx) const override
+    {
+        QStyledItemDelegate::initStyleOption(o, idx);
+        o->decorationPosition = QStyleOptionViewItem::Right;
+    }
+};
 } // namespace
 
 void MainPopup::applyRarityColor(const ParsedItem& it)
 {
     // 밝은 테마에서도 노랑/회색이 보이게 배경은 게임처럼 어둡게 고정. 체크 끈 쪽은 흐리게
     const QColor c = rarityColor(it);
-    m_header->setStyleSheet(QStringLiteral(
-        "QFrame#itemHeader { background:#151311; border:1px solid %2; border-radius:3px; }"
-        "QFrame#itemHeader QLabel, QFrame#itemHeader QCheckBox { color:%1; background:transparent; }"
-        "QFrame#itemHeader QCheckBox:unchecked { color:#6b6b6b; }")
-                                .arg(c.name(), c.darker(220).name()));
+    m_header->setStyleSheet(QStringLiteral("QFrame#itemHeader { background:#151311; border:1px solid %1; border-radius:3px; }")
+                                .arg(c.darker(220).name()));
+    m_name->setStyleSheet(QStringLiteral("QLabel{color:%1; background:transparent; padding:1px 5px;}").arg(c.name()));
+    m_useName->setColor(c);
+    m_useType->setColor(c);
 }
 
 MainPopup::MainPopup(const Keywords& kw, QWidget* parent) : QWidget(parent), m_kw(kw)
@@ -168,15 +186,24 @@ void MainPopup::buildUi()
     // 이름/베이스: 게임 아이템 헤더처럼 어두운 띠 + 레어도 색. 체크 = 검색에 넣음
     m_header = new QFrame(this);
     m_header->setObjectName(QStringLiteral("itemHeader"));
-    // 게임 아이템 헤더처럼 이름 / 베이스 두 줄, 가운데 정렬
-    auto* hl = new QVBoxLayout(m_header);
-    hl->setContentsMargins(8, 4, 8, 4);
-    hl->setSpacing(0);
-    m_useName = new QCheckBox(m_header);
-    m_useName->setToolTip(QStringLiteral("고유 이름으로 검색"));
+    // 게임 아이템 헤더처럼 [영향][이름 / 베이스 두 줄 가운데][영향]. 이름/베이스는 눌러서 검색에 넣고 뺌
+    auto* hh = new QHBoxLayout(m_header);
+    hh->setContentsMargins(6, 4, 6, 4);
+    hh->setSpacing(4);
+    m_inflL = new QLabel(m_header);
+    m_inflR = new QLabel(m_header);
+    for (QLabel* b : {m_inflL, m_inflR}) {
+        b->setFixedWidth(64);
+        b->setAlignment(Qt::AlignCenter);
+        b->setWordWrap(true);
+    }
+    auto* hl = new QVBoxLayout;
+    hl->setSpacing(1);
+    m_useName = new ToggleLabel(m_header);
+    m_useName->setToolTip(QStringLiteral("고유 이름으로 검색 (누르면 켜고 끕니다)"));
     m_name = new QLabel(m_header); // 희귀 이름 (검색엔 못 씀)
-    m_useType = new QCheckBox(m_header);
-    m_useType->setToolTip(QStringLiteral("베이스로 검색. 끄면 아이템 유형(한손 검 등)으로 검색"));
+    m_useType = new ToggleLabel(m_header);
+    m_useType->setToolTip(QStringLiteral("베이스로 검색. 끄면 아이템 유형(한손 검 등)으로 검색합니다 (누르면 켜고 끕니다)"));
     QFont nf = m_name->font();
     nf.setBold(true);
     nf.setPointSizeF(nf.pointSizeF() + 2);
@@ -184,6 +211,9 @@ void MainPopup::buildUi()
         w->setFont(nf);
     for (QWidget* w : std::initializer_list<QWidget*>{m_useName, m_name, m_useType})
         hl->addWidget(w, 0, Qt::AlignHCenter);
+    hh->addWidget(m_inflL, 0, Qt::AlignVCenter);
+    hh->addLayout(hl, 1);
+    hh->addWidget(m_inflR, 0, Qt::AlignVCenter);
     m_sub = new QLabel(this);
     m_sub->setWordWrap(true);
     names->addWidget(m_header);
@@ -201,30 +231,28 @@ void MainPopup::buildUi()
     lmax->setFixedWidth(42);
     lmin->setAlignment(Qt::AlignCenter);
     lmax->setAlignment(Qt::AlignCenter);
-    m_all = new QCheckBox(this);
-    m_all->setToolTip(QStringLiteral("전체 체크 (색 있는 고정/제작 옵션 제외)"));
+    m_all = new ToggleLabel(this);
+    m_all->setText(QStringLiteral("전체"));
+    m_all->setToolTip(QStringLiteral("일반 옵션 전체 선택/해제 (고정·제작 옵션 제외)"));
     hdr->addWidget(m_info, 1);
     hdr->addWidget(lmin);
     hdr->addWidget(lmax);
     hdr->addWidget(m_all);
     root->addLayout(hdr);
 
-    // ---- 탭
-    m_tabs = new QTabWidget(this);
-    m_tabs->setTabPosition(QTabWidget::South);
-    m_tabs->setDocumentMode(true);
-
-    auto* page1 = new QWidget(m_tabs);
+    // ---- 본문 (옵션 / 교환 / 기타 필터)
+    auto* page1 = new QWidget(this);
     auto* p1 = new QVBoxLayout(page1);
-    p1->setContentsMargins(0, 4, 0, 4);
+    p1->setContentsMargins(0, 2, 0, 2);
 
     auto* scroll = new QScrollArea(page1);
+    m_scroll = scroll;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setMinimumHeight(250);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_rowsBox = new QWidget(scroll);
     m_rowsLayout = new QVBoxLayout(m_rowsBox);
-    m_rowsLayout->setContentsMargins(0, 0, 0, 0);
+    m_rowsLayout->setContentsMargins(0, 0, 6, 0); // 오른쪽 여유 (스크롤바/테두리에 안 잘리게)
     m_rowsLayout->setSpacing(2);
     m_detail = new QLabel(m_rowsBox);
     m_detail->setWordWrap(true);
@@ -301,6 +329,36 @@ void MainPopup::buildUi()
         v->addLayout(h);
         g->addWidget(w, 0, 2);
     }
+    // 아이템 속성 (방어도/회피/에너지 보호막/DPS ...): 있는 것만 보임
+    m_propBox = new QWidget(m_miscBox);
+    {
+        auto* ph = new QHBoxLayout(m_propBox);
+        ph->setContentsMargins(0, 0, 0, 0);
+        ph->setSpacing(10);
+        const QList<QPair<QString, QString>> keys = {
+            {QStringLiteral("ar"), QStringLiteral("방어도")},       {QStringLiteral("ev"), QStringLiteral("회피")},
+            {QStringLiteral("es"), QStringLiteral("에너지 보호막")}, {QStringLiteral("ward"), QStringLiteral("수호")},
+            {QStringLiteral("block"), QStringLiteral("막기")},       {QStringLiteral("spirit"), QStringLiteral("정신력")},
+            {QStringLiteral("dps"), QStringLiteral("DPS")},          {QStringLiteral("pdps"), QStringLiteral("물리 DPS")},
+            {QStringLiteral("edps"), QStringLiteral("원소 DPS")}};
+        static const QSet<QString> q20 = {QStringLiteral("ar"), QStringLiteral("ev"), QStringLiteral("es"),
+                                          QStringLiteral("ward"), QStringLiteral("dps"), QStringLiteral("pdps")};
+        for (const auto& k : keys) {
+            PropWidgets pw;
+            pw.key = k.first;
+            pw.use = new QCheckBox(k.second, m_propBox);
+            pw.min = numEdit(m_propBox);
+            pw.max = numEdit(m_propBox);
+            if (q20.contains(k.first))
+                pw.use->setToolTip(QStringLiteral("거래소는 퀄리티 20% 기준 값으로 검색합니다. 최소값도 그 기준입니다"));
+            pw.box = pair(pw.use, pw.min, pw.max);
+            pw.box->setParent(m_propBox);
+            ph->addWidget(pw.box);
+            m_props.push_back(pw);
+        }
+        ph->addStretch(1);
+    }
+    g->addWidget(m_propBox, 1, 0, 1, 3);
     m_special1 = new QCheckBox(QStringLiteral("결합"), m_miscBox);
     m_special2 = new QCheckBox(QStringLiteral("역병 침식"), m_miscBox);
     m_corrupt = new QComboBox(m_miscBox);
@@ -333,33 +391,33 @@ void MainPopup::buildUi()
     row2->addWidget(m_alt);
     row2->addWidget(m_mutated);
     row2->addWidget(m_corrupt);
-    g->addLayout(row2, 1, 0, 1, 3);
+    g->addLayout(row2, 2, 0, 1, 3);
     p1->addWidget(m_miscBox);
 
 
-    m_tabs->addTab(page1, QStringLiteral("간략히"));
+    root->addWidget(page1);
 
-    // 시세 목록 탭
-    auto* page2 = new QWidget(m_tabs);
-    auto* p2 = new QVBoxLayout(page2);
-    p2->setContentsMargins(0, 4, 0, 4);
-    m_prices = new QTableWidget(page2);
+    // 매물 목록 (항상 보임)
+    m_prices = new QTableWidget(this);
     m_prices->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_prices->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_prices->verticalHeader()->setVisible(false);
     m_prices->verticalHeader()->setDefaultSectionSize(20);
-    m_prices->horizontalHeader()->setStretchLastSection(true);
+    m_prices->horizontalHeader()->setStretchLastSection(false);
     m_prices->setShowGrid(false);
     m_prices->setAlternatingRowColors(true);
     m_prices->setWordWrap(false);
-    p2->addWidget(m_prices, 1);
-    m_priceCount = new QLabel(page2);
-    p2->addWidget(m_priceCount);
-    m_tabs->addTab(page2, QStringLiteral("자세히"));
+    m_prices->setMinimumHeight(170);
+    m_prices->setIconSize(QSize(18, 18));
+    m_prices->verticalHeader()->setDefaultSectionSize(22);
+    {
+        auto* d = new IconRightDelegate(m_prices);
+        m_prices->setItemDelegateForColumn(0, d);
+        m_prices->setItemDelegateForColumn(1, d);
+    }
+    m_priceCount = new QLabel(this);
 
-    root->addWidget(m_tabs, 1);
-
-    // 거래 조건 줄 (두 탭 공용). 거래소 사이트 순서: 화폐 / 판매 방식 / 등록 기간
+    // 거래 조건 줄. 거래소 사이트 순서: 화폐 / 판매 방식 / 등록 기간
     auto* pr = new QHBoxLayout;
     m_currency = new QComboBox(this); // 게임별 목록은 setItem 에서 채움
     m_currency->setSizeAdjustPolicy(QComboBox::AdjustToContents);
@@ -390,17 +448,23 @@ void MainPopup::buildUi()
     m_listCount->setToolTip(QStringLiteral("목록 수 (많을수록 느림)"));
     pr->addWidget(m_listCount);
     root->addLayout(pr);
+    root->addWidget(m_prices, 1);
 
     // 시세 줄
-    m_price = new QPushButton(this);
-    m_price->setFlat(true);
+    m_price = new QLabel(this); // 화폐 아이콘 넣으려고 버튼 대신 라벨 (누르면 시세 조회)
     m_price->setCursor(Qt::PointingHandCursor);
-    m_price->setStyleSheet(QStringLiteral("text-align:right; padding:2px;"));
-    m_price->setToolTip(QStringLiteral("좌클릭: 시세 조회 / 우클릭: 시세 목록 탭"));
+    m_price->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_price->setMinimumHeight(26);
+    m_price->setToolTip(QStringLiteral("누르면 시세를 다시 조회합니다"));
     m_price->installEventFilter(this);
     m_idleText = QStringLiteral("시세를 검색하려면 클릭하세요");
-    m_price->setText(m_idleText);
-    root->addWidget(m_price);
+    setPriceText(m_idleText);
+    {
+        auto* pl = new QHBoxLayout;
+        pl->addWidget(m_priceCount);
+        pl->addWidget(m_price, 1);
+        root->addLayout(pl);
+    }
 
     auto* bottom = new QHBoxLayout;
     m_search = new QPushButton(QStringLiteral("거래소에서 찾기"), this);
@@ -426,8 +490,7 @@ void MainPopup::buildUi()
     connect(m_search, &QPushButton::clicked, this, &MainPopup::openTradeRequested);
     connect(m_close, &QPushButton::clicked, this, &QWidget::hide);
     connect(m_settings, &QPushButton::clicked, this, &MainPopup::settingsRequested);
-    connect(m_price, &QPushButton::clicked, this, &MainPopup::priceCheckRequested);
-    connect(m_all, &QCheckBox::toggled, this, [this](bool on) {
+    connect(m_all, &ToggleLabel::toggled, this, [this](bool on) {
         for (FilterRow* r : m_rows) {
             if (r->isPlain() && r->isCheckable())
                 r->setChecked(on);
@@ -436,8 +499,15 @@ void MainPopup::buildUi()
     auto stale = [this]() { markStale(); };
     for (QComboBox* c : {m_rarity, m_server, m_corrupt, m_mutated, m_infl1, m_infl2, m_alt, m_status, m_currency, m_indexed, m_listCount})
         connect(c, qOverload<int>(&QComboBox::currentIndexChanged), this, stale);
-    for (QCheckBox* c : {m_lv, m_q, m_sock, m_special1, m_special2, m_useName, m_useType, m_collapse})
+    for (QCheckBox* c : {m_lv, m_q, m_sock, m_special1, m_special2, m_collapse})
         connect(c, &QCheckBox::toggled, this, stale);
+    for (ToggleLabel* t : {m_useName, m_useType})
+        connect(t, &ToggleLabel::toggled, this, stale);
+    for (const PropWidgets& pw : m_props) {
+        connect(pw.use, &QCheckBox::toggled, this, stale);
+        connect(pw.min, &QLineEdit::textEdited, this, stale);
+        connect(pw.max, &QLineEdit::textEdited, this, stale);
+    }
     connect(m_preset, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() {
         applyPresetAndRender();
         markStale();
@@ -473,13 +543,11 @@ void MainPopup::installActivator(QWidget* w)
 bool MainPopup::eventFilter(QObject* o, QEvent* e)
 {
     if (e->type() == QEvent::MouseButtonPress) {
-        if (o == m_price) {
-            auto* me = static_cast<QMouseEvent*>(e);
-            if (me->button() == Qt::RightButton) {
-                m_tabs->setCurrentIndex(m_tabs->currentIndex() == 0 ? 1 : 0);
-                return true;
-            }
-        } else if (qobject_cast<QLineEdit*>(o) && !isActiveWindow()) {
+        if (o == m_price && static_cast<QMouseEvent*>(e)->button() == Qt::LeftButton) {
+            emit priceCheckRequested();
+            return true;
+        }
+        if (qobject_cast<QLineEdit*>(o) && !isActiveWindow()) {
             // 포커스 안 뺏고 떠 있다가 입력칸 누르면 그때 활성화 (원본 WS_EX_NOACTIVATE 토글)
             platform::activateWindow(this);
         }
@@ -498,8 +566,9 @@ void MainPopup::clearRows()
 
 void MainPopup::markStale()
 {
-    if (m_price->text() != m_idleText && !m_price->text().endsWith(QStringLiteral("...")))
-        m_price->setStyleSheet(QStringLiteral("text-align:right; padding:2px; color:#e75480;"));
+    // 조건을 바꿨으면 지금 시세는 옛 조건 결과라 색으로 표시
+    if (m_priceText != m_idleText && !m_priceText.endsWith(QStringLiteral("...")))
+        setPriceText(m_priceText, QStringLiteral("#e75480"));
 }
 
 void MainPopup::setLeagueTitle(const QString& league)
@@ -543,6 +612,41 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
         m_useType->setText(base);
         m_useType->setVisible(!base.isEmpty());
         applyRarityColor(it);
+    }
+    // 영향 배지: 첫째 왼쪽, 둘째 오른쪽 (게임 헤더 양쪽 아이콘 자리)
+    {
+        QVector<QPair<QString, QString>> badges; // 이름, 색
+        static const QHash<QString, QString> inflColor = {
+            {QStringLiteral("shaper_item"), QStringLiteral("#7fa8f0")},   {QStringLiteral("elder_item"), QStringLiteral("#b98be6")},
+            {QStringLiteral("crusader_item"), QStringLiteral("#e8d27a")}, {QStringLiteral("redeemer_item"), QStringLiteral("#7fd3e6")},
+            {QStringLiteral("hunter_item"), QStringLiteral("#8fd36b")},   {QStringLiteral("warlord_item"), QStringLiteral("#ec7a62")},
+        };
+        for (int i : it.influences) {
+            if (i >= 0 && i < m_kw.influences().size()) {
+                const auto& inf = m_kw.influences()[i];
+                badges.push_back({inf.name.first(Lang::Ko), inflColor.value(inf.flag, QStringLiteral("#cccccc"))});
+            }
+        }
+        if (it.searing)
+            badges.push_back({QStringLiteral("총주교"), QStringLiteral("#ff8a3d")});
+        if (it.tangled)
+            badges.push_back({QStringLiteral("포식자"), QStringLiteral("#5fd0b8")});
+        auto setBadge = [](QLabel* l, const QVector<QPair<QString, QString>>& b) {
+            QStringList names;
+            for (const auto& x : b)
+                names << x.first;
+            l->setText(names.join(QLatin1Char('\n')));
+            const QString c = b.isEmpty() ? QStringLiteral("transparent") : b.first().second;
+            l->setStyleSheet(b.isEmpty() ? QStringLiteral("QLabel{background:transparent;}")
+                                         : QStringLiteral("QLabel{color:%1; border:1px solid %1; border-radius:8px; "
+                                                          "padding:1px 3px; font-weight:bold; background:transparent;}")
+                                               .arg(c));
+        };
+        const auto left = badges.mid(0, 1), right = badges.mid(1);
+        setBadge(m_inflL, left);
+        setBadge(m_inflR, right);
+        m_inflL->setVisible(!badges.isEmpty());
+        m_inflR->setVisible(!badges.isEmpty());
     }
     m_icon->clear();
     m_icon->setVisible(false);
@@ -647,7 +751,6 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     }
     m_priceMin->setText(cfg.searchPriceMinimum > 0 ? QString::number(cfg.searchPriceMinimum) : QString());
     priceIdle(m_idleText);
-    m_tabs->setCurrentIndex(0);
     setLeagueTitle(cfg.leagueFor(it.game));
 
     applyPresetAndRender();
@@ -689,6 +792,18 @@ void MainPopup::renderRows()
     }
     QSignalBlocker b(m_all);
     m_all->setChecked(m_item.checkAllUnique);
+    // 옵션 영역은 옵션 수만큼만 (빈 공간은 매물 목록에). 너무 많으면 스크롤
+    // 줄마다 실제 폭 기준 높이를 더함 (긴 옵션은 줄바꿈)
+    const int w = qMax(m_scroll->viewport()->width(), 600);
+    int h = 0;
+    for (FilterRow* r : m_rows)
+        h += (r->hasHeightForWidth() ? r->heightForWidth(w) : r->sizeHint().height()) + m_rowsLayout->spacing();
+    if (!m_detail->isHidden())
+        h += m_detail->heightForWidth(w) + m_rowsLayout->spacing();
+    // 줄바꿈 라벨은 최소 높이를 넉넉히 잡아서, 그보다 작으면 스크롤바가 생김
+    m_rowsLayout->activate();
+    h = qMax(h, m_rowsBox->minimumSizeHint().height());
+    m_scroll->setMinimumHeight(qBound(60, h + 6, 330));
 }
 
 void MainPopup::renderMisc(const ItemFilterState& st)
@@ -719,8 +834,8 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     m_lMax->setVisible(poe1);
     m_sock->setText(poe1 ? QStringLiteral("홈·링크") : QStringLiteral("룬 홈"));
 
-    setBold(m_lv, it.highlightLevel, QStringLiteral("#8B0000"));
-    setBold(m_q, it.highlightQuality, QStringLiteral("#8B0000"));
+    setBold(m_lv, it.highlightLevel, QStringLiteral("#e06666"));
+    setBold(m_q, it.highlightQuality, QStringLiteral("#e06666"));
 
     // 결합 / 역병
     const bool mapP1 = poe1 && it.isMap;
@@ -735,7 +850,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
         const int ci = m_corrupt->findData(st.corrupted + twice * 10);
         m_corrupt->setCurrentIndex(ci < 0 ? 0 : ci);
     }
-    setBold(m_corrupt, it.corrupted, QStringLiteral("#8B0000"));
+    setBold(m_corrupt, it.corrupted, QStringLiteral("#e06666"));
 
     // 삿된(PoE1) / 함양된 바알 고유(PoE2): 같은 거래소 필터(mutated), 고유만
     const QString mu = poe1 ? QStringLiteral("삿된") : QStringLiteral("함양된 바알");
@@ -744,7 +859,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     m_mutated->setItemText(2, mu + QStringLiteral(": 아니오"));
     m_mutated->setCurrentIndex(qBound(0, st.mutated, 2));
     m_mutated->setVisible(it.rarityId == QStringLiteral("unique"));
-    setBold(m_mutated, it.foulborn, QStringLiteral("#8B0000"));
+    setBold(m_mutated, it.foulborn, QStringLiteral("#e06666"));
 
     const bool showInfl = poe1 && it.isGear;
     m_infl1->setVisible(showInfl);
@@ -768,6 +883,23 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     }
     m_alt->setVisible(m_alt->count() > 0);
 
+    {
+        bool any = false;
+        for (const PropWidgets& pw : m_props) {
+            const PropFilterState* ps = nullptr;
+            for (const auto& x : st.props) {
+                if (x.key == pw.key)
+                    ps = &x;
+            }
+            pw.box->setVisible(ps != nullptr);
+            any = any || ps;
+            QSignalBlocker bb(pw.use);
+            pw.use->setChecked(ps && ps->use);
+            pw.min->setText(ps && ps->min ? QString::number(*ps->min) : QString());
+            pw.max->setText(ps && ps->max ? QString::number(*ps->max) : QString());
+        }
+        m_propBox->setVisible(any);
+    }
     m_useName->setChecked(st.useName && !st.byCategory);
     m_useType->setChecked(st.useType && !st.byCategory);
     const int ri = m_rarity->findData(st.rarity);
@@ -806,6 +938,15 @@ ItemFilterState MainPopup::collectState() const
     s.mutated = m_mutated->isHidden() ? 0 : m_mutated->currentIndex();
     s.rarity = m_rarity->currentData().toString();
     s.byCategory = false;
+    for (PropFilterState& p : s.props) {
+        for (const PropWidgets& pw : m_props) {
+            if (pw.key == p.key && !pw.box->isHidden()) {
+                p.use = pw.use->isChecked();
+                p.min = toOpt(pw.min);
+                p.max = toOpt(pw.max);
+            }
+        }
+    }
     s.useName = m_useName->isHidden() || m_useName->isChecked();
     s.useType = m_useType->isHidden() || m_useType->isChecked();
     s.influences.clear();
@@ -888,14 +1029,13 @@ void MainPopup::priceBusy(const QString& msg)
 {
     m_prices->setRowCount(0);
     m_priceCount->clear();
-    m_price->setToolTip(QStringLiteral("좌클릭: 시세 조회 / 우클릭: 시세 목록 탭"));
+    m_price->setToolTip(QStringLiteral("누르면 시세를 다시 조회합니다"));
     priceStatus(msg);
 }
 
 void MainPopup::priceStatus(const QString& msg)
 {
-    m_price->setStyleSheet(QStringLiteral("text-align:right; padding:2px;"));
-    m_price->setText(msg);
+    setPriceText(msg);
 }
 
 void MainPopup::priceColumns(const QStringList& headers, const QVector<int>& hidden)
@@ -903,8 +1043,17 @@ void MainPopup::priceColumns(const QStringList& headers, const QVector<int>& hid
     m_prices->setRowCount(0);
     m_prices->setColumnCount(headers.size());
     m_prices->setHorizontalHeaderLabels(headers);
-    for (int c = 0; c < headers.size(); ++c)
+    int lastVisible = -1;
+    for (int c = 0; c < headers.size(); ++c) {
         m_prices->setColumnHidden(c, hidden.contains(c));
+        m_prices->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Interactive);
+        if (!hidden.contains(c))
+            lastVisible = c;
+    }
+    // 숨긴 열이 끝에 있어도 보이는 마지막 열(판매자)이 남는 폭을 채우게
+    m_lastPriceCol = lastVisible;
+    if (lastVisible >= 0)
+        m_prices->horizontalHeader()->setSectionResizeMode(lastVisible, QHeaderView::Stretch);
 }
 
 void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, const QString& tooltip)
@@ -914,6 +1063,8 @@ void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, cons
     const QColor dimC = dimColor(palette());
     for (int c = 0; c < cells.size() && c < m_prices->columnCount(); ++c) {
         auto* item = new QTableWidgetItem(cells[c]);
+        if (c < 2)
+            applyUnitIcon(item); // "1 카오스" -> "1" + 카오스 아이콘
         if (c < 3)
             item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         if (dim)
@@ -933,24 +1084,95 @@ void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, cons
         }
     }
     if (r == 0)
-        m_prices->resizeColumnsToContents();
+        fitPriceColumns();
+}
+
+void MainPopup::fitPriceColumns()
+{
+    // 마지막 열(판매자)은 늘려서 남는 폭을 채우고, 나머지만 내용에 맞춤
+    for (int c = 0; c < m_prices->columnCount(); ++c) {
+        if (c != m_lastPriceCol && !m_prices->isColumnHidden(c))
+            m_prices->resizeColumnToContents(c);
+    }
+}
+
+QString MainPopup::withUnitIcons(const QString& plain) const
+{
+    // "≈ 29 디바인" 의 화폐 이름 -> 아이콘. 맨 앞 금액 부분은 굵게
+    QString html = plain.toHtmlEscaped();
+    bool replaced = false;
+    for (auto u = m_unitIcons.constBegin(); u != m_unitIcons.constEnd(); ++u) {
+        const QRegularExpression re(QStringLiteral("(\\d) %1(?=\\s|$|\\))").arg(QRegularExpression::escape(u.key().toHtmlEscaped())));
+        if (!re.match(html).hasMatch())
+            continue;
+        const QString img = QStringLiteral("\\1 <img src=\"%1\" width=\"20\" height=\"20\" align=\"middle\">")
+                                .arg(QUrl::fromLocalFile(u.value()).toString());
+        html.replace(re, img);
+        replaced = true;
+    }
+    if (!replaced)
+        return {};
+    // "≈ 29 [아이콘]  (..." 앞부분 굵게
+    const int cut = html.indexOf(QStringLiteral("  ("));
+    if (html.startsWith(QStringLiteral("≈")) && cut > 0)
+        html = QStringLiteral("<b>") + html.left(cut) + QStringLiteral("</b>") + html.mid(cut);
+    return html;
+}
+
+void MainPopup::setPriceText(const QString& plain, const QString& color)
+{
+    m_priceText = plain;
+    m_priceColor = color;
+    m_price->setStyleSheet(QStringLiteral("QLabel{padding:2px 4px; %1}")
+                               .arg(color.isEmpty() ? QString() : QStringLiteral("color:%1;").arg(color)));
+    const QString html = withUnitIcons(plain);
+    m_price->setTextFormat(html.isEmpty() ? Qt::PlainText : Qt::RichText);
+    m_price->setText(html.isEmpty() ? plain : html);
+}
+
+void MainPopup::applyUnitIcon(QTableWidgetItem* item) const
+{
+    const QString t = item->text();
+    const int sp = t.indexOf(QLatin1Char(' '));
+    if (sp <= 0)
+        return;
+    const QString path = m_unitIcons.value(t.mid(sp + 1));
+    if (path.isEmpty())
+        return;
+    item->setText(t.left(sp));
+    item->setIcon(QIcon(path));
+    if (item->toolTip().isEmpty())
+        item->setToolTip(t);
+}
+
+void MainPopup::setUnitIcon(const QString& unitName, const QString& path)
+{
+    if (unitName.isEmpty() || path.isEmpty() || m_unitIcons.value(unitName) == path)
+        return;
+    m_unitIcons.insert(unitName, path);
+    // 이미 그린 줄 / 추정가에도 반영
+    for (int r = 0; r < m_prices->rowCount(); ++r) {
+        for (int c = 0; c < 2 && c < m_prices->columnCount(); ++c) {
+            if (QTableWidgetItem* it = m_prices->item(r, c))
+                applyUnitIcon(it);
+        }
+    }
+    setPriceText(m_priceText, m_priceColor);
 }
 
 void MainPopup::priceDone(const QString& summary, const QString& count, const QString& tooltip)
 {
-    m_price->setStyleSheet(QStringLiteral("text-align:right; padding:2px;"));
-    m_price->setText(summary);
+    setPriceText(summary);
     if (!tooltip.isEmpty())
-        m_price->setToolTip(tooltip + QStringLiteral("\n\n좌클릭: 다시 조회 / 우클릭: 시세 목록 탭"));
+        m_price->setToolTip(tooltip + QStringLiteral("\n\n누르면 다시 조회합니다"));
     m_priceCount->setText(count);
-    m_prices->resizeColumnsToContents();
+    fitPriceColumns();
     m_prices->scrollToTop();
 }
 
 void MainPopup::priceIdle(const QString& msg)
 {
-    m_price->setStyleSheet(QStringLiteral("text-align:right; padding:2px;"));
-    m_price->setText(msg);
+    setPriceText(msg);
 }
 
 void MainPopup::keyPressEvent(QKeyEvent* e)

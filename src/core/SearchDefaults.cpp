@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/SearchDefaults.h"
 
+#include <cmath>
+
 #include "core/Keywords.h"
 #include "core/TradeDb.h"
 
@@ -52,6 +54,8 @@ ItemFilterState defaultFilterState(const ParsedItem& it)
     s.heistObjective = it.heistValue;
     s.ultimatumReward = it.ultimatumReward;
     s.ultimatumOutput = it.ultimatumOutput;
+    for (const ItemProp& p : it.props)
+        s.props.push_back({p.key, false, std::floor(p.value), std::nullopt});
     return s;
 }
 
@@ -122,6 +126,13 @@ ParsedItem applyPreset(const ParsedItem& parsed, Preset p, int rangePct, ItemFil
         }
         break;
     }
+    // 아이템 속성(방어도/DPS) 최소값도 옵션처럼 완화 (정확 프리셋은 그대로)
+    if (st && p != Preset::Exact && rangePct > 0) {
+        for (PropFilterState& pr : st->props) {
+            if (pr.min)
+                pr.min = std::floor(*pr.min * (100 - rangePct) / 100.0);
+        }
+    }
     return it;
 }
 
@@ -180,6 +191,10 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
     r.heistObjective = st.heistObjective;
     r.ultimatumReward = st.ultimatumReward;
     r.ultimatumOutput = st.ultimatumOutput;
+    for (const PropFilterState& p : st.props) {
+        if (p.use && (p.min || p.max))
+            r.props.push_back({p.key, p.min, p.max});
+    }
 
     if (it.game == Game::Poe1 && !it.isMap) {
         const auto& infl = kw.influences();

@@ -36,6 +36,14 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("sale_type"), QStringLiteral("trade_filters")},
         {QStringLiteral("price"), QStringLiteral("trade_filters")},
         {QStringLiteral("collapse"), QStringLiteral("trade_filters")},
+        {QStringLiteral("ar"), QStringLiteral("armour_filters")},
+        {QStringLiteral("ev"), QStringLiteral("armour_filters")},
+        {QStringLiteral("es"), QStringLiteral("armour_filters")},
+        {QStringLiteral("ward"), QStringLiteral("armour_filters")},
+        {QStringLiteral("block"), QStringLiteral("armour_filters")},
+        {QStringLiteral("dps"), QStringLiteral("weapon_filters")},
+        {QStringLiteral("pdps"), QStringLiteral("weapon_filters")},
+        {QStringLiteral("edps"), QStringLiteral("weapon_filters")},
     };
     static const QHash<QString, QString> p2 = {
         {QStringLiteral("collapse"), QStringLiteral("trade_filters")},
@@ -44,6 +52,15 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("ilvl"), QStringLiteral("type_filters")},
         {QStringLiteral("quality"), QStringLiteral("type_filters")},
         {QStringLiteral("rune_sockets"), QStringLiteral("equipment_filters")},
+        {QStringLiteral("ar"), QStringLiteral("equipment_filters")},
+        {QStringLiteral("ev"), QStringLiteral("equipment_filters")},
+        {QStringLiteral("es"), QStringLiteral("equipment_filters")},
+        {QStringLiteral("ward"), QStringLiteral("equipment_filters")},
+        {QStringLiteral("block"), QStringLiteral("equipment_filters")},
+        {QStringLiteral("spirit"), QStringLiteral("equipment_filters")},
+        {QStringLiteral("dps"), QStringLiteral("equipment_filters")},
+        {QStringLiteral("pdps"), QStringLiteral("equipment_filters")},
+        {QStringLiteral("edps"), QStringLiteral("equipment_filters")},
         {QStringLiteral("gem_level"), QStringLiteral("misc_filters")},
         {QStringLiteral("corrupted"), QStringLiteral("misc_filters")},
         {QStringLiteral("twice_corrupted"), QStringLiteral("misc_filters")},
@@ -220,6 +237,8 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
         if (!r.ultimatumOutput.isEmpty())
             fs.add(QStringLiteral("ultimatum_output"), option(r.ultimatumOutput));
     }
+    for (const PropQuery& p : r.props)
+        fs.add(p.id, minMax(p.min, p.max));
     if (!r.indexed.isEmpty())
         fs.add(QStringLiteral("indexed"), option(r.indexed));
     if (!r.saleType.isEmpty())

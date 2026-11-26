@@ -14,7 +14,8 @@
 #include <QMessageBox>
 #include <QStandardPaths>
 #include <QTextStream>
-#include <QTabWidget>
+#include <QPalette>
+#include <QStyleHints>
 #include <QTimer>
 #include <QWidget>
 #include <memory>
@@ -58,6 +59,38 @@ QString pickDataDir()
     return app;
 }
 
+// 게임 글씨 색(파랑/노랑/주황 옵션 등)이 읽히도록 항상 어두운 테마.
+// Qt 6.8+ 는 OS 테마와 관계없이 다크 색 구성을 요청하고, 안 되는 플랫폼이면 Fusion 다크 팔레트
+void applyDarkTheme(QApplication& app)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+    if (QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark)
+        return;
+#endif
+    app.setStyle(QStringLiteral("Fusion"));
+    QPalette p;
+    const QColor win(0x20, 0x20, 0x20), base(0x16, 0x16, 0x16), text(0xe6, 0xe6, 0xe6);
+    p.setColor(QPalette::Window, win);
+    p.setColor(QPalette::WindowText, text);
+    p.setColor(QPalette::Base, base);
+    p.setColor(QPalette::AlternateBase, QColor(0x24, 0x24, 0x24));
+    p.setColor(QPalette::ToolTipBase, QColor(0x2b, 0x2b, 0x2b));
+    p.setColor(QPalette::ToolTipText, text);
+    p.setColor(QPalette::Text, text);
+    p.setColor(QPalette::Button, QColor(0x2d, 0x2d, 0x2d));
+    p.setColor(QPalette::ButtonText, text);
+    p.setColor(QPalette::BrightText, Qt::red);
+    p.setColor(QPalette::Highlight, QColor(0x3d, 0x6f, 0xb4));
+    p.setColor(QPalette::HighlightedText, Qt::white);
+    p.setColor(QPalette::PlaceholderText, QColor(0x80, 0x80, 0x80));
+    p.setColor(QPalette::Mid, QColor(0x55, 0x55, 0x55));
+    p.setColor(QPalette::Disabled, QPalette::Text, QColor(0x70, 0x70, 0x70));
+    p.setColor(QPalette::Disabled, QPalette::WindowText, QColor(0x70, 0x70, 0x70));
+    p.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(0x70, 0x70, 0x70));
+    app.setPalette(p);
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -67,6 +100,7 @@ int main(int argc, char** argv)
     QApplication::setApplicationVersion(QStringLiteral(PTS_VERSION));
     QApplication::setQuitOnLastWindowClosed(false);
     Q_INIT_RESOURCE(resources);
+    applyDarkTheme(app);
 
     const QString dataDir = pickDataDir();
 
@@ -114,10 +148,6 @@ int main(int argc, char** argv)
                 const int delay = qEnvironmentVariableIsSet("PTS_DEV_SHOT_DELAY") ? qEnvironmentVariableIntValue("PTS_DEV_SHOT_DELAY") : 1500;
                 QTimer::singleShot(at + delay, &a, [&a, shot]() {
                     if (QWidget* w = a.popupWidget()) {
-                        if (qEnvironmentVariableIsSet("PTS_DEV_TAB")) {
-                            if (auto* tabs = w->findChild<QTabWidget*>())
-                                tabs->setCurrentIndex(qEnvironmentVariableIntValue("PTS_DEV_TAB"));
-                        }
                         w->grab().save(shot);
                     }
                     QCoreApplication::quit();

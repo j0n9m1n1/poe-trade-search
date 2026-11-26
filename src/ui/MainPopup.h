@@ -5,6 +5,7 @@
 #include "core/ItemParser.h"
 #include "core/SearchDefaults.h"
 
+#include <QHash>
 #include <QWidget>
 
 class QCheckBox;
@@ -13,13 +14,15 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QPushButton;
-class QTabWidget;
+class QScrollArea;
+class QTableWidgetItem;
 class QTableWidget;
 class QVBoxLayout;
 
 namespace pts {
 
 class FilterRow;
+class ToggleLabel;
 class Keywords;
 struct GameDb;
 
@@ -58,6 +61,8 @@ public:
     void priceIdle(const QString& msg);
 
     void setLeagueTitle(const QString& league);
+    // 화폐 이름(카오스/디바인/전체 이름) 아이콘. 가격 칸과 추정가에 이름 대신 아이콘
+    void setUnitIcon(const QString& unitName, const QString& path);
 
 signals:
     void openTradeRequested();
@@ -83,6 +88,10 @@ private:
     void renderRows();
     void renderMisc(const ItemFilterState& st);
     void applyRarityColor(const ParsedItem& it);
+    void setPriceText(const QString& plain, const QString& color = QString());
+    QString withUnitIcons(const QString& plain) const;
+    void applyUnitIcon(QTableWidgetItem* item) const;
+    void fitPriceColumns();
     int rangePct() const;
 
     const Keywords& m_kw;
@@ -102,14 +111,25 @@ private:
     QPushButton* m_settings;
     QLabel* m_icon;
     QFrame* m_header;   // 이름/베이스 띠
-    QCheckBox* m_useName; // 고유 이름 (체크 = 검색에 넣음)
-    QCheckBox* m_useType; // 베이스 (끄면 유형으로 검색)
+    ToggleLabel* m_useName; // 고유 이름 (켜짐 = 검색에 넣음)
+    ToggleLabel* m_useType; // 베이스 (끄면 유형으로 검색)
+    QLabel* m_inflL;        // 영향 표시 (왼쪽/오른쪽)
+    QLabel* m_inflR;
     QLabel* m_name;     // 희귀 이름 표시용
     QLabel* m_sub;
     QLabel* m_info;
-    QCheckBox* m_all;
+    ToggleLabel* m_all;
 
-    QTabWidget* m_tabs;
+    QScrollArea* m_scroll;
+    struct PropWidgets {
+        QString key;
+        QWidget* box = nullptr;
+        QCheckBox* use = nullptr;
+        QLineEdit* min = nullptr;
+        QLineEdit* max = nullptr;
+    };
+    QVector<PropWidgets> m_props; // 아이템 속성 필터 (방어도/DPS ...)
+    QWidget* m_propBox;
     QWidget* m_rowsBox;
     QVBoxLayout* m_rowsLayout;
     QVector<FilterRow*> m_rows;
@@ -140,7 +160,10 @@ private:
     QComboBox* m_infl2;
     QComboBox* m_alt;
 
-    QPushButton* m_price;
+    QLabel* m_price; // 추정가 줄 (누르면 시세 조회)
+    int m_lastPriceCol = -1;
+    QString m_priceText, m_priceColor;
+    QHash<QString, QString> m_unitIcons; // 화폐 이름 -> 아이콘 파일
     QTableWidget* m_prices;
     QLineEdit* m_priceMin;
     QComboBox* m_listCount;

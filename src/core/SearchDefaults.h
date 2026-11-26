@@ -10,6 +10,13 @@ class Keywords;
 struct GameDb;
 
 // 옵션 줄 말고 아래쪽 필터들의 UI 편집 상태 (옵션 줄은 ParsedItem::mods 를 직접 고침)
+// 아이템 속성 필터 (방어도/회피/DPS ...). key = 거래소 필터 id
+struct PropFilterState {
+    QString key;
+    bool use = false;
+    OptDouble min, max;
+};
+
 struct ItemFilterState {
     bool useLevel = false;
     OptDouble levelMin, levelMax;
@@ -31,6 +38,7 @@ struct ItemFilterState {
     QString heistObjective;
     QString ultimatumReward;
     QString ultimatumOutput;
+    QVector<PropFilterState> props;
 };
 
 ItemFilterState defaultFilterState(const ParsedItem& it);

@@ -340,6 +340,63 @@ private slots:
         QVERIFY(findMod(*it, QStringLiteral("stat_1940865751"))); // 물리 피해 추가 (특정)
     }
 
+    void itemPropsAndAffix()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        auto propOf = [](const ParsedItem& it, const char* k) {
+            for (const ItemProp& p : it.props) {
+                if (p.key == QLatin1String(k))
+                    return p.value;
+            }
+            return -1.0;
+        };
+        // 퀄 20: 표시값 그대로
+        const QString gull = fixture(QStringLiteral("poe1_ko_unique_gull.txt"));
+        auto g = parseText(gull, Game::Poe1);
+        QVERIFY(g);
+        QCOMPARE(propOf(*g, "ev"), 301.0);
+        QCOMPARE(propOf(*g, "es"), 150.0);
+        QCOMPARE(propOf(*g, "ar"), -1.0);
+        // "적 처치 시 1레벨 하위 성소 창조 발동 — 변경이 불가능한 값" 도 매칭
+        QVERIFY(findMod(*g, QStringLiteral("stat_1010340836")));
+        // 퀄 10: 거래소 기준(퀄 20)으로 환산. "회피 및 에너지 보호막 141% 증가" 포함
+        QString q10 = gull;
+        q10.replace(QStringLiteral("퀄리티: +20%"), QStringLiteral("퀄리티: +10%"));
+        auto g10 = parseText(q10, Game::Poe1);
+        QVERIFY(g10);
+        QVERIFY(qAbs(propOf(*g10, "ev") - 301.0 * 261.0 / 251.0) < 0.01);
+        QVERIFY(qAbs(propOf(*g10, "es") - 150.0 * 261.0 / 251.0) < 0.01);
+        // 쿼리: 켠 속성만 armour_filters 로
+        ItemFilterState st = defaultFilterState(*g);
+        QCOMPARE(st.props.size(), 2);
+        st.props[0].use = true;
+        RequestContext ctx;
+        ctx.server = Lang::Ko;
+        const SearchRequest r = makeRequest(*g, st, kw, &dbs[0], ctx);
+        const QJsonObject af = QueryBuilder::build(r, nullptr).value(QStringLiteral("query")).toObject()
+                                   .value(QStringLiteral("filters")).toObject()
+                                   .value(QStringLiteral("armour_filters")).toObject()
+                                   .value(QStringLiteral("filters")).toObject();
+        QCOMPARE(af.value(QStringLiteral("ev")).toObject().value(QStringLiteral("min")).toDouble(), 301.0);
+        QVERIFY(!af.contains(QStringLiteral("es")));
+
+        // 고급 설명: 접두/접미 + 화면용 문구(수치 포함, 범위 제거)
+        auto adv = parse(QStringLiteral("poe1_en_advanced.txt"), Game::Poe1);
+        QVERIFY(adv);
+        int pre = 0, suf = 0;
+        for (const ParsedMod& m : adv->mods) {
+            pre += m.affix == QStringLiteral("prefix");
+            suf += m.affix == QStringLiteral("suffix");
+            if (!m.unmatched) {
+                QVERIFY2(!m.shown.isEmpty() && !m.shown.contains(QLatin1Char('#')), qPrintable(m.shown));
+                QVERIFY2(!m.shown.contains(QLatin1Char('(')), qPrintable(m.shown)); // "35(30-35)" 범위 제거
+            }
+        }
+        QVERIFY(pre >= 2);
+        QVERIFY(suf >= 1);
+    }
+
     void queryPriceCurrency()
     {
         auto priceOf = [](const SearchRequest& r) {

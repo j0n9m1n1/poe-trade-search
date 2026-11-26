@@ -20,6 +20,12 @@ struct StatQuery {
     bool disabled = false;
 };
 
+// 아이템 속성 필터 (거래소 필터 id: ar/ev/es/ward/block/spirit/dps/pdps/edps)
+struct PropQuery {
+    QString id;
+    OptDouble min, max;
+};
+
 // UI 에서 사용자가 고른 값 그대로
 struct SearchRequest {
     Game game = Game::Poe1;
@@ -59,6 +65,7 @@ struct SearchRequest {
     QString ultimatumReward;
     QString ultimatumOutput;
 
+    QVector<PropQuery> props;
     QVector<StatQuery> stats;
     bool includeDisabledStats = true; // 브라우저용은 꺼진 옵션도 같이 보냄
 

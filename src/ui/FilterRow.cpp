@@ -1,36 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ui/FilterRow.h"
 
+#include "ui/ToggleLabel.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMouseEvent>
 #include <QRegularExpressionValidator>
 #include <cmath>
 
 namespace pts {
 
 namespace {
-QString colorHex(const QString& c)
-{
-    if (c == QStringLiteral("implicit"))
-        return QStringLiteral("#8B0000");
-    if (c == QStringLiteral("crafted") || c == QStringLiteral("enchant"))
-        return QStringLiteral("#1f3fbf");
-    if (c == QStringLiteral("scourge"))
-        return QStringLiteral("#d2691e");
-    if (c == QStringLiteral("rune"))
-        return QStringLiteral("#6a0dad");
-    if (c == QStringLiteral("desecrated"))
-        return QStringLiteral("#4b6b2f");
-    if (c == QStringLiteral("ambiguous"))
-        return QStringLiteral("#e75480");
-    return {};
-}
-
 OptDouble toOpt(const QString& s)
 {
     bool ok = false;
@@ -53,11 +37,19 @@ FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
     m_type = new QComboBox(this);
     m_type->setFixedWidth(84);
     m_type->setToolTip(QStringLiteral("검색할 옵션 종류"));
-    m_text = new QLabel(this);
-    m_text->setMinimumWidth(200);
+    m_tier = new QLabel(this);
+    m_tier->setFixedWidth(26);
+    m_tier->setAlignment(Qt::AlignCenter);
+    m_tier->setToolTip(QStringLiteral("P = 접두어, S = 접미어, 숫자 = 등급 (Ctrl+Alt+C 로 복사했을 때)"));
+    m_text = new ToggleLabel(this);
+    m_text->setMinimumWidth(330); // 최소 폭에서 줄바꿈한 높이가 최소 높이라 너무 좁으면 목록 아래 빈 공간이 생김
     m_text->setWordWrap(true); // 긴 옵션은 줄바꿈
     m_text->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::MinimumExpanding);
-    m_text->setTextInteractionFlags(Qt::NoTextInteraction);
+    {
+        QFont f = m_text->font();
+        f.setPointSizeF(f.pointSizeF() + 1);
+        m_text->setFont(f);
+    }
     m_roll = new QLabel(this);
     m_roll->setFixedWidth(36);
     m_roll->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -72,20 +64,23 @@ FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
         e->setValidator(v);
         e->setAlignment(Qt::AlignRight);
     }
-    m_use = new QCheckBox(this);
-    m_use->setToolTip(QStringLiteral("이 옵션으로 검색\n우클릭: 이 종류 아이템에서 항상 자동 체크"));
-    m_use->installEventFilter(this);
-
     lay->addWidget(m_type);
+    lay->addWidget(m_tier);
     lay->addWidget(m_text, 1);
     lay->addWidget(m_roll);
     lay->addWidget(m_res);
     lay->addWidget(m_min);
     lay->addWidget(m_max);
-    lay->addWidget(m_use);
 
     connect(m_type, qOverload<int>(&QComboBox::currentIndexChanged), this, &FilterRow::changed);
-    connect(m_use, &QCheckBox::toggled, this, &FilterRow::changed);
+    connect(m_text, &ToggleLabel::toggled, this, &FilterRow::changed);
+    connect(m_text, &ToggleLabel::rightClicked, this, [this]() {
+        // 우클릭: 이 종류 아이템에서 항상 자동 체크 (켜면 체크도 같이)
+        m_remembered = !m_remembered;
+        m_text->setMarked(m_remembered);
+        m_text->setChecked(m_remembered);
+        emit rememberToggled(m_remembered);
+    });
     connect(m_res, &QCheckBox::toggled, this, &FilterRow::changed);
     connect(m_min, &QLineEdit::textEdited, this, &FilterRow::changed);
     connect(m_max, &QLineEdit::textEdited, this, &FilterRow::changed);
@@ -93,7 +88,7 @@ FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
 
 void FilterRow::setMod(const ParsedMod& m)
 {
-    QSignalBlocker b1(m_type), b2(m_use), b3(m_res);
+    QSignalBlocker b1(m_type), b2(m_text), b3(m_res);
     m_type->clear();
     for (const auto& c : m.cands)
         m_type->addItem(c.label, c.id);
@@ -103,11 +98,29 @@ void FilterRow::setMod(const ParsedMod& m)
     m_type->setEnabled(m.cands.size() > 1);
     m_unmatched = m.unmatched;
 
-    QString shown = m.text;
+    // 등급 칸: P1 / S2 (고급 설명) 또는 T1 (접두/접미 모름)
+    if (m.tier > 0) {
+        const bool pre = m.affix == QStringLiteral("prefix"), suf = m.affix == QStringLiteral("suffix");
+        m_tier->setText((pre ? QStringLiteral("P") : (suf ? QStringLiteral("S") : QStringLiteral("T"))) +
+                        QString::number(m.tier));
+        m_tier->setStyleSheet(QStringLiteral("color:%1; font-weight:bold;")
+                                  .arg(pre ? QStringLiteral("#e08a8a") : (suf ? QStringLiteral("#7fc4e0") : QStringLiteral("#bbbbbb"))));
+    } else {
+        m_tier->clear();
+    }
+    // 글자는 게임 문구 그대로 (수치 포함). 검색에 쓰는 거래소 문구는 툴팁
+    QString shown = m.shown;
+    if (shown.isEmpty()) {
+        shown = m.text;
+        const QString tierPrefix = QStringLiteral("T%1 ").arg(m.tier);
+        if (m.tier > 0 && shown.startsWith(tierPrefix))
+            shown = shown.mid(tierPrefix.size());
+    }
     if (m.unmatched)
-        shown = QStringLiteral("%1  (거래소 옵션을 찾지 못했습니다)").arg(m.text);
+        shown = QStringLiteral("%1  (거래소 옵션을 찾지 못했습니다)").arg(shown);
     m_text->setText(shown);
-    m_text->setToolTip(m.text == m.raw ? m.raw : m.text + QStringLiteral("\n\n") + m.raw);
+    m_text->setToolTip(QStringLiteral("거래소 검색: %1\n원문: %2\n\n누르면 검색에 넣거나 뺍니다 / 우클릭: 항상 자동 체크")
+                           .arg(m.text, m.raw));
     m_color = m.color;
     m_optionStat = m.optionStat;
     m_remembered = m.autoChecked;
@@ -128,15 +141,17 @@ void FilterRow::setMod(const ParsedMod& m)
     m_max->setText(fromOpt(m.max));
     m_min->setEnabled(!m.optionStat && !m.unmatched);
     m_max->setEnabled(!m.optionStat && !m.unmatched);
-    m_use->setChecked(m.checked && !m.lockedOff);
-    m_use->setEnabled(!m.lockedOff);
-    updateStyle();
+    m_text->setCheckable(!m.lockedOff && !m.unmatched);
+    m_text->setChecked(m.checked && !m.lockedOff);
+    m_text->setColor(m.unmatched ? QColor() : modColor(m.color));
+    m_text->setItalic(m.unmatched);
+    m_text->setMarked(m_remembered);
 }
 
 void FilterRow::apply(ParsedMod& m) const
 {
     m.selected = qMax(0, m_type->currentIndex());
-    m.checked = m_use->isChecked();
+    m.checked = m_text->isChecked() && m_text->isCheckable();
     m.totalRes = m.resistance && m_res->isChecked();
     if (!m.optionStat) {
         m.min = toOpt(m_min->text());
@@ -147,42 +162,29 @@ void FilterRow::apply(ParsedMod& m) const
 
 void FilterRow::setChecked(bool on)
 {
-    if (m_use->isEnabled())
-        m_use->setChecked(on);
+    if (m_text->isCheckable())
+        m_text->setChecked(on);
 }
 
 bool FilterRow::isCheckable() const
 {
-    return m_use->isEnabled();
+    return m_text->isCheckable();
 }
 
-void FilterRow::updateStyle()
+QColor FilterRow::modColor(const QString& c)
 {
-    const QString c = colorHex(m_color);
-    if (m_unmatched)
-        m_text->setStyleSheet(QStringLiteral("QLabel{color:palette(mid);font-style:italic;border-bottom:1px dotted palette(mid);}"));
-    else
-        m_text->setStyleSheet(c.isEmpty() ? QStringLiteral("QLabel{border-bottom:1px solid palette(mid);}")
-                                          : QStringLiteral("QLabel{color:%1;border-bottom:1px solid %1;}").arg(c));
-    QFont f = m_use->font();
-    f.setBold(m_remembered);
-    m_use->setFont(f);
-    m_use->setStyleSheet(m_remembered ? QStringLiteral("QCheckBox::indicator{border:2px solid #1f3fbf;}") : QString());
-}
-
-bool FilterRow::eventFilter(QObject* o, QEvent* e)
-{
-    if (o == m_use && e->type() == QEvent::MouseButtonPress) {
-        auto* me = static_cast<QMouseEvent*>(e);
-        if (me->button() == Qt::RightButton && m_use->isEnabled()) {
-            m_remembered = !m_remembered;
-            m_use->setChecked(m_remembered);
-            updateStyle();
-            emit rememberToggled(m_remembered);
-            return true;
-        }
-    }
-    return QWidget::eventFilter(o, e);
+    // 게임 아이템 설명 글씨 색 (어두운 배경 기준)
+    if (c == QStringLiteral("crafted") || c == QStringLiteral("enchant") || c == QStringLiteral("rune"))
+        return QColor(0xb4, 0xb4, 0xff);
+    if (c == QStringLiteral("fractured"))
+        return QColor(0xa2, 0x91, 0x62);
+    if (c == QStringLiteral("scourge"))
+        return QColor(0xff, 0x6e, 0x25);
+    if (c == QStringLiteral("desecrated"))
+        return QColor(0xb8, 0xd0, 0x8a);
+    if (c == QStringLiteral("ambiguous"))
+        return QColor(0xff, 0x9e, 0xc4); // 우리 쪽 표시: 종류가 애매한 줄
+    return QColor(0x88, 0x88, 0xff); // 일반 / 고정 옵션
 }
 
 } // namespace pts

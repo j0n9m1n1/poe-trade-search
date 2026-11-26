@@ -43,9 +43,17 @@ struct ParsedMod {
     bool checked = false;
     bool autoChecked = false; // Checked.txt 로 자동 체크됨
     bool unmatched = false;   // 거래소 stat 을 못 찾은 줄 (표시만, 검색 불가)
-    QString color;            // implicit / crafted / enchant / scourge / rune / desecrated / ambiguous / ""
+    QString color;            // implicit / crafted / enchant / scourge / rune / desecrated / fractured / ambiguous / ""
+    QString shown;            // 화면 표시용: 실제 수치가 들어간 게임 문구 (여러 줄은 " / ")
+    QString affix;            // 고급 설명 기준 prefix / suffix / "" (모름)
 
     const ModCandidate* current() const { return selected >= 0 && selected < cands.size() ? &cands[selected] : nullptr; }
+};
+
+// 아이템 자체 속성 (방어도/회피/DPS 등). key 는 거래소 필터 id (ar/ev/es/ward/block/spirit/dps/pdps/edps)
+struct ItemProp {
+    QString key;
+    double value = 0; // 거래소 기준값 (방어/물리 DPS 는 퀄리티 20 기준)
 };
 
 struct ParsedItem {
@@ -102,6 +110,7 @@ struct ParsedItem {
     bool hasDps = false;
     double pdps = 0, edps = 0, cdps = 0;
 
+    QVector<ItemProp> props;  // 방어도/회피/에너지 보호막/DPS ... (있는 것만)
     QVector<ParsedMod> mods; // 매칭 못 한 옵션 줄도 unmatched=true 로 순서대로 들어감
     QStringList unmatched;   // 매칭 못 한 줄 전부 (설명문 포함, 디버그용)
 
@@ -148,6 +157,8 @@ private:
         QString raw;
         QString rangeSrc; // 범위 뽑을 텍스트 (별칭 치환된 줄은 빈 문자열)
         QString modType;
+        QString affix;   // prefix / suffix / ""
+        QString display; // 별칭 치환 전 문구 (수치 포함, 범위/접미 제거)
         int tier = 0;
     };
 

@@ -78,6 +78,8 @@ private:
     Game decideGame(const QString& text) const;
     Lang serverFor(Lang itemLang) const;
     QString currencyName(Game g, Lang l, const QString& id) const;
+    // 화폐 아이콘 받아서 팝업에 등록 (가격 칸/추정가에 이름 대신 아이콘)
+    void loadCurrencyIcons(Game g, Lang l, const QStringList& ids);
     ParseOptions parseOptions() const;
 
     void registerHotkeys();

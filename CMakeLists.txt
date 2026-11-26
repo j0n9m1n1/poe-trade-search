@@ -72,6 +72,7 @@ set(PTS_APP_SOURCES
     src/platform/HotkeyManager.h src/platform/HotkeyManager.cpp
     src/ui/MainPopup.h src/ui/MainPopup.cpp
     src/ui/FilterRow.h src/ui/FilterRow.cpp
+    src/ui/ToggleLabel.h src/ui/ToggleLabel.cpp
     src/ui/SettingsDialog.h src/ui/SettingsDialog.cpp
     src/ui/HotkeyEdit.h src/ui/HotkeyEdit.cpp
 )
