@@ -2,7 +2,15 @@ cmake_minimum_required(VERSION 3.21)
 
 project(PoeTradeSearch VERSION 0.0.1 LANGUAGES CXX)
 
-set(PTS_VERSION "${PROJECT_VERSION}" CACHE STRING "앱 버전 (CI 가 태그로 덮어씀)")
+# 앱 버전 = project() 버전. CI 는 태그 버전을 PTS_VERSION_OVERRIDE 로 넘김
+# (캐시 변수를 버전 자체로 쓰면 project 버전을 올려도 기존 빌드 폴더에선 옛 값이 남음)
+set(PTS_VERSION_OVERRIDE "" CACHE STRING "앱 버전 덮어쓰기 (비우면 project 버전)")
+if(PTS_VERSION_OVERRIDE)
+    set(PTS_VERSION "${PTS_VERSION_OVERRIDE}")
+else()
+    set(PTS_VERSION "${PROJECT_VERSION}")
+endif()
+message(STATUS "PoeTradeSearch version: ${PTS_VERSION}")
 option(PTS_RELEASE_BUILD "배포 빌드: 자동 업데이트로 스스로 교체 가능" OFF)
 set(PTS_UPDATE_REPO "j0n9m1n1/poe-trade-search" CACHE STRING "업데이트 확인할 GitHub 저장소 owner/repo (비우면 끔)")
 

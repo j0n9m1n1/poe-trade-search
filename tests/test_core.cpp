@@ -141,6 +141,12 @@ private slots:
         QVERIFY(!Updater::isNewer(QStringLiteral("0.2.0-ci.15"), QStringLiteral("v0.2.0")));
         QVERIFY(!Updater::isNewer(QStringLiteral("0.10.0"), QStringLiteral("v0.9.9")));
         QVERIFY(!Updater::isNewer(QStringLiteral("0.2.0"), QStringLiteral("nightly")));
+
+        // CI: 빌드에 박힌 버전이 태그 버전과 같아야 함 (pwsh 인자 쪼개짐 사고 방지)
+        const QString expect = qEnvironmentVariable("PTS_EXPECT_VERSION");
+        qInfo() << "built version" << Updater::currentVersion();
+        if (!expect.isEmpty())
+            QCOMPARE(Updater::currentVersion(), expect);
     }
 
     void endpointsUrls()
