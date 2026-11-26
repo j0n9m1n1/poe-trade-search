@@ -2,6 +2,7 @@
 #include "ui/SettingsDialog.h"
 
 #include "core/CheckedStore.h"
+#include "core/QueryBuilder.h"
 #include "core/TradeDb.h"
 #include "ui/HotkeyEdit.h"
 
@@ -60,13 +61,29 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     f->addRow(QStringLiteral("검색 서버:"), m_server);
 
     m_status = new QComboBox(basic);
-    m_status->addItem(QStringLiteral("즉시 구매 + 직접 거래"), QStringLiteral("available"));
-    m_status->addItem(QStringLiteral("즉시 구매만"), QStringLiteral("securable"));
+    m_status->addItem(QStringLiteral("즉시 구입만"), QStringLiteral("securable"));
+    m_status->addItem(QStringLiteral("즉시 구입 + 직접 거래"), QStringLiteral("available"));
     m_status->addItem(QStringLiteral("직접 거래 (리그 접속 중)"), QStringLiteral("onlineleague"));
     m_status->addItem(QStringLiteral("직접 거래 (접속 중)"), QStringLiteral("online"));
     m_status->addItem(QStringLiteral("모두"), QStringLiteral("any"));
     m_status->setCurrentIndex(qMax(0, m_status->findData(cfg.tradeStatus)));
-    f->addRow(QStringLiteral("판매자 상태:"), m_status);
+    f->addRow(QStringLiteral("판매 방식:"), m_status);
+
+    // 가격 화폐: 등가물이면 색채 같은 잡화폐로 올린 매물까지 다 나옴
+    auto currencyBox = [&](Game g, const QString& cur) {
+        auto* c = new QComboBox(basic);
+        for (const PriceCurrency& pc : priceCurrencies(g))
+            c->addItem(pc.text, pc.id);
+        if (c->findData(cur) < 0)
+            c->addItem(cur, cur);
+        c->setCurrentIndex(c->findData(cur));
+        c->setToolTip(QStringLiteral("이 화폐로 가격을 올린 매물만 봄. 등가물 = 모든 화폐"));
+        return c;
+    };
+    m_currency1 = currencyBox(Game::Poe1, cfg.priceCurrency);
+    f->addRow(QStringLiteral("가격 화폐 (PoE1):"), m_currency1);
+    m_currency2 = currencyBox(Game::Poe2, cfg.priceCurrencyPoe2);
+    f->addRow(QStringLiteral("가격 화폐 (PoE2):"), m_currency2);
 
     m_beforeDay = new QComboBox(basic);
     for (auto p : {qMakePair(0, QStringLiteral("모두")), qMakePair(1, QStringLiteral("1일 이내")),
@@ -282,6 +299,8 @@ Config SettingsDialog::result() const
     c.leaguePoe2 = m_league2->currentText().trimmed();
     c.serverType = m_server->currentIndex();
     c.tradeStatus = m_status->currentData().toString();
+    c.priceCurrency = m_currency1->currentData().toString();
+    c.priceCurrencyPoe2 = m_currency2->currentData().toString();
     c.searchBeforeDay = m_beforeDay->currentData().toInt();
     c.searchListCount = m_listCount->currentData().toInt();
     c.searchPriceMinimum = m_priceMin->value();

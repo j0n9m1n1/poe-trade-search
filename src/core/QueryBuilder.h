@@ -61,8 +61,16 @@ struct SearchRequest {
     QString indexed; // "" = any
     OptDouble priceMin;
     bool collapse = false; // 계정별 묶기
-    QString saleType; // "" = 거래소 기본(즉시구매/고정가)
+    QString saleType; // "" = 거래소 기본(즉시 구입/고정 가격)
+    QString priceOption; // 가격 화폐 필터. "" = 등가물(모든 화폐), "chaos_divine", "chaos" ...
 };
+
+// 거래소 "즉시 구입 가격" 화폐 옵션 (id, 거래소 표기). 첫 항목 id "" = 등가물
+struct PriceCurrency {
+    QString id;
+    QString text;
+};
+QVector<PriceCurrency> priceCurrencies(Game g);
 
 class QueryBuilder {
 public:

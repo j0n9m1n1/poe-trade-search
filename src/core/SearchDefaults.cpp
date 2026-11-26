@@ -129,6 +129,7 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
     r.status = ctx.status;
     r.indexed = ctx.indexed;
     r.priceMin = ctx.priceMin;
+    r.priceOption = ctx.priceOption;
     r.collapse = ctx.collapse;
     r.includeDisabledStats = ctx.forBrowser;
 

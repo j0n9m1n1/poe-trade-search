@@ -320,12 +320,16 @@ void MainPopup::buildUi()
     m_priceCount = new QLabel(page2);
     pr->addWidget(m_priceCount, 1);
     m_status = new QComboBox(page2);
-    m_status->addItem(QStringLiteral("즉시구매+직접"), QStringLiteral("available"));
-    m_status->addItem(QStringLiteral("즉시구매만"), QStringLiteral("securable"));
+    m_status->addItem(QStringLiteral("즉시 구입만"), QStringLiteral("securable"));
+    m_status->addItem(QStringLiteral("즉시 구입+직접"), QStringLiteral("available"));
     m_status->addItem(QStringLiteral("직접(접속 중)"), QStringLiteral("online"));
     m_status->addItem(QStringLiteral("전부"), QStringLiteral("any"));
     m_status->setToolTip(QStringLiteral("판매 방식"));
     pr->addWidget(m_status);
+    m_currency = new QComboBox(page2); // 게임별 목록은 setItem 에서 채움
+    m_currency->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    m_currency->setToolTip(QStringLiteral("가격 화폐 (등가물 = 모든 화폐. 색채 같은 잡화폐로 올린 매물을 거르려면 기준 화폐/신성만)"));
+    pr->addWidget(m_currency);
     m_collapse = new QCheckBox(QStringLiteral("계정별 묶기"), page2);
     pr->addWidget(m_collapse);
     pr->addWidget(new QLabel(QStringLiteral("최소:"), page2));
@@ -387,7 +391,7 @@ void MainPopup::buildUi()
         }
     });
     auto stale = [this]() { markStale(); };
-    for (QComboBox* c : {m_rarity, m_server, m_corrupt, m_infl1, m_infl2, m_alt, m_status, m_listCount})
+    for (QComboBox* c : {m_rarity, m_server, m_corrupt, m_infl1, m_infl2, m_alt, m_status, m_currency, m_listCount})
         connect(c, qOverload<int>(&QComboBox::currentIndexChanged), this, stale);
     for (QCheckBox* c : {m_lv, m_q, m_sock, m_special1, m_special2, m_byCategory, m_collapse})
         connect(c, &QCheckBox::toggled, this, stale);
@@ -634,12 +638,22 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     m_prices->setColumnCount(0);
     m_priceCount->clear();
     {
-        QSignalBlocker b1(m_listCount), b2(m_status), b3(m_collapse);
+        QSignalBlocker b1(m_listCount), b2(m_status), b3(m_collapse), b4(m_currency);
         const int lc = m_listCount->findData(cfg.searchListCount);
         m_listCount->setCurrentIndex(lc < 0 ? 1 : lc);
         const int si = m_status->findData(cfg.tradeStatus);
         m_status->setCurrentIndex(si < 0 ? 0 : si);
         m_collapse->setChecked(cfg.collapseListings);
+        m_currency->clear();
+        for (const PriceCurrency& pc : priceCurrencies(it.game))
+            m_currency->addItem(pc.text, pc.id);
+        const QString cur = cfg.priceCurrencyFor(it.game);
+        int ci = m_currency->findData(cur);
+        if (ci < 0) { // 설정 파일에 목록 밖 값을 직접 넣은 경우
+            m_currency->addItem(cur, cur);
+            ci = m_currency->count() - 1;
+        }
+        m_currency->setCurrentIndex(ci);
     }
     m_priceMin->setText(cfg.searchPriceMinimum > 0 ? QString::number(cfg.searchPriceMinimum) : QString());
     priceIdle(m_idleText);
@@ -829,6 +843,11 @@ QString MainPopup::tradeStatus() const
     return m_status->currentData().toString();
 }
 
+QString MainPopup::priceCurrency() const
+{
+    return m_currency->currentData().toString();
+}
+
 QString MainPopup::exchangeWant() const
 {
     if (m_exchangeBox->isHidden())
@@ -901,7 +920,7 @@ void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, cons
             s->setText(QStringLiteral("● ") + s->text());
             s->setForeground(online == 1 ? QColor(QStringLiteral("#2e9e5b"))
                                          : (online == 2 ? QColor(QStringLiteral("#d2891e")) : dimC));
-            s->setToolTip(online == 1 ? QStringLiteral("접속 중") : (online == 2 ? QStringLiteral("자리 비움") : QStringLiteral("오프라인 (즉시구매는 가능할 수 있음)")));
+            s->setToolTip(online == 1 ? QStringLiteral("접속 중") : (online == 2 ? QStringLiteral("자리 비움") : QStringLiteral("오프라인 (즉시 구입은 가능할 수 있음)")));
         }
     }
     if (r == 0)

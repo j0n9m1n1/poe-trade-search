@@ -39,6 +39,7 @@ public:
     int listCount() const;
     bool collapse() const;
     QString tradeStatus() const;
+    QString priceCurrency() const; // 가격 화폐 필터 ("" = 등가물)
 
     // 일괄 교환: 선택된 받을 화폐 static id (없으면 빈 문자열)
     QString exchangeWant() const;
@@ -176,6 +177,7 @@ private:
     QLineEdit* m_priceMin;
     QComboBox* m_listCount;
     QComboBox* m_status;
+    QComboBox* m_currency;
     QCheckBox* m_collapse;
     QLabel* m_priceCount;
 

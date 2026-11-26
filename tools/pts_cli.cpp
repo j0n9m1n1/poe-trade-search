@@ -4,6 +4,7 @@
 //   pts_cli --data <dir> [--game poe1|poe2|auto] [--league L] [--server ko|en] [--search] [--price N]
 //           [--update] item.txt
 #include "core/CheckedStore.h"
+#include "core/Config.h"
 #include "core/ItemParser.h"
 #include "core/Keywords.h"
 #include "core/PriceSummary.h"
@@ -106,6 +107,11 @@ int main(int argc, char** argv)
 
         RequestContext ctx;
         ctx.server = it->lang;
+        { // 앱 기본값과 같게 (즉시 구입만, 기준 화폐 + 신성)
+            const Config d = Config::defaults();
+            ctx.status = d.tradeStatus;
+            ctx.priceOption = d.priceCurrencyFor(game);
+        }
         if (cl.value(QStringLiteral("server")) == QStringLiteral("ko"))
             ctx.server = Lang::Ko;
         else if (cl.value(QStringLiteral("server")) == QStringLiteral("en"))

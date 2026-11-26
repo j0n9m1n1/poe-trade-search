@@ -201,6 +201,37 @@ private slots:
         QVERIFY(!q.contains(QStringLiteral("name")));
     }
 
+    void queryPriceCurrency()
+    {
+        auto priceOf = [](const SearchRequest& r) {
+            return QueryBuilder::build(r, nullptr)
+                .value(QStringLiteral("query")).toObject()
+                .value(QStringLiteral("filters")).toObject()
+                .value(QStringLiteral("trade_filters")).toObject()
+                .value(QStringLiteral("filters")).toObject()
+                .value(QStringLiteral("price")).toObject();
+        };
+        SearchRequest r;
+        r.type = QStringLiteral("Two-Stone Ring");
+        QVERIFY(priceOf(r).isEmpty()); // 등가물 = 필터 없음
+        r.priceOption = QStringLiteral("chaos_divine");
+        QCOMPARE(priceOf(r), QJsonObject({{QStringLiteral("option"), QStringLiteral("chaos_divine")}}));
+        r.priceMin = 5;
+        QCOMPARE(priceOf(r).value(QStringLiteral("option")).toString(), QStringLiteral("chaos_divine"));
+        QCOMPARE(priceOf(r).value(QStringLiteral("min")).toDouble(), 5.0);
+
+        const Config d = Config::defaults();
+        QCOMPARE(d.tradeStatus, QStringLiteral("securable"));
+        QCOMPARE(d.priceCurrencyFor(Game::Poe1), QStringLiteral("chaos_divine"));
+        QCOMPARE(d.priceCurrencyFor(Game::Poe2), QStringLiteral("exalted_divine"));
+        for (Game g : {Game::Poe1, Game::Poe2}) {
+            bool found = false;
+            for (const PriceCurrency& pc : priceCurrencies(g))
+                found = found || pc.id == d.priceCurrencyFor(g);
+            QVERIFY(found);
+        }
+    }
+
     // ---------------- 실데이터 테스트
     void poe1RareRing()
     {
@@ -378,7 +409,7 @@ private slots:
         const QString path = QDir::temp().filePath(QStringLiteral("pts_cfg_test.txt"));
         QFile f(path);
         QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
-        f.write("{\"options\":{\"league\":\"Scourge\"},\"shortcuts\":["
+        f.write("{\"options\":{\"league\":\"Scourge\",\"trade_status\":\"available\"},\"shortcuts\":["
                 "{\"keycode\":0,\"modifiers\":0,\"value\":\"{Run}\"},"
                 "{\"keycode\":72,\"modifiers\":2,\"value\":\"{Wiki} 위키\"},"
                 "{\"keycode\":78,\"modifiers\":2,\"value\":\"{Link}https://poe.ninja/{Link}\"},"
@@ -396,6 +427,8 @@ private slots:
         QVERIFY(vals.contains(QStringLiteral("{Enter}/exit{Enter}")));
         QVERIFY(vals.join(QLatin1Char('|')).contains(QStringLiteral("{Last}")));
         QVERIFY(c.autoPriceCheck); // v3: 뜨자마자 시세 조회
+        QCOMPARE(c.tradeStatus, QStringLiteral("securable")); // v4: 예전 기본값 -> 즉시 구입만
+        QCOMPARE(c.priceCurrency, QStringLiteral("chaos_divine"));
         QCOMPARE(c.configVersion, Config::kConfigVersion);
         for (const auto& s : c.shortcuts) {
             if (s.value == QStringLiteral("{Enter}/hideout{Enter}"))

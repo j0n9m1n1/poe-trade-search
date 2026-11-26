@@ -43,6 +43,7 @@ struct RequestContext {
     QString status = QStringLiteral("available");
     QString indexed;
     OptDouble priceMin;
+    QString priceOption;    // 가격 화폐 필터 ("" = 등가물)
     bool collapse = false;  // 계정별 묶기
     bool forBrowser = true; // false 면 꺼진 옵션은 아예 안 보냄 (시세 조회용)
 };

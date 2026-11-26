@@ -63,6 +63,11 @@ void Config::migrate()
         if (!hasLast)
             shortcuts.insert(qMin<qsizetype>(1, shortcuts.size()), {0, 0, QStringLiteral("{Last} 마지막 창 다시 열기")});
     }
+    if (configVersion < 4) {
+        // v4: 기본 판매 방식을 즉시 구입만으로 (예전 기본값 그대로 쓰던 경우만)
+        if (tradeStatus == QStringLiteral("available"))
+            tradeStatus = QStringLiteral("securable");
+    }
     configVersion = kConfigVersion;
     migrated = true;
 }
@@ -113,6 +118,8 @@ bool Config::load(const QString& path, QString* error)
     leaguePoe2 = s("league_poe2", d.leaguePoe2);
     game = s("game", d.game);
     tradeStatus = s("trade_status", d.tradeStatus);
+    priceCurrency = s("price_currency", d.priceCurrency);
+    priceCurrencyPoe2 = s("price_currency_poe2", d.priceCurrencyPoe2);
     dataMaxAgeDays = i("data_max_age_days", d.dataMaxAgeDays);
     autoPriceCheck = b("auto_price_check", d.autoPriceCheck);
     popupNearCursor = b("popup_near_cursor", d.popupNearCursor);
@@ -152,6 +159,8 @@ bool Config::save(const QString& path, QString* error) const
     o.insert(QStringLiteral("server_timeout"), serverTimeout);
     o.insert(QStringLiteral("server_redirect"), serverRedirect);
     o.insert(QStringLiteral("trade_status"), tradeStatus);
+    o.insert(QStringLiteral("price_currency"), priceCurrency);
+    o.insert(QStringLiteral("price_currency_poe2"), priceCurrencyPoe2);
     o.insert(QStringLiteral("search_auto_delay"), searchAutoDelay);
     o.insert(QStringLiteral("auto_price_check"), autoPriceCheck);
     o.insert(QStringLiteral("popup_near_cursor"), popupNearCursor);

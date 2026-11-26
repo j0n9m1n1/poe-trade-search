@@ -37,7 +37,11 @@ struct Config {
     // ---- 추가 키
     QString leaguePoe2 = QStringLiteral("Standard");
     QString game = QStringLiteral("auto"); // auto / poe1 / poe2
-    QString tradeStatus = QStringLiteral("available");
+    QString tradeStatus = QStringLiteral("securable"); // 기본: 즉시 구입만
+    // 가격 화폐 필터 (거래소 "즉시 구입 가격" 옵션). "" = 등가물(모든 화폐)
+    // 기본은 기준 화폐 + 신성만 -> 색채/쥬얼러 같은 잡화폐로 올린 매물 거름
+    QString priceCurrency = QStringLiteral("chaos_divine");       // PoE1
+    QString priceCurrencyPoe2 = QStringLiteral("exalted_divine"); // PoE2
     int dataMaxAgeDays = 7;
     bool autoPriceCheck = true;  // 창 뜰 때 바로 시세 조회 (원본: search_auto_delay > 0)
     bool popupNearCursor = true; // 커서 근처에 띄움 (false 면 마지막 위치)
@@ -48,7 +52,7 @@ struct Config {
 
     QVector<Shortcut> shortcuts;
 
-    static constexpr int kConfigVersion = 3;
+    static constexpr int kConfigVersion = 4;
     int configVersion = kConfigVersion;
     bool migrated = false; // load 때 마이그레이션 했으면 true -> 저장 필요
 
@@ -59,6 +63,7 @@ struct Config {
 
     QString leagueFor(Game g) const { return g == Game::Poe1 ? league : leaguePoe2; }
     void setLeague(Game g, const QString& l) { (g == Game::Poe1 ? league : leaguePoe2) = l; }
+    QString priceCurrencyFor(Game g) const { return g == Game::Poe1 ? priceCurrency : priceCurrencyPoe2; }
     QStringList byTypeList() const;
 };
 

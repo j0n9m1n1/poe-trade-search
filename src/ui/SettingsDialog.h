@@ -46,6 +46,8 @@ private:
     QComboBox* m_league2;
     QComboBox* m_server;
     QComboBox* m_status;
+    QComboBox* m_currency1; // 가격 화폐 PoE1
+    QComboBox* m_currency2; // 가격 화폐 PoE2
     QComboBox* m_beforeDay;
     QComboBox* m_listCount;
     QSpinBox* m_priceMin;

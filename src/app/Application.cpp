@@ -545,6 +545,7 @@ void Application::openTrade()
     ctx.server = server;
     ctx.status = m_popup->tradeStatus();
     ctx.indexed = QueryBuilder::indexedFromDays(m_cfg.searchBeforeDay);
+    ctx.priceOption = m_popup->priceCurrency();
     ctx.forBrowser = true;
     QString warn;
     const SearchRequest req = makeRequest(it, m_popup->collectState(), m_kw, &m_dbs[gi(g)], ctx, &warn);
@@ -784,6 +785,7 @@ void Application::priceCheck()
         ctx.status = m_popup->tradeStatus();
         ctx.indexed = QueryBuilder::indexedFromDays(m_cfg.searchBeforeDay);
         ctx.priceMin = m_popup->priceMin();
+        ctx.priceOption = m_popup->priceCurrency();
         ctx.collapse = m_popup->collapse();
         ctx.forBrowser = false;
         const SearchRequest req = makeRequest(it, m_popup->collectState(), m_kw, &m_dbs[gi(g)], ctx);

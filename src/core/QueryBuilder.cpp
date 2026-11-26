@@ -97,6 +97,22 @@ private:
 
 } // namespace
 
+QVector<PriceCurrency> priceCurrencies(Game g)
+{
+    // 카카오 거래소 /api/trade(2)/data/filters 의 price 옵션 표기 그대로 (자주 쓰는 것만)
+    if (g == Game::Poe2) {
+        return {{QString(), QStringLiteral("엑잘티드 오브 상당 아이템")},
+                {QStringLiteral("exalted_divine"), QStringLiteral("엑잘티드 오브 및 신성한 오브")},
+                {QStringLiteral("exalted"), QStringLiteral("엑잘티드 오브")},
+                {QStringLiteral("divine"), QStringLiteral("신성한 오브")},
+                {QStringLiteral("chaos"), QStringLiteral("카오스 오브")}};
+    }
+    return {{QString(), QStringLiteral("카오스 오브 등가물")},
+            {QStringLiteral("chaos_divine"), QStringLiteral("카오스 오브 또는 신성한 오브")},
+            {QStringLiteral("chaos"), QStringLiteral("카오스 오브")},
+            {QStringLiteral("divine"), QStringLiteral("신성한 오브")}};
+}
+
 QString QueryBuilder::indexedFromDays(int days)
 {
     if (days < 1)
@@ -180,8 +196,15 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
         fs.add(QStringLiteral("sale_type"), option(r.saleType));
     if (r.collapse)
         fs.add(QStringLiteral("collapse"), option(QStringLiteral("true")));
-    if (r.priceMin && *r.priceMin > 0)
-        fs.add(QStringLiteral("price"), minMax(r.priceMin, std::nullopt));
+    {
+        QJsonObject price;
+        if (r.priceMin && *r.priceMin > 0)
+            price = minMax(r.priceMin, std::nullopt);
+        if (!r.priceOption.isEmpty())
+            price.insert(QStringLiteral("option"), r.priceOption);
+        if (!price.isEmpty())
+            fs.add(QStringLiteral("price"), price);
+    }
 
     const QJsonObject filters = fs.result();
     if (!filters.isEmpty())
