@@ -63,8 +63,8 @@ master 푸시/PR 은 GitHub Actions 가 Windows 빌드 + 테스트만 함 (결�
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올려두면 개발 빌드 버전 표시가 맞음
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.0.2
+git push origin v0.0.2
 ```
 
 ## 빌드 (Windows)

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(PoeTradeSearch VERSION 0.2.0 LANGUAGES CXX)
+project(PoeTradeSearch VERSION 0.0.1 LANGUAGES CXX)
 
 set(PTS_VERSION "${PROJECT_VERSION}" CACHE STRING "앱 버전 (CI 가 태그로 덮어씀)")
 option(PTS_RELEASE_BUILD "배포 빌드: 자동 업데이트로 스스로 교체 가능" OFF)
