@@ -121,7 +121,7 @@
 | D8 | 젬 대체 퀄리티 | **삭제→수정** | 변형 젬 `type: {option, discriminator}` |
 | D9 | stats `and` 그룹 (min/max/option/disabled) | 유지 | |
 | D10 | 등록 기간(`indexed` 1시간~2달, 팝업 콤보), 가격 화폐(`price.option`), 판매 방식(기본 즉시 구입만), 최소 가격 | 확장 | 원본은 등록일 설정값만 |
-| D11 | "아이템 유형으로 검색" (이름·베이스 빼고 카테고리로만), `auto_select_bytype` | 유지 | |
+| D11 | 이름·베이스 각각 체크 (베이스 끄면 아이템 유형으로 검색), 이름 띠는 레어도 색, `auto_select_bytype` | 수정 | 원본은 "아이템 유형으로 검색" 체크 하나 |
 | D12 | 유니크 아니면 name 제거 등 조건부 필드 | 유지 | 원본은 99999 센티넬 넣고 문자열 regex로 지우는 야매 → QJsonObject로 정상 빌드 |
 | D13 | 매칭 실패 stat은 빨간 줄 + error 표시 | 유지 | |
 

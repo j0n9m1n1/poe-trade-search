@@ -8,6 +8,7 @@
 #include <QWidget>
 
 class QCheckBox;
+class QFrame;
 class QComboBox;
 class QLabel;
 class QLineEdit;
@@ -107,6 +108,7 @@ private:
     void applyPresetAndRender();
     void renderRows();
     void renderMisc(const ItemFilterState& st);
+    void applyRarityColor(const ParsedItem& it);
     int rangePct() const;
 
     const Keywords& m_kw;
@@ -137,7 +139,10 @@ private:
     QComboBox* m_server;
     QPushButton* m_settings;
     QLabel* m_icon;
-    QLabel* m_name;
+    QFrame* m_header;   // 이름/베이스 띠
+    QCheckBox* m_useName; // 고유 이름 (체크 = 검색에 넣음)
+    QCheckBox* m_useType; // 베이스 (끄면 유형으로 검색)
+    QLabel* m_name;     // 희귀 이름 표시용
     QLabel* m_sub;
     QLabel* m_info;
     QCheckBox* m_all;
@@ -172,7 +177,6 @@ private:
     QComboBox* m_infl1;
     QComboBox* m_infl2;
     QComboBox* m_alt;
-    QCheckBox* m_byCategory;
 
     QPushButton* m_price;
     QTableWidget* m_prices;

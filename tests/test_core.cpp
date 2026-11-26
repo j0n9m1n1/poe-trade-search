@@ -295,6 +295,51 @@ private slots:
         QCOMPARE(fb->mutatedDefault, 1);
     }
 
+    void queryUseNameType()
+    {
+        SearchRequest r;
+        r.rarity = QStringLiteral("unique");
+        r.name = QStringLiteral("꿈의 깃털");
+        r.type = QStringLiteral("영원의 검");
+        r.category = QStringLiteral("weapon.onesword");
+        auto q = [&]() { return QueryBuilder::build(r, nullptr).value(QStringLiteral("query")).toObject(); };
+        auto cat = [&]() {
+            return q().value(QStringLiteral("filters")).toObject().value(QStringLiteral("type_filters")).toObject()
+                .value(QStringLiteral("filters")).toObject().value(QStringLiteral("category")).toObject()
+                .value(QStringLiteral("option")).toString();
+        };
+        QCOMPARE(q().value(QStringLiteral("name")).toString(), r.name);
+        QCOMPARE(q().value(QStringLiteral("type")).toString(), r.type);
+        QVERIFY(cat().isEmpty());
+        r.useType = false; // 베이스 끄면 유형으로
+        QVERIFY(!q().contains(QStringLiteral("type")));
+        QCOMPARE(cat(), r.category);
+        QCOMPARE(q().value(QStringLiteral("name")).toString(), r.name);
+        r.useName = false;
+        QVERIFY(!q().contains(QStringLiteral("name")));
+        r.category.clear(); // 유형 모르면 베이스 유지
+        QCOMPARE(q().value(QStringLiteral("type")).toString(), r.type);
+    }
+
+    void poe1KoreanTwiceCorruptedWeapon()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        auto it = parse(QStringLiteral("poe1_ko_unique_twice_corrupted.txt"), Game::Poe1);
+        QVERIFY(it);
+        QCOMPARE(it->name, QStringLiteral("꿈의 깃털"));
+        QVERIFY(it->corrupted && it->twiceCorrupted);
+        QCOMPARE(it->twiceCorruptDefault, 1);
+        QCOMPARE(it->mutatedDefault, 2);
+        // 무기에 붙은 회피는 전역 stat (로컬 회피는 방어구 전용) -> 로컬로 잡으면 매물 0개
+        QVERIFY2(findMod(*it, QStringLiteral("stat_2144192055")), "회피 +# 전역");
+        QVERIFY(!findMod(*it, QStringLiteral("stat_53045048")));
+        // 무기 로컬은 그대로
+        QVERIFY(findMod(*it, QStringLiteral("stat_210067635"))); // 공격 속도 (특정)
+        QVERIFY(findMod(*it, QStringLiteral("stat_691932474"))); // 정확도 (특정)
+        QVERIFY(findMod(*it, QStringLiteral("stat_1940865751"))); // 물리 피해 추가 (특정)
+    }
+
     void queryPriceCurrency()
     {
         auto priceOf = [](const SearchRequest& r) {

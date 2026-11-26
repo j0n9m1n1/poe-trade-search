@@ -74,7 +74,37 @@ QColor dimColor(const QPalette& pal)
     return QColor((fg.red() * 3 + bg.red() * 2) / 5, (fg.green() * 3 + bg.green() * 2) / 5,
                   (fg.blue() * 3 + bg.blue() * 2) / 5);
 }
+
+// 게임 안 아이템 이름 색 (레어도별)
+QColor rarityColor(const ParsedItem& it)
+{
+    const QString& r = it.rarityId;
+    if (it.isGem || r == QStringLiteral("gem"))
+        return QColor(0x1b, 0xa2, 0x9b);
+    if (it.isCurrency || r == QStringLiteral("currency"))
+        return QColor(0xaa, 0x9e, 0x82);
+    if (it.isCard || r == QStringLiteral("card"))
+        return QColor(0x0e, 0xba, 0xff);
+    if (r == QStringLiteral("unique"))
+        return QColor(0xaf, 0x60, 0x25);
+    if (r == QStringLiteral("rare"))
+        return QColor(0xff, 0xff, 0x77);
+    if (r == QStringLiteral("magic"))
+        return QColor(0x88, 0x88, 0xff);
+    return QColor(0xc8, 0xc8, 0xc8); // 일반
+}
 } // namespace
+
+void MainPopup::applyRarityColor(const ParsedItem& it)
+{
+    // 밝은 테마에서도 노랑/회색이 보이게 배경은 게임처럼 어둡게 고정. 체크 끈 쪽은 흐리게
+    const QColor c = rarityColor(it);
+    m_header->setStyleSheet(QStringLiteral(
+        "QFrame#itemHeader { background:#151311; border:1px solid %2; border-radius:3px; }"
+        "QFrame#itemHeader QLabel, QFrame#itemHeader QCheckBox { color:%1; background:transparent; }"
+        "QFrame#itemHeader QCheckBox:unchecked { color:#6b6b6b; }")
+                                .arg(c.name(), c.darker(220).name()));
+}
 
 MainPopup::MainPopup(const Keywords& kw, QWidget* parent) : QWidget(parent), m_kw(kw)
 {
@@ -134,16 +164,30 @@ void MainPopup::buildUi()
     m_icon->setAlignment(Qt::AlignCenter);
     m_icon->setVisible(false);
     auto* names = new QVBoxLayout;
-    names->setSpacing(1);
-    m_name = new QLabel(this);
+    names->setSpacing(2);
+    // 이름/베이스: 게임 아이템 헤더처럼 어두운 띠 + 레어도 색. 체크 = 검색에 넣음
+    m_header = new QFrame(this);
+    m_header->setObjectName(QStringLiteral("itemHeader"));
+    auto* hl = new QHBoxLayout(m_header);
+    hl->setContentsMargins(8, 3, 8, 3);
+    hl->setSpacing(10);
+    m_useName = new QCheckBox(m_header);
+    m_useName->setToolTip(QStringLiteral("고유 이름으로 검색"));
+    m_name = new QLabel(m_header); // 희귀 이름 (검색엔 못 씀)
+    m_useType = new QCheckBox(m_header);
+    m_useType->setToolTip(QStringLiteral("베이스로 검색. 끄면 아이템 유형(한손 검 등)으로 검색"));
     QFont nf = m_name->font();
     nf.setBold(true);
     nf.setPointSizeF(nf.pointSizeF() + 2);
-    m_name->setFont(nf);
-    m_name->setWordWrap(true);
+    for (QWidget* w : std::initializer_list<QWidget*>{m_useName, m_name, m_useType})
+        w->setFont(nf);
+    hl->addWidget(m_useName);
+    hl->addWidget(m_name);
+    hl->addWidget(m_useType);
+    hl->addStretch(1);
     m_sub = new QLabel(this);
     m_sub->setWordWrap(true);
-    names->addWidget(m_name);
+    names->addWidget(m_header);
     names->addWidget(m_sub);
     head->addWidget(m_icon, 0, Qt::AlignTop);
     head->addLayout(names, 1);
@@ -306,8 +350,6 @@ void MainPopup::buildUi()
     g->addLayout(row2, 1, 0, 1, 3);
     p1->addWidget(m_miscBox);
 
-    m_byCategory = new QCheckBox(QStringLiteral("아이템 유형으로 검색 (이름/베이스 무시)"), page1);
-    p1->addWidget(m_byCategory);
 
     m_tabs->addTab(page1, QStringLiteral("간략히"));
 
@@ -392,7 +434,6 @@ void MainPopup::buildUi()
     {
         const QString css = QStringLiteral("color:%1;").arg(dimColor(palette()).name());
         m_sub->setStyleSheet(css);
-        m_byCategory->setStyleSheet(css);
     }
 
     // ---- 연결
@@ -410,7 +451,7 @@ void MainPopup::buildUi()
     auto stale = [this]() { markStale(); };
     for (QComboBox* c : {m_rarity, m_server, m_corrupt, m_mutated, m_infl1, m_infl2, m_alt, m_status, m_currency, m_indexed, m_listCount})
         connect(c, qOverload<int>(&QComboBox::currentIndexChanged), this, stale);
-    for (QCheckBox* c : {m_lv, m_q, m_sock, m_special1, m_special2, m_byCategory, m_collapse})
+    for (QCheckBox* c : {m_lv, m_q, m_sock, m_special1, m_special2, m_useName, m_useType, m_collapse})
         connect(c, &QCheckBox::toggled, this, stale);
     connect(m_preset, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() {
         applyPresetAndRender();
@@ -570,11 +611,21 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     const TradeDb* db = gdb ? &(*gdb)[it.lang] : nullptr;
     const bool poe1 = it.game == Game::Poe1;
 
-    // 이름
-    QString title = it.rarityId == QStringLiteral("unique") && !it.name.isEmpty() ? it.name + QLatin1Char(' ') + it.type : it.type;
-    if (it.transfigured)
-        title = it.rawType;
-    m_name->setText(title.isEmpty() ? it.rawType : title);
+    // 이름 (고유: 이름 체크 + 베이스 체크 / 희귀: 이름 표시 + 베이스 체크 / 그 외: 베이스 체크)
+    {
+        const bool unique = it.rarityId == QStringLiteral("unique") && !it.name.isEmpty();
+        const bool rareName = !unique && it.rarityId == QStringLiteral("rare") && !it.rawName.isEmpty() && it.rawName != it.rawType;
+        QString base = it.transfigured ? it.rawType : it.type;
+        if (base.isEmpty())
+            base = it.rawType;
+        m_useName->setText(it.name);
+        m_useName->setVisible(unique);
+        m_name->setText(it.rawName);
+        m_name->setVisible(rareName);
+        m_useType->setText(base);
+        m_useType->setVisible(!base.isEmpty());
+        applyRarityColor(it);
+    }
     m_icon->clear();
     m_icon->setVisible(false);
     QStringList sub;
@@ -733,7 +784,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
                                                                : QStringLiteral("아이템 레벨"));
     auto setOpt = [](QLineEdit* e, const OptDouble& v) { e->setText(v ? QString::number(*v) : QString()); };
     QSignalBlocker b1(m_lv), b2(m_q), b3(m_sock), b4(m_special1), b5(m_special2), b6(m_corrupt), b6b(m_mutated), b7(m_infl1),
-        b8(m_infl2), b9(m_alt), b10(m_byCategory), b11(m_rarity);
+        b8(m_infl2), b9(m_alt), b10(m_useName), b10b(m_useType), b11(m_rarity);
     m_lv->setChecked(st.useLevel);
     setOpt(m_lvMin, st.levelMin);
     setOpt(m_lvMax, st.levelMax);
@@ -799,7 +850,8 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     }
     m_alt->setVisible(m_alt->count() > 0);
 
-    m_byCategory->setChecked(st.byCategory);
+    m_useName->setChecked(st.useName && !st.byCategory);
+    m_useType->setChecked(st.useType && !st.byCategory);
     const int ri = m_rarity->findData(st.rarity);
     if (ri >= 0)
         m_rarity->setCurrentIndex(ri);
@@ -835,7 +887,9 @@ ItemFilterState MainPopup::collectState() const
     }
     s.mutated = m_mutated->isHidden() ? 0 : m_mutated->currentIndex();
     s.rarity = m_rarity->currentData().toString();
-    s.byCategory = m_byCategory->isChecked();
+    s.byCategory = false;
+    s.useName = m_useName->isHidden() || m_useName->isChecked();
+    s.useType = m_useType->isHidden() || m_useType->isChecked();
     s.influences.clear();
     if (!m_infl1->isHidden() || !m_infl2->isHidden()) {
         for (QComboBox* c : {m_infl1, m_infl2}) {

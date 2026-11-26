@@ -152,16 +152,30 @@ ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const Ma
                                const QVector<StatMatch>& ms, const CleanLine& first, const QString& raw,
                                const QString& rangeSrc, const ParseOptions& opt, bool* optionStatSeen) const
 {
-    const bool localContext =
-        (it.top == QStringLiteral("weapon") || it.top == QStringLiteral("armour")) &&
-        it.category != QStringLiteral("armour.quiver");
+    const bool weapon = it.top == QStringLiteral("weapon");
+    const bool armour = it.top == QStringLiteral("armour") && it.category != QStringLiteral("armour.quiver");
+    const bool localContext = weapon || armour;
+    // 방어 계열 로컬(방어도/회피/에너지 보호막/막기)은 방어구 전용, 나머지 로컬(공격 속도/명중/추가 피해/흡수...)은 무기 전용.
+    // 무기에 붙은 "회피 +#" 은 전역 stat (꿈의 깃털 등). id 는 PoE1/PoE2, 언어 공통
+    static const QSet<QString> armourLocal = {
+        QStringLiteral("stat_4052037485"), QStringLiteral("stat_124859000"),  QStringLiteral("stat_53045048"),
+        QStringLiteral("stat_1062208444"), QStringLiteral("stat_3484657501"), QStringLiteral("stat_4015621042"),
+        QStringLiteral("stat_1999113824"), QStringLiteral("stat_3321629045"), QStringLiteral("stat_2451402625"),
+        QStringLiteral("stat_3523867985"), QStringLiteral("stat_2481353198"),
+    };
+    auto localFits = [&](const StatEntry& e) {
+        if (!localContext)
+            return false;
+        const bool def = armourLocal.contains(e.id.mid(e.id.indexOf(QLatin1Char('.')) + 1));
+        return def ? armour : weapon;
+    };
 
     auto scopeScore = [&](const StatEntry& e) {
         const QString& s = e.scope;
         if (s.isEmpty())
             return 1;
         if (s == QStringLiteral("local"))
-            return localContext ? 3 : 0;
+            return localFits(e) ? 3 : 0;
         if (s == QStringLiteral("global"))
             return localContext ? 0 : 2;
         if (s == QStringLiteral("legacy"))
@@ -224,7 +238,7 @@ ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const Ma
         c.option = e.option;
         mod.cands.push_back(c);
         if (e.scope == QStringLiteral("local"))
-            localChosen = localChosen || localContext;
+            localChosen = localChosen || localFits(e);
     }
 
     // 기준 후보: 접미 그룹 > explicit > pseudo 아닌 첫 후보

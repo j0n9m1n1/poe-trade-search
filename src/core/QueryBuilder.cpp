@@ -154,10 +154,13 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
     query.insert(QStringLiteral("status"), option(r.status.isEmpty() ? QStringLiteral("available") : r.status));
 
     const bool unique = r.rarity == QStringLiteral("unique");
-    if (!r.byCategory) {
-        if (unique && !r.name.isEmpty())
+    const bool useName = !r.byCategory && r.useName;
+    // 유형을 모르면 베이스를 꺼도 베이스로 (안 그러면 전체 검색이 됨)
+    const bool useType = !r.byCategory && (r.useType || r.category.isEmpty());
+    {
+        if (unique && useName && !r.name.isEmpty())
             query.insert(QStringLiteral("name"), r.name);
-        if (!r.type.isEmpty()) {
+        if (useType && !r.type.isEmpty()) {
             if (!r.disc.isEmpty())
                 query.insert(QStringLiteral("type"), QJsonObject{{QStringLiteral("option"), r.type},
                                                                  {QStringLiteral("discriminator"), r.disc}});
@@ -167,7 +170,7 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
     }
 
     FilterSet fs(r.game, db);
-    if (!r.category.isEmpty() && (r.byCategory || r.type.isEmpty()))
+    if (!r.category.isEmpty() && (!useType || r.type.isEmpty()))
         fs.add(QStringLiteral("category"), option(r.category));
     if (!r.rarity.isEmpty())
         fs.add(QStringLiteral("rarity"), option(r.rarity));

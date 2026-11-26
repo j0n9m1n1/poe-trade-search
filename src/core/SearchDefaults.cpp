@@ -43,7 +43,8 @@ ItemFilterState defaultFilterState(const ParsedItem& it)
     s.twiceCorrupted = it.twiceCorruptDefault;
     s.mutated = it.mutatedDefault;
     s.rarity = it.rarityFilter;
-    s.byCategory = it.byCategory;
+    s.useName = !it.byCategory; // auto_select_bytype 대상이면 처음부터 유형 검색
+    s.useType = !it.byCategory;
     s.influences = it.influences;
     s.synthesised = it.synthesised;
     s.blighted = it.blighted;
@@ -114,6 +115,8 @@ ParsedItem applyPreset(const ParsedItem& parsed, Preset p, int rangePct, ItemFil
             st->useQuality = false;
             st->useSockets = false;
             st->byCategory = false;
+            st->useName = true;
+            st->useType = true;
             if (it.rarityId != QStringLiteral("unique"))
                 st->rarity = QStringLiteral("nonunique");
         }
@@ -151,6 +154,8 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
         }
     }
     r.byCategory = st.byCategory;
+    r.useName = st.useName;
+    r.useType = st.useType;
     r.category = it.category;
     r.rarity = st.rarity;
 

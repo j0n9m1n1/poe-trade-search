@@ -74,8 +74,8 @@ master 푸시/PR 은 GitHub Actions 가 Windows 빌드 + 테스트만 함 (결�
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.3
-git push origin v0.0.3
+git tag v0.0.4
+git push origin v0.0.4
 ```
 
 Release 에 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip` 과 각각의 `.sha256` 이 올라감.

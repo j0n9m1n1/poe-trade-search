@@ -21,7 +21,9 @@ struct ItemFilterState {
     int twiceCorrupted = 0; // 0 any / 1 yes / 2 no
     int mutated = 0;        // 삿된(PoE1) / 함양된 바알 고유(PoE2) 0 any / 1 yes / 2 no
     QString rarity;
-    bool byCategory = false;
+    bool byCategory = false; // 이름/베이스 둘 다 무시하고 유형으로
+    bool useName = true;     // 고유 이름으로 검색
+    bool useType = true;     // 베이스로 검색 (끄면 아이템 유형으로)
     QVector<int> influences; // Keywords::influences() 인덱스
     bool synthesised = false;
     bool blighted = false;

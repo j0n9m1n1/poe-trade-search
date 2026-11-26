@@ -29,7 +29,9 @@ struct SearchRequest {
     QString name;
     QString type;
     QString disc;
-    bool byCategory = false;
+    bool byCategory = false; // 이름/베이스 무시, 유형으로
+    bool useName = true;     // 고유 이름
+    bool useType = true;     // 베이스 (끄면 유형으로)
     QString category;
     QString rarity; // "" = 모두
 
