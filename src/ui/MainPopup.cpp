@@ -81,7 +81,7 @@ MainPopup::MainPopup(const Keywords& kw, QWidget* parent) : QWidget(parent), m_k
     setWindowFlags(Qt::Tool | Qt::WindowStaysOnTopHint | Qt::CustomizeWindowHint | Qt::WindowTitleHint |
                    Qt::WindowCloseButtonHint);
     setAttribute(Qt::WA_ShowWithoutActivating, true);
-    setWindowTitle(QStringLiteral("POE 거래소 검색"));
+    setWindowTitle(QStringLiteral("Poe Trade Search"));
     buildUi();
 }
 
@@ -457,7 +457,7 @@ void MainPopup::markStale()
 
 void MainPopup::setLeagueTitle(const QString& league)
 {
-    setWindowTitle(QStringLiteral("POE 거래소 검색 - %1").arg(league));
+    setWindowTitle(QStringLiteral("Poe Trade Search - %1").arg(league));
 }
 
 int MainPopup::rangePct() const

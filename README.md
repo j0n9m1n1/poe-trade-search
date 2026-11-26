@@ -1,4 +1,4 @@
-# POE 거래소 검색 (C++/Qt)
+# Poe Trade Search (C++/Qt)
 
 인게임 아이템 위에서 Ctrl+C 하면 팝업이 떠서 거래소 검색 / 시세 확인을 해주는 Windows 도구.
 [phiDelPark/PoeTradeSearch](https://github.com/phiDelPark/PoeTradeSearch) (C#/WPF, 3.16 기준)를 C++17 / Qt 6 로 다시 짠 것이고, 현행 PoE1 + PoE2 거래소 API 기준으로 맞춤.

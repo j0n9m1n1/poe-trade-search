@@ -130,7 +130,7 @@ bool Application::start(QString* error)
     const QIcon appIcon(QStringLiteral(":/icons/app.png"));
     QApplication::setWindowIcon(appIcon);
     m_tray = new QSystemTrayIcon(appIcon, this);
-    m_tray->setToolTip(QStringLiteral("POE 거래소 검색 %1").arg(QStringLiteral(PTS_VERSION)));
+    m_tray->setToolTip(QStringLiteral("Poe Trade Search %1").arg(QStringLiteral(PTS_VERSION)));
     connect(m_tray, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason r) {
         if (r == QSystemTrayIcon::Trigger)
             reopenLast();
@@ -221,7 +221,7 @@ void Application::updateGame(Game g, std::function<void()> then)
     m_data->update(g, [this, g, then](bool ok, const QString& err) {
         if (ok) {
             loadGame(g);
-            m_tray->setToolTip(QStringLiteral("POE 거래소 검색 %1").arg(QStringLiteral(PTS_VERSION)));
+            m_tray->setToolTip(QStringLiteral("Poe Trade Search %1").arg(QStringLiteral(PTS_VERSION)));
         } else {
             notify(QStringLiteral("%1 거래소 데이터 업데이트 실패\n%2")
                        .arg(g == Game::Poe1 ? QStringLiteral("PoE1") : QStringLiteral("PoE2"), err),
@@ -964,7 +964,7 @@ void Application::restart()
 void Application::notify(const QString& msg, QSystemTrayIcon::MessageIcon icon)
 {
     if (m_tray && QSystemTrayIcon::supportsMessages())
-        m_tray->showMessage(QStringLiteral("POE 거래소 검색"), msg, icon, 5000);
+        m_tray->showMessage(QStringLiteral("Poe Trade Search"), msg, icon, 5000);
     qInfo().noquote() << msg;
 }
 
