@@ -23,6 +23,7 @@ namespace pts {
 namespace {
 
 const QString kZipName = QStringLiteral("PoeTradeSearch-win64.zip");
+const QString kSetupName = QStringLiteral("PoeTradeSearch-Setup.exe");
 
 QNetworkRequest request(const QUrl& url, int timeoutMs)
 {
@@ -57,7 +58,29 @@ try {
 }
 )PS1";
 
+// 설치판: 새 설치 프로그램을 조용히 실행. 성공하면 설치 프로그램이 앱을 다시 켬 (installer.iss [Run])
+const char* kSetupScript = R"PS1(param([int]$ProcId, [string]$Setup, [string]$Exe, [string]$Log)
+function Log($m) { Add-Content -LiteralPath $Log -Value ("{0} {1}" -f (Get-Date -Format s), $m) }
+try {
+    Log "waiting for process $ProcId"
+    try { Wait-Process -Id $ProcId -Timeout 30 -ErrorAction Stop } catch {}
+    Start-Sleep -Milliseconds 500
+    $p = Start-Process -FilePath $Setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+    Log ("setup exit " + $p.ExitCode)
+    Remove-Item -LiteralPath $Setup -Force -ErrorAction SilentlyContinue
+    if ($p.ExitCode -ne 0) { Start-Process -FilePath $Exe -ArgumentList '--update-failed','--wait-shutdown' }
+} catch {
+    Log ("failed: " + $_)
+    Start-Process -FilePath $Exe -ArgumentList '--update-failed','--wait-shutdown'
+}
+)PS1";
+
 } // namespace
+
+bool Updater::isInstalled()
+{
+    return QFileInfo::exists(QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("unins000.exe")));
+}
 
 Updater::Updater(const QString& repo, const QString& workDir, QObject* parent)
     : QObject(parent), m_nam(new QNetworkAccessManager(this)), m_repo(repo), m_dir(workDir)
@@ -86,6 +109,8 @@ bool Updater::isNewer(const QString& current, const QString& candidate)
 bool Updater::canSelfInstall(QString* why)
 {
 #if defined(Q_OS_WIN) && defined(PTS_RELEASE_BUILD)
+    if (isInstalled())
+        return true; // 설치 프로그램이 알아서 덮어씀 (모든 사용자 설치면 UAC 창 뜸)
     const QString dir = QCoreApplication::applicationDirPath();
     QFile probe(QDir(dir).filePath(QStringLiteral(".update_write_test")));
     if (!probe.open(QIODevice::WriteOnly)) {
@@ -140,6 +165,10 @@ void Updater::check(std::function<void(const Release*, const QString&)> cb)
                 rel.zipUrl = url;
             else if (name == kZipName + QStringLiteral(".sha256"))
                 rel.shaUrl = url;
+            else if (name == kSetupName)
+                rel.setupUrl = url;
+            else if (name == kSetupName + QStringLiteral(".sha256"))
+                rel.setupShaUrl = url;
         }
         if (o.value(QStringLiteral("draft")).toBool() || o.value(QStringLiteral("prerelease")).toBool() ||
             !isNewer(currentVersion(), rel.tag)) {
@@ -156,16 +185,21 @@ void Updater::download(const Release& rel, std::function<void(const QString&, co
         cb(QString(), QStringLiteral("이미 받는 중"));
         return;
     }
-    if (rel.zipUrl.isEmpty() || rel.shaUrl.isEmpty()) {
-        cb(QString(), QStringLiteral("릴리즈에 %1 / .sha256 파일이 없음").arg(kZipName));
+    // 설치판은 설치 프로그램, 포터블은 zip
+    const bool setup = isInstalled() && !rel.setupUrl.isEmpty() && !rel.setupShaUrl.isEmpty();
+    const QString fileName = setup ? kSetupName : kZipName;
+    const QString fileUrl = setup ? rel.setupUrl : rel.zipUrl;
+    const QString shaUrl = setup ? rel.setupShaUrl : rel.shaUrl;
+    if (fileUrl.isEmpty() || shaUrl.isEmpty()) {
+        cb(QString(), QStringLiteral("릴리즈에 %1 / .sha256 파일이 없음").arg(fileName));
         return;
     }
     m_busy = true;
     QDir().mkpath(m_dir);
-    const QString zipPath = QDir(m_dir).filePath(kZipName);
+    const QString zipPath = QDir(m_dir).filePath(fileName);
 
-    QNetworkReply* shaReply = m_nam->get(request(QUrl(rel.shaUrl), 30000));
-    connect(shaReply, &QNetworkReply::finished, this, [this, shaReply, rel, zipPath, cb]() {
+    QNetworkReply* shaReply = m_nam->get(request(QUrl(shaUrl), 30000));
+    connect(shaReply, &QNetworkReply::finished, this, [this, shaReply, fileUrl, zipPath, cb]() {
         shaReply->deleteLater();
         const QByteArray expected = shaReply->readAll().trimmed().split(' ').value(0).toLower();
         if (shaReply->error() != QNetworkReply::NoError || expected.size() != 64) {
@@ -173,7 +207,7 @@ void Updater::download(const Release& rel, std::function<void(const QString&, co
             cb(QString(), QStringLiteral("체크섬 파일을 못 받음: %1").arg(shaReply->errorString()));
             return;
         }
-        QNetworkReply* zr = m_nam->get(request(QUrl(rel.zipUrl), 300000));
+        QNetworkReply* zr = m_nam->get(request(QUrl(fileUrl), 300000));
         connect(zr, &QNetworkReply::finished, this, [this, zr, expected, zipPath, cb]() {
             zr->deleteLater();
             m_busy = false;
@@ -205,30 +239,31 @@ bool Updater::install(const QString& zipPath, QString* error)
             *error = why;
         return false;
     }
-    const QString script = QDir(m_dir).filePath(QStringLiteral("apply-update.ps1"));
+    const bool setup = zipPath.endsWith(QStringLiteral(".exe"), Qt::CaseInsensitive);
+    const QString script = QDir(m_dir).filePath(setup ? QStringLiteral("run-setup.ps1") : QStringLiteral("apply-update.ps1"));
     QString err;
-    if (!json::writeRaw(script, QByteArray(kScript), &err)) {
+    if (!json::writeRaw(script, QByteArray(setup ? kSetupScript : kScript), &err)) {
         if (error)
             *error = err;
         return false;
     }
-    const QStringList args = {QStringLiteral("-NoProfile"),
-                              QStringLiteral("-ExecutionPolicy"),
-                              QStringLiteral("Bypass"),
-                              QStringLiteral("-WindowStyle"),
-                              QStringLiteral("Hidden"),
-                              QStringLiteral("-File"),
-                              QDir::toNativeSeparators(script),
-                              QStringLiteral("-ProcId"),
-                              QString::number(QCoreApplication::applicationPid()),
-                              QStringLiteral("-Zip"),
-                              QDir::toNativeSeparators(zipPath),
-                              QStringLiteral("-Dest"),
-                              QDir::toNativeSeparators(QCoreApplication::applicationDirPath()),
-                              QStringLiteral("-Exe"),
-                              QDir::toNativeSeparators(QCoreApplication::applicationFilePath()),
-                              QStringLiteral("-Log"),
-                              QDir::toNativeSeparators(logPath())};
+    QStringList args = {QStringLiteral("-NoProfile"),
+                        QStringLiteral("-ExecutionPolicy"),
+                        QStringLiteral("Bypass"),
+                        QStringLiteral("-WindowStyle"),
+                        QStringLiteral("Hidden"),
+                        QStringLiteral("-File"),
+                        QDir::toNativeSeparators(script),
+                        QStringLiteral("-ProcId"),
+                        QString::number(QCoreApplication::applicationPid())};
+    if (setup) {
+        args << QStringLiteral("-Setup") << QDir::toNativeSeparators(zipPath);
+    } else {
+        args << QStringLiteral("-Zip") << QDir::toNativeSeparators(zipPath) << QStringLiteral("-Dest")
+             << QDir::toNativeSeparators(QCoreApplication::applicationDirPath());
+    }
+    args << QStringLiteral("-Exe") << QDir::toNativeSeparators(QCoreApplication::applicationFilePath())
+         << QStringLiteral("-Log") << QDir::toNativeSeparators(logPath());
     if (!QProcess::startDetached(QStringLiteral("powershell.exe"), args)) {
         if (error)
             *error = QStringLiteral("PowerShell 을 실행 못 함");

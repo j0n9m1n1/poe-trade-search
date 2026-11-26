@@ -43,6 +43,8 @@ bool isAdministrator()
     return false;
 }
 
+void createInstanceMutex() {}
+
 bool mouseButtonDown()
 {
     // 전역 마우스 상태를 못 읽음 -> 우리 창 위 클릭만 앎

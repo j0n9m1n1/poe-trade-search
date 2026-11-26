@@ -597,10 +597,9 @@ void Application::checkForUpdate(bool manual)
             return;
         }
         const bool firstSeen = m_newTag != rel->tag;
+        m_newRelease = *rel;
         m_newTag = rel->tag;
         m_newPage = rel->page;
-        m_newZipUrl = rel->zipUrl;
-        m_newShaUrl = rel->shaUrl;
         QString why;
         const bool canInstall = Updater::canSelfInstall(&why);
         m_updateAction->setText(canInstall ? QStringLiteral("업데이트 설치 (%1 → %2)").arg(Updater::currentVersion(), rel->tag)
@@ -631,11 +630,7 @@ void Application::installUpdate()
         applyDownloadedUpdate();
         return;
     }
-    Updater::Release rel;
-    rel.tag = m_newTag;
-    rel.page = m_newPage;
-    rel.zipUrl = m_newZipUrl;
-    rel.shaUrl = m_newShaUrl;
+    const Updater::Release rel = m_newRelease;
     notify(QStringLiteral("%1 받는 중...").arg(rel.tag));
     m_updater->download(rel, [this](const QString& zip, const QString& error) {
         if (!error.isEmpty()) {

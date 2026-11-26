@@ -7,6 +7,7 @@
 #include "core/Keywords.h"
 #include "core/PriceEstimate.h"
 #include "core/TradeDb.h"
+#include "net/Updater.h"
 
 #include <QElapsedTimer>
 #include <QObject>
@@ -24,7 +25,6 @@ namespace pts {
 class DataManager;
 class HotkeyManager;
 class IconCache;
-class Updater;
 class MainPopup;
 class TradeClient;
 
@@ -103,7 +103,8 @@ private:
     Updater* m_updater = nullptr;
     QAction* m_updateAction = nullptr;
     QTimer m_updateTimer;
-    QString m_newTag, m_newPage, m_newZipUrl, m_newShaUrl; // 찾은 새 버전
+    Updater::Release m_newRelease; // 찾은 새 버전
+    QString m_newTag, m_newPage;
     QString m_downloadedZip;
     std::unique_ptr<ItemParser> m_parser;
     MainPopup* m_popup = nullptr;

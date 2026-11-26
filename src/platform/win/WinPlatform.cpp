@@ -210,6 +210,13 @@ bool isAdministrator()
     return member != FALSE;
 }
 
+void createInstanceMutex()
+{
+    // 프로세스 끝날 때까지 들고 있음 (종료 시 OS 가 정리)
+    static HANDLE h = CreateMutexW(nullptr, FALSE, L"PoeTradeSearchQt_Running");
+    Q_UNUSED(h);
+}
+
 bool mouseButtonDown()
 {
     return isDown(VK_LBUTTON) || isDown(VK_RBUTTON) || isDown(VK_MBUTTON);

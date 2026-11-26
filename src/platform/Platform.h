@@ -35,6 +35,9 @@ void activateWindow(QWidget* w);
 
 bool isAdministrator();
 
+// 실행 중 표시용 이름 있는 뮤텍스 (설치 프로그램 AppMutex=PoeTradeSearchQt_Running 이 확인)
+void createInstanceMutex();
+
 // 지금 마우스 버튼(좌/우/가운데)이 눌려 있는지 (전역). 팝업 바깥 클릭 감지용
 bool mouseButtonDown();
 

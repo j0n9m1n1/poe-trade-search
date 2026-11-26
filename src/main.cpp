@@ -3,6 +3,7 @@
 // POE 거래소 검색 (C++/Qt 포팅)
 // 원본: PoeTradeSearch by phiDelPark (https://github.com/phiDelPark/PoeTradeSearch), GPL-3.0
 #include "app/Application.h"
+#include "platform/Platform.h"
 
 #include <QApplication>
 #include <QDateTime>
@@ -84,6 +85,8 @@ int main(int argc, char** argv)
                                               : QStringLiteral("이 프로그램은 이미 실행 중임"));
         return 1;
     }
+
+    pts::platform::createInstanceMutex();
 
     pts::Application a(dataDir);
     QString err;

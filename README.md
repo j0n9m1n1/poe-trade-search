@@ -49,12 +49,20 @@ QT_QPA_PLATFORM=offscreen ./build/make_icon resources/app.svg resources/app.ico 
 
 ## 설치 / 업데이트
 
-[Releases](https://github.com/j0n9m1n1/poe-trade-search/releases) 에서 `PoeTradeSearch-win64.zip` 받아서 아무 폴더에 풀고 `PoeTradeSearch.exe` 실행.
+[Releases](https://github.com/j0n9m1n1/poe-trade-search/releases) 에서:
 
-- 프로그램 업데이트는 GitHub Release 기준. 시작 15초 뒤 + 6시간마다 확인
+- **`PoeTradeSearch-Setup.exe`** (설치 파일, 권장): 기본은 관리자 권한 없이 내 계정에만 설치 (`%LOCALAPPDATA%\Programs\PoeTradeSearch`). 설치 화면에서 모든 사용자 설치도 고를 수 있음. 시작 메뉴 / 바탕화면(선택) / Windows 시작 시 자동 실행(선택)
+- `PoeTradeSearch-win64.zip` (포터블): 아무 폴더에 풀고 `PoeTradeSearch.exe` 실행
+
+업데이트:
+
+- GitHub Release 기준. 시작 15초 뒤 + 6시간마다 확인
 - 설정 > 프로그램 업데이트: **새 버전 알림만**(기본) / 자동으로 받아서 설치 / 확인 안 함
-- 설치는 트레이 메뉴 "업데이트 설치". SHA256 검증 후 PowerShell 로 압축 풀어 덮어쓰고 다시 켬. `data\` (설정/캐시) 는 그대로
-- 자동 설치는 Release 로 받은 배포 빌드에서만 됨 (직접 빌드한 건 알림만). Program Files 처럼 쓰기 막힌 폴더면 릴리즈 페이지만 열어줌
+- 설치는 트레이 메뉴 "업데이트 설치". SHA256 검증 후 앱을 닫고
+  - 설치판: 새 설치 파일을 조용히 실행 (모든 사용자 설치면 UAC 창 뜸) → 끝나면 앱 다시 켜짐
+  - 포터블: PowerShell 로 압축 풀어 덮어쓰고 다시 켬
+- `data\` (설정/캐시) 는 업데이트·삭제해도 그대로 남음
+- 자동 설치는 Release 로 받은 배포 빌드에서만 됨 (직접 빌드한 건 알림만). 포터블을 쓰기 막힌 폴더에 두면 릴리즈 페이지만 열어줌
 - 실패하면 기존 버전으로 다시 켜지고 `data\update\update.log` 에 사유 남음
 
 ### 릴리즈 만들기 (관리자용)

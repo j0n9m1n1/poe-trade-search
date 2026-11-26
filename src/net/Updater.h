@@ -11,9 +11,12 @@ namespace pts {
 
 // GitHub Release 기반 자동 업데이트
 //   1) api.github.com/repos/<repo>/releases/latest 로 최신 태그 확인
-//   2) PoeTradeSearch-win64.zip + .sha256 받아서 해시 검증
-//   3) PowerShell 스크립트를 띄우고 앱 종료 -> 스크립트가 압축 풀어 실행 폴더에 덮어쓰고 재실행
-// 실행 폴더 안의 data/ (설정/캐시) 는 압축에 없으니 그대로 남음.
+//   2) 설치판(설치 폴더에 unins000.exe): PoeTradeSearch-Setup.exe + .sha256
+//      포터블(zip)판: PoeTradeSearch-win64.zip + .sha256  -> 해시 검증
+//   3) PowerShell 스크립트를 띄우고 앱 종료 -> 스크립트가 앱 종료를 기다렸다가
+//      설치판: Setup.exe /VERYSILENT (설치 프로그램이 끝나고 앱을 다시 켬)
+//      포터블: 압축 풀어 실행 폴더에 덮어쓰고 다시 켬
+// 실행 폴더 안의 data/ (설정/캐시) 는 배포 파일에 없으니 그대로 남음.
 class Updater : public QObject {
     Q_OBJECT
 public:
@@ -23,7 +26,12 @@ public:
         QString page;    // 릴리즈 웹 페이지
         QString zipUrl;
         QString shaUrl;
+        QString setupUrl;
+        QString setupShaUrl;
     };
+
+    // 설치 프로그램으로 깔린 것인지 (설치 폴더에 Inno Setup 제거 프로그램이 있음)
+    static bool isInstalled();
 
     Updater(const QString& repo, const QString& workDir, QObject* parent = nullptr);
 
