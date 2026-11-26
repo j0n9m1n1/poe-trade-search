@@ -115,7 +115,7 @@ bool Updater::canSelfInstall(QString* why)
     QFile probe(QDir(dir).filePath(QStringLiteral(".update_write_test")));
     if (!probe.open(QIODevice::WriteOnly)) {
         if (why)
-            *why = QStringLiteral("실행 폴더에 쓸 수 없음 (Program Files 등)");
+            *why = QStringLiteral("실행 폴더에 쓸 수 없습니다 (Program Files 등)");
         return false;
     }
     probe.close();
@@ -123,7 +123,7 @@ bool Updater::canSelfInstall(QString* why)
     return true;
 #else
     if (why)
-        *why = QStringLiteral("직접 빌드한 개발 버전이라 자동 설치 안 함");
+        *why = QStringLiteral("직접 빌드한 개발 버전은 자동 설치를 지원하지 않습니다");
     return false;
 #endif
 }
@@ -136,7 +136,7 @@ QString Updater::logPath() const
 void Updater::check(std::function<void(const Release*, const QString&)> cb)
 {
     if (!enabled()) {
-        cb(nullptr, QStringLiteral("업데이트 저장소가 설정 안 됨"));
+        cb(nullptr, QStringLiteral("업데이트 저장소가 설정되지 않았습니다"));
         return;
     }
     const QUrl url(QStringLiteral("https://api.github.com/repos/%1/releases/latest").arg(m_repo));
@@ -182,7 +182,7 @@ void Updater::check(std::function<void(const Release*, const QString&)> cb)
 void Updater::download(const Release& rel, std::function<void(const QString&, const QString&)> cb)
 {
     if (m_busy) {
-        cb(QString(), QStringLiteral("이미 받는 중"));
+        cb(QString(), QStringLiteral("이미 받는 중입니다"));
         return;
     }
     // 설치판은 설치 프로그램, 포터블은 zip
@@ -191,7 +191,7 @@ void Updater::download(const Release& rel, std::function<void(const QString&, co
     const QString fileUrl = setup ? rel.setupUrl : rel.zipUrl;
     const QString shaUrl = setup ? rel.setupShaUrl : rel.shaUrl;
     if (fileUrl.isEmpty() || shaUrl.isEmpty()) {
-        cb(QString(), QStringLiteral("릴리즈에 %1 / .sha256 파일이 없음").arg(fileName));
+        cb(QString(), QStringLiteral("릴리즈에 %1 / .sha256 파일이 없습니다").arg(fileName));
         return;
     }
     m_busy = true;
@@ -204,7 +204,7 @@ void Updater::download(const Release& rel, std::function<void(const QString&, co
         const QByteArray expected = shaReply->readAll().trimmed().split(' ').value(0).toLower();
         if (shaReply->error() != QNetworkReply::NoError || expected.size() != 64) {
             m_busy = false;
-            cb(QString(), QStringLiteral("체크섬 파일을 못 받음: %1").arg(shaReply->errorString()));
+            cb(QString(), QStringLiteral("체크섬 파일을 받지 못했습니다: %1").arg(shaReply->errorString()));
             return;
         }
         QNetworkReply* zr = m_nam->get(request(QUrl(fileUrl), 300000));
@@ -213,12 +213,12 @@ void Updater::download(const Release& rel, std::function<void(const QString&, co
             m_busy = false;
             const QByteArray data = zr->readAll();
             if (zr->error() != QNetworkReply::NoError || data.isEmpty()) {
-                cb(QString(), QStringLiteral("업데이트 파일을 못 받음: %1").arg(zr->errorString()));
+                cb(QString(), QStringLiteral("업데이트 파일을 받지 못했습니다: %1").arg(zr->errorString()));
                 return;
             }
             const QByteArray got = QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex();
             if (got != expected) {
-                cb(QString(), QStringLiteral("체크섬이 안 맞음 (받다가 깨졌거나 파일이 바뀜)"));
+                cb(QString(), QStringLiteral("체크섬이 일치하지 않습니다 (다운로드 중 손상되었거나 파일이 변경되었습니다)"));
                 return;
             }
             QString err;
@@ -266,7 +266,7 @@ bool Updater::install(const QString& zipPath, QString* error)
          << QStringLiteral("-Log") << QDir::toNativeSeparators(logPath());
     if (!QProcess::startDetached(QStringLiteral("powershell.exe"), args)) {
         if (error)
-            *error = QStringLiteral("PowerShell 을 실행 못 함");
+            *error = QStringLiteral("PowerShell을 실행하지 못했습니다");
         return false;
     }
     return true;

@@ -147,7 +147,7 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
             r.type = t;
             r.name = n;
         } else if (warning) {
-            *warning = QStringLiteral("다른 언어 서버용 이름 변환 실패 - 아이템 언어 서버로 검색");
+            *warning = QStringLiteral("다른 언어 서버용 이름으로 바꾸지 못해 아이템 언어 서버로 검색합니다.");
             r.lang = it.lang;
         } else {
             r.lang = it.lang;

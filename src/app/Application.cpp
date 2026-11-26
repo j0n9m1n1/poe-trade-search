@@ -73,7 +73,7 @@ bool Application::start(QString* error)
         QString e;
         if (!m_cfg.load(m_cfgPath, &e)) {
             QMessageBox::warning(nullptr, QStringLiteral("설정 오류"),
-                                 QStringLiteral("Config.txt 를 읽지 못해 기본값으로 시작함\n%1").arg(e));
+                                 QStringLiteral("Config.txt를 읽지 못해 기본값으로 시작합니다.\n%1").arg(e));
             m_cfg = Config::defaults();
         } else if (m_cfg.migrated) {
             saveConfig();
@@ -93,7 +93,7 @@ bool Application::start(QString* error)
     if (!(QFileInfo::exists(userParser) && m_kw.load(userParser, &e)) &&
         !m_kw.load(QStringLiteral(":/data/parser.json"), &e)) {
         if (error)
-            *error = QStringLiteral("parser.json 로드 실패: ") + e;
+            *error = QStringLiteral("parser.json을 읽지 못했습니다: ") + e;
         return false;
     }
 
@@ -186,18 +186,18 @@ bool Application::start(QString* error)
     m_updateTimer.start(15000);
     const QStringList args = QCoreApplication::arguments();
     if (args.contains(QStringLiteral("--updated"))) {
-        notify(QStringLiteral("%1 버전으로 업데이트됨").arg(Updater::currentVersion()));
+        notify(QStringLiteral("%1 버전으로 업데이트했습니다.").arg(Updater::currentVersion()));
         return true;
     }
     if (args.contains(QStringLiteral("--update-failed"))) {
-        notify(QStringLiteral("업데이트 실패해서 기존 버전으로 켰음. 로그: %1").arg(QDir::toNativeSeparators(m_updater->logPath())),
+        notify(QStringLiteral("업데이트에 실패해 기존 버전으로 실행했습니다. 로그: %1").arg(QDir::toNativeSeparators(m_updater->logPath())),
                QSystemTrayIcon::Warning);
         return true;
     }
 
-    QString hint = QStringLiteral("프로그램을 시작합니다.\n사용법: 아이템 위에서 Ctrl + C\n종료: 트레이 아이콘 우클릭");
+    QString hint = QStringLiteral("프로그램을 시작합니다.\n사용법: 게임에서 아이템에 마우스를 올리고 Ctrl + C\n종료: 트레이 아이콘 우클릭 → 종료");
     if (!platform::isAdministrator())
-        hint += QStringLiteral("\n(PoE 를 관리자 권한으로 돌리면 이 프로그램도 관리자로 실행해야 단축키가 먹음)");
+        hint += QStringLiteral("\n(PoE를 관리자 권한으로 실행했다면 이 프로그램도 관리자 권한으로 실행해야 단축키가 동작합니다)");
     notify(hint);
     return true;
 }
@@ -223,7 +223,7 @@ void Application::updateGame(Game g, std::function<void()> then)
             loadGame(g);
             m_tray->setToolTip(QStringLiteral("Poe Trade Search %1").arg(QStringLiteral(PTS_VERSION)));
         } else {
-            notify(QStringLiteral("%1 거래소 데이터 업데이트 실패\n%2")
+            notify(QStringLiteral("%1 거래소 데이터를 업데이트하지 못했습니다.\n%2")
                        .arg(g == Game::Poe1 ? QStringLiteral("PoE1") : QStringLiteral("PoE2"), err),
                    QSystemTrayIcon::Warning);
         }
@@ -251,7 +251,7 @@ void Application::fixLeagues()
             m_cfg.setLeague(g, d.leagues().first().id);
             changed = true;
             if (!found)
-                notify(QStringLiteral("설정된 리그 '%1' 가 없어서 '%2' 로 바꿈").arg(cur, d.leagues().first().id));
+                notify(QStringLiteral("설정된 리그 '%1'을(를) 찾을 수 없어 '%2'(으)로 변경했습니다.").arg(cur, d.leagues().first().id));
         }
     }
     if (changed)
@@ -327,7 +327,7 @@ void Application::registerHotkeys()
             const bool ok = m_hotkeys->add(kShortcutBase + i, s.modifiers, s.keycode);
 #ifdef Q_OS_WIN
             if (!ok)
-                qWarning() << "hotkey register failed (다른 프로그램이 이미 쓰는 중일 수 있음)" << s.keycode
+                qWarning() << "hotkey register failed (다른 프로그램이 이미 사용 중일 수 있습니다)" << s.keycode
                            << s.modifiers << s.value;
 #else
             Q_UNUSED(ok);
@@ -357,8 +357,8 @@ void Application::onHotkey(int id)
 
     if (lower.startsWith(kPause)) {
         m_pauseAction->setChecked(!m_paused);
-        notify(m_paused ? QStringLiteral("일시 정지함. 같은 단축키 한 번 더 누르면 다시 시작")
-                        : QStringLiteral("다시 시작함"));
+        notify(m_paused ? QStringLiteral("일시 정지했습니다. 같은 단축키를 한 번 더 누르면 다시 시작합니다.")
+                        : QStringLiteral("다시 시작했습니다."));
         return;
     }
     if (lower.startsWith(kRestart)) {
@@ -403,7 +403,7 @@ void Application::onHotkey(int id)
     }
     if (!m_unsupportedWarned) {
         m_unsupportedWarned = true;
-        notify(QStringLiteral("이 단축키 명령은 1차 버전에서 지원 안 함: %1").arg(value), QSystemTrayIcon::Warning);
+        notify(QStringLiteral("지원하지 않는 단축키 명령입니다: %1").arg(value), QSystemTrayIcon::Warning);
     }
 }
 
@@ -433,10 +433,10 @@ void Application::handleItemText(const QString& text)
     if (!it) {
         if (err == QStringLiteral("data not loaded")) {
             if (!m_data->isUpdating(g)) {
-                notify(QStringLiteral("거래소 데이터를 받는 중... 받고 나면 다시 Ctrl+C 하셈"));
+                notify(QStringLiteral("거래소 데이터를 받는 중입니다. 완료되면 다시 Ctrl+C를 눌러 주세요."));
                 updateGame(g);
             } else {
-                notify(QStringLiteral("거래소 데이터 받는 중. 잠깐 기다려"));
+                notify(QStringLiteral("거래소 데이터를 받는 중입니다. 잠시 기다려 주세요."));
             }
         } else {
             qWarning() << "parse failed" << err;
@@ -487,7 +487,7 @@ void Application::showPopup()
 void Application::reopenLast()
 {
     if (!m_popup->hasItem()) {
-        notify(QStringLiteral("다시 열 창이 없음"));
+        notify(QStringLiteral("다시 열 창이 없습니다."));
         return;
     }
     showPopup();
@@ -561,7 +561,7 @@ void Application::openTrade()
     m_client->search(g, req.lang, league, q, [this, g, lang = req.lang, league](const TradeClient::SearchResult& r) {
         if (!r.error.isEmpty()) {
             showPopupMessage(QStringLiteral("검색 실패"),
-                             QStringLiteral("거래소 검색 실패: %1\n한/영 서버 거래소 접속을 확인하고 다시 해봐").arg(r.error));
+                             QStringLiteral("거래소 검색에 실패했습니다: %1\n한국/글로벌 거래소에 접속되는지 확인한 뒤 다시 시도해 주세요.").arg(r.error));
             return;
         }
         QDesktopServices::openUrl(endpoints::webSearch(g, lang, league, r.id));
@@ -589,12 +589,12 @@ void Application::checkForUpdate(bool manual)
         if (!error.isEmpty()) {
             qWarning() << "update check failed" << error;
             if (manual)
-                notify(QStringLiteral("업데이트 확인 실패: %1").arg(error), QSystemTrayIcon::Warning);
+                notify(QStringLiteral("업데이트를 확인하지 못했습니다: %1").arg(error), QSystemTrayIcon::Warning);
             return;
         }
         if (!rel) {
             if (manual)
-                notify(QStringLiteral("최신 버전임 (%1)").arg(Updater::currentVersion()));
+                notify(QStringLiteral("최신 버전입니다 (%1).").arg(Updater::currentVersion()));
             return;
         }
         const bool firstSeen = m_newTag != rel->tag;
@@ -610,8 +610,8 @@ void Application::checkForUpdate(bool manual)
             return;
         }
         if (firstSeen || manual) {
-            notify(canInstall ? QStringLiteral("새 버전 %1 있음. 트레이 메뉴 '업데이트 설치' 로 설치").arg(rel->tag)
-                              : QStringLiteral("새 버전 %1 있음 (%2). 트레이 메뉴에서 릴리즈 페이지 열기").arg(rel->tag, why));
+            notify(canInstall ? QStringLiteral("새 버전(%1)이 있습니다. 트레이 메뉴의 '업데이트 설치'를 눌러 설치하세요.").arg(rel->tag)
+                              : QStringLiteral("새 버전(%1)이 있습니다 (%2). 트레이 메뉴에서 릴리즈 페이지를 열 수 있습니다.").arg(rel->tag, why));
         }
         if (manual)
             installUpdate();
@@ -635,7 +635,7 @@ void Application::installUpdate()
     notify(QStringLiteral("%1 받는 중...").arg(rel.tag));
     m_updater->download(rel, [this](const QString& zip, const QString& error) {
         if (!error.isEmpty()) {
-            notify(QStringLiteral("업데이트 받기 실패: %1").arg(error), QSystemTrayIcon::Warning);
+            notify(QStringLiteral("업데이트를 받지 못했습니다: %1").arg(error), QSystemTrayIcon::Warning);
             return;
         }
         m_downloadedZip = zip;
@@ -650,10 +650,10 @@ void Application::applyDownloadedUpdate()
         QTimer::singleShot(2000, this, &Application::applyDownloadedUpdate);
         return;
     }
-    notify(QStringLiteral("%1 로 업데이트하고 다시 켬").arg(m_newTag));
+    notify(QStringLiteral("%1 버전으로 업데이트한 뒤 다시 실행합니다.").arg(m_newTag));
     QString err;
     if (!m_updater->install(m_downloadedZip, &err)) {
-        notify(QStringLiteral("업데이트 설치 실패: %1").arg(err), QSystemTrayIcon::Warning);
+        notify(QStringLiteral("업데이트를 설치하지 못했습니다: %1").arg(err), QSystemTrayIcon::Warning);
         return;
     }
     m_hotkeys->clear();
@@ -740,7 +740,7 @@ void Application::priceCheck()
                     if (token != m_priceToken)
                         return;
                     if (!r.error.isEmpty()) {
-                        m_popup->priceIdle(QStringLiteral("교환 시세 실패: %1 (클릭해서 다시)").arg(r.error));
+                        m_popup->priceIdle(QStringLiteral("교환 시세를 가져오지 못했습니다: %1 (클릭하면 다시 시도합니다)").arg(r.error));
                         return;
                     }
                     m_popup->priceColumns({QStringLiteral("1개당"), QStringLiteral("환산"), QStringLiteral("재고"),
@@ -762,7 +762,7 @@ void Application::priceCheck()
                                                  .arg(PriceSummary::formatAmount(l.payAmount), haveName,
                                                       PriceSummary::formatAmount(l.getAmount), wantName));
                     }
-                    QString summary = QStringLiteral("해당 교환 매물 없음");
+                    QString summary = QStringLiteral("해당 교환 매물이 없습니다");
                     if (!perOne.isEmpty()) {
                         // 상위 5개 중앙값
                         const QVector<double> top = perOne.mid(0, 5);
@@ -828,14 +828,14 @@ void Application::priceCheck()
                     return;
                 learnIcon(it, all.listings);
                 if (!error.isEmpty()) {
-                    m_popup->priceIdle(QStringLiteral("시세 조회 실패: %1 (클릭해서 다시)").arg(error));
+                    m_popup->priceIdle(QStringLiteral("시세를 조회하지 못했습니다: %1 (클릭하면 다시 시도합니다)").arg(error));
                     return;
                 }
                 const QString dist =
                     PriceSummary::summarize(all.listings, [this, g, lang](const QString& id) { return currencyName(g, lang, id); });
                 QString summary;
                 if (all.listings.isEmpty()) {
-                    summary = all.total == 0 ? QStringLiteral("해당 물품의 거래가 없음") : QStringLiteral("가격 붙은 매물 없음");
+                    summary = all.total == 0 ? QStringLiteral("해당 물품의 거래가 없습니다") : QStringLiteral("가격이 붙은 매물이 없습니다");
                 } else {
                     const Estimate e = estimatePrice(all.listings, rates);
                     summary = e.ok ? formatEstimate(e, rates, all.total) : dist;

@@ -11,7 +11,7 @@ HotkeyEdit::HotkeyEdit(QWidget* parent) : QLineEdit(parent)
 {
     setReadOnly(true);
     setPlaceholderText(QStringLiteral("없음"));
-    setToolTip(QStringLiteral("누른 키 조합이 저장됨. Delete/Backspace/Esc 는 지우기"));
+    setToolTip(QStringLiteral("누른 키 조합이 저장됩니다. Delete/Backspace/Esc를 누르면 지웁니다."));
 }
 
 QString HotkeyEdit::describe(int vk, int mods)

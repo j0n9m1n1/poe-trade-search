@@ -81,8 +81,8 @@ int main(int argc, char** argv)
     lock.setStaleLockTime(0);
     if (!lock.tryLock(waitShutdown ? 10000 : 200)) {
         QMessageBox::information(nullptr, QStringLiteral("중복 실행"),
-                                 waitShutdown ? QStringLiteral("이전 프로그램이 종료되지 않았음")
-                                              : QStringLiteral("이 프로그램은 이미 실행 중임"));
+                                 waitShutdown ? QStringLiteral("이전 프로그램이 아직 종료되지 않았습니다.")
+                                              : QStringLiteral("프로그램이 이미 실행 중입니다. 트레이 아이콘을 확인해 주세요."));
         return 1;
     }
 

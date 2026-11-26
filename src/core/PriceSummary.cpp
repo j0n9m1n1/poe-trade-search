@@ -52,7 +52,7 @@ QString PriceSummary::summarize(const QVector<Listing>& listings, const NameFn& 
             continue;
         top << QStringLiteral("%1[%2]").arg(k).arg(counts[k]);
     }
-    msg += QStringLiteral(" = ") + (top.isEmpty() ? QStringLiteral("가장 많은 가격 없음") : top.join(QStringLiteral(", ")));
+    msg += QStringLiteral(" = ") + (top.isEmpty() ? QStringLiteral("두 번 이상 나온 가격 없음") : top.join(QStringLiteral(", ")));
     return msg;
 }
 

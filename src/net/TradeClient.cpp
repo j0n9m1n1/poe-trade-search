@@ -119,7 +119,7 @@ void TradeClient::start(const Job& j)
         if (reply->error() != QNetworkReply::NoError) {
             err = apiError(body);
             if (err.isEmpty())
-                err = status == 429 ? QStringLiteral("요청이 너무 많음 (레이트 리밋)") : reply->errorString();
+                err = status == 429 ? QStringLiteral("요청이 너무 많습니다 (요청 제한)") : reply->errorString();
         }
         if (job.cb)
             job.cb(status, body, err);
@@ -141,7 +141,7 @@ void TradeClient::search(Game g, Lang server, const QString& league, const QJson
                  for (const auto& v : o.value(QStringLiteral("result")).toArray())
                      r.ids << v.toString();
                  if (r.id.isEmpty())
-                     r.error = QStringLiteral("검색 응답이 이상함");
+                     r.error = QStringLiteral("검색 응답 형식이 올바르지 않습니다");
              }
              cb(r);
          },

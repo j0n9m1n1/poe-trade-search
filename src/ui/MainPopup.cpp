@@ -140,7 +140,7 @@ void MainPopup::buildUi()
     m_preset->addItem(QStringLiteral("베이스"), static_cast<int>(Preset::Base));
     m_preset->setToolTip(QStringLiteral("기본: pseudo 우선 / 자동 체크\n"
                                         "정확: 원래 옵션, T1~T2 만 체크 (등급 모르면 일반 옵션 전부), 정확값\n"
-                                        "베이스: 옵션 다 끄고 아이템 레벨·영향 위주"));
+                                        "베이스: 옵션을 모두 끄고 아이템 레벨·영향 위주로 검색"));
     m_range = new QComboBox(this);
     m_range->setToolTip(QStringLiteral("옵션 값 완화: 최소값을 N% 낮춰서 검색 (고유는 롤 범위 폭 기준)"));
 
@@ -201,7 +201,7 @@ void MainPopup::buildUi()
     m_prevLabel = new QLabel(m_prevBar);
     m_prevLabel->setTextFormat(Qt::PlainText);
     m_prevBtn = new QPushButton(QStringLiteral("직전 보기"), m_prevBar);
-    m_prevBtn->setToolTip(QStringLiteral("직전 아이템으로 바꿔 보기 (다시 누르면 돌아옴)"));
+    m_prevBtn->setToolTip(QStringLiteral("직전 아이템으로 바꿔 봅니다 (다시 누르면 돌아옵니다)"));
     pb->addWidget(m_prevLabel, 1);
     pb->addWidget(m_prevBtn);
     m_prevBar->setVisible(false);
@@ -255,7 +255,7 @@ void MainPopup::buildUi()
     ex->setContentsMargins(0, 0, 0, 0);
     m_want1 = new QComboBox(m_exchangeBox);
     m_want2 = new QComboBox(m_exchangeBox);
-    m_want1->setToolTip(QStringLiteral("이 아이템을 팔고 받을 화폐 (일괄 교환 시세). '일반 검색' 이면 아이템 검색"));
+    m_want1->setToolTip(QStringLiteral("이 아이템을 팔고 받을 화폐 (일괄 교환 시세). '일반 검색'을 고르면 아이템으로 검색합니다"));
     m_want2->setToolTip(QStringLiteral("같은 종류의 다른 아이템과 교환 시세"));
     ex->addWidget(m_want1, 1);
     ex->addWidget(m_want2, 1);
@@ -377,7 +377,7 @@ void MainPopup::buildUi()
     auto* pr = new QHBoxLayout;
     m_currency = new QComboBox(this); // 게임별 목록은 setItem 에서 채움
     m_currency->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-    m_currency->setToolTip(QStringLiteral("가격 화폐 (등가물 = 모든 화폐. 색채 같은 잡화폐로 올린 매물을 거르려면 기준 화폐/신성만)"));
+    m_currency->setToolTip(QStringLiteral("가격 화폐 (등가물 = 모든 화폐. 색채의 오브 같은 화폐로 올린 매물을 제외하려면 기준 화폐 또는 신성한 오브를 고르세요)"));
     pr->addWidget(m_currency);
     m_status = new QComboBox(this);
     m_status->addItem(QStringLiteral("즉시 구입만"), QStringLiteral("securable"));
@@ -412,7 +412,7 @@ void MainPopup::buildUi()
     m_price->setStyleSheet(QStringLiteral("text-align:right; padding:2px;"));
     m_price->setToolTip(QStringLiteral("좌클릭: 시세 조회 / 우클릭: 시세 목록 탭"));
     m_price->installEventFilter(this);
-    m_idleText = QStringLiteral("시세를 검색하려면 클릭");
+    m_idleText = QStringLiteral("시세를 검색하려면 클릭하세요");
     m_price->setText(m_idleText);
     root->addWidget(m_price);
 
@@ -586,7 +586,7 @@ void MainPopup::updatePrevBar()
         return;
     const ParsedItem& p = m_prev.parsed;
     QString name = p.rarityId == QStringLiteral("unique") && !p.name.isEmpty() ? p.name : (p.transfigured ? p.rawType : p.type);
-    const QString price = m_prev.priced ? m_prev.summary : QStringLiteral("시세 안 봄");
+    const QString price = m_prev.priced ? m_prev.summary : QStringLiteral("시세 미확인");
     const QString text = QStringLiteral("직전: %1 · %2").arg(name, price);
     m_prevLabel->setText(QFontMetrics(m_prevLabel->font()).elidedText(text, Qt::ElideRight, 480));
     m_prevLabel->setToolTip(text);
@@ -671,7 +671,7 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
 
     m_detail->setVisible(it.detail || it.mods.isEmpty());
     m_detail->setText(it.detail ? it.detailText
-                                : (it.mods.isEmpty() ? QStringLiteral("검색 가능한 옵션이 없음") : QString()));
+                                : (it.mods.isEmpty() ? QStringLiteral("검색할 수 있는 옵션이 없습니다") : QString()));
 
     // 일괄 교환: 교환 가능한 템이면 기본으로 기준 화폐 교환 시세 (R6)
     const bool exchange = !it.exchangeId.isEmpty() && db;
@@ -1018,7 +1018,7 @@ void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, cons
             s->setText(QStringLiteral("● ") + s->text());
             s->setForeground(online == 1 ? QColor(QStringLiteral("#2e9e5b"))
                                          : (online == 2 ? QColor(QStringLiteral("#d2891e")) : dimC));
-            s->setToolTip(online == 1 ? QStringLiteral("접속 중") : (online == 2 ? QStringLiteral("자리 비움") : QStringLiteral("오프라인 (즉시 구입은 가능할 수 있음)")));
+            s->setToolTip(online == 1 ? QStringLiteral("접속 중") : (online == 2 ? QStringLiteral("자리 비움") : QStringLiteral("오프라인 (즉시 구입은 가능할 수 있습니다)")));
         }
     }
     if (r == 0)

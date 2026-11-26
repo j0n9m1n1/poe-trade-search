@@ -105,7 +105,7 @@ void FilterRow::setMod(const ParsedMod& m)
 
     QString shown = m.text;
     if (m.unmatched)
-        shown = QStringLiteral("%1  (거래소 옵션을 못 찾음)").arg(m.text);
+        shown = QStringLiteral("%1  (거래소 옵션을 찾지 못했습니다)").arg(m.text);
     m_text->setText(shown);
     m_text->setToolTip(m.text == m.raw ? m.raw : m.text + QStringLiteral("\n\n") + m.raw);
     m_color = m.color;

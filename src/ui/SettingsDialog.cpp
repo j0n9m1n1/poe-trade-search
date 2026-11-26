@@ -77,7 +77,7 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
         if (c->findData(cur) < 0)
             c->addItem(cur, cur);
         c->setCurrentIndex(c->findData(cur));
-        c->setToolTip(QStringLiteral("이 화폐로 가격을 올린 매물만 봄. 등가물 = 모든 화폐"));
+        c->setToolTip(QStringLiteral("이 화폐로 가격을 올린 매물만 봅니다. 등가물 = 모든 화폐"));
         return c;
     };
     m_currency1 = currencyBox(Game::Poe1, cfg.priceCurrency);
@@ -116,9 +116,9 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_statRange->setRange(0, 50);
     m_statRange->setSuffix(QStringLiteral("%"));
     m_statRange->setValue(cfg.searchStatRange);
-    m_statRange->setToolTip(QStringLiteral("옵션 최소값을 값의 N% 만큼 낮춰서 채움 (0 = 정확값). 고유는 롤 범위 폭 기준"));
+    m_statRange->setToolTip(QStringLiteral("옵션 최소값을 값의 N%만큼 낮춰서 채웁니다 (0 = 정확값). 고유는 롤 범위 폭을 기준으로 합니다"));
     f->addRow(QStringLiteral("옵션 값 완화:"), m_statRange);
-    m_collapse = new QCheckBox(QStringLiteral("시세 조회 시 계정별로 묶기 (한 사람 도배 방지)"), basic);
+    m_collapse = new QCheckBox(QStringLiteral("시세 조회 시 계정별로 묶기 (한 판매자의 매물이 목록을 채우지 않도록)"), basic);
     m_collapse->setChecked(cfg.collapseListings);
     f->addRow(m_collapse);
 
@@ -153,7 +153,7 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_timeout->setValue(cfg.serverTimeout);
     m_timeout->setSuffix(QStringLiteral("초"));
     f->addRow(QStringLiteral("서버 대기 시간:"), m_timeout);
-    m_redirect = new QCheckBox(QStringLiteral("검색을 브라우저가 직접 하게 함 (server_redirect)"), basic);
+    m_redirect = new QCheckBox(QStringLiteral("브라우저에서 직접 검색 (server_redirect)"), basic);
     m_redirect->setChecked(cfg.serverRedirect);
     f->addRow(m_redirect);
 
@@ -162,10 +162,10 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_appUpdate->addItem(QStringLiteral("자동으로 받아서 설치"), QStringLiteral("auto"));
     m_appUpdate->addItem(QStringLiteral("확인 안 함"), QStringLiteral("off"));
     m_appUpdate->setCurrentIndex(qMax(0, m_appUpdate->findData(cfg.appUpdate)));
-    m_appUpdate->setToolTip(QStringLiteral("GitHub Release 기준. 자동 설치는 배포 빌드에서만 동작"));
+    m_appUpdate->setToolTip(QStringLiteral("GitHub Release를 기준으로 확인합니다. 자동 설치는 배포 빌드에서만 동작합니다"));
     f->addRow(QStringLiteral("프로그램 업데이트:"), m_appUpdate);
 
-    m_updates = new QCheckBox(QStringLiteral("시작 시 거래소 데이터 오래됐으면 자동 갱신"), basic);
+    m_updates = new QCheckBox(QStringLiteral("시작할 때 거래소 데이터가 오래되었으면 자동 갱신"), basic);
     m_updates->setChecked(cfg.checkUpdates);
     f->addRow(m_updates);
     m_dataAge = new QSpinBox(basic);
@@ -196,10 +196,10 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     // ---------------- 단축키
     auto* keys = new QWidget(tabs);
     auto* kl = new QVBoxLayout(keys);
-    auto* help = new QLabel(QStringLiteral("PoE 창이 활성일 때만 동작. 값 예시:\n"
-                                           "  {Run} 아이템 검색 (키 지정하면 Ctrl+C 클립보드 감시는 꺼짐)   {Last} 마지막 창 다시 열기\n"
+    auto* help = new QLabel(QStringLiteral("PoE 창이 활성 상태일 때만 동작합니다. 값 예시:\n"
+                                           "  {Run} 아이템 검색 (키를 지정하면 Ctrl+C 클립보드 감시는 꺼집니다)   {Last} 마지막 창 다시 열기\n"
                                            "  {Enter}/hideout{Enter} 은신처   {Enter}/exit{Enter} 로그아웃(캐릭터 선택)\n"
-                                           "  ^{Enter}고마워{Enter} 마지막 귓말에 답장 (키 한 번에 명령 하나)\n"
+                                           "  ^{Enter}감사합니다{Enter} 마지막 귓속말에 답장 (키 한 번에 명령 하나)\n"
                                            "  {Pause} 일시정지   {Restart} 재시작   {Link}URL{Link} 링크 열기"),
                             keys);
     help->setStyleSheet(QStringLiteral("color:palette(mid);"));
@@ -231,8 +231,8 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     // ---------------- 자동 체크
     auto* chk = new QWidget(tabs);
     auto* cl = new QVBoxLayout(chk);
-    auto* ch = new QLabel(QStringLiteral("팝업에서 옵션 체크박스를 우클릭하면 여기에 등록됨 (고정 옵션 제외).\n"
-                                         "Ctrl+Alt+C 고급 설명으로 복사하면 1~2등급일 때만 자동 체크함."),
+    auto* ch = new QLabel(QStringLiteral("팝업에서 옵션 체크박스를 우클릭하면 여기에 등록됩니다 (고정 옵션 제외).\n"
+                                         "Ctrl+Alt+C 고급 설명으로 복사하면 1~2등급일 때만 자동으로 체크합니다."),
                           chk);
     ch->setStyleSheet(QStringLiteral("color:palette(mid);"));
     cl->addWidget(ch);

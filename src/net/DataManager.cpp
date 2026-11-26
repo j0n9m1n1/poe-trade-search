@@ -81,7 +81,7 @@ void DataManager::update(Game g, std::function<void(bool, const QString&)> done)
 {
     if (m_updating[gi(g)]) {
         if (done)
-            done(false, QStringLiteral("이미 업데이트 중"));
+            done(false, QStringLiteral("이미 업데이트 중입니다"));
         return;
     }
     m_updating[gi(g)] = true;
