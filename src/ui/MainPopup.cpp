@@ -168,9 +168,10 @@ void MainPopup::buildUi()
     // 이름/베이스: 게임 아이템 헤더처럼 어두운 띠 + 레어도 색. 체크 = 검색에 넣음
     m_header = new QFrame(this);
     m_header->setObjectName(QStringLiteral("itemHeader"));
-    auto* hl = new QHBoxLayout(m_header);
-    hl->setContentsMargins(8, 3, 8, 3);
-    hl->setSpacing(10);
+    // 게임 아이템 헤더처럼 이름 / 베이스 두 줄, 가운데 정렬
+    auto* hl = new QVBoxLayout(m_header);
+    hl->setContentsMargins(8, 4, 8, 4);
+    hl->setSpacing(0);
     m_useName = new QCheckBox(m_header);
     m_useName->setToolTip(QStringLiteral("고유 이름으로 검색"));
     m_name = new QLabel(m_header); // 희귀 이름 (검색엔 못 씀)
@@ -181,10 +182,8 @@ void MainPopup::buildUi()
     nf.setPointSizeF(nf.pointSizeF() + 2);
     for (QWidget* w : std::initializer_list<QWidget*>{m_useName, m_name, m_useType})
         w->setFont(nf);
-    hl->addWidget(m_useName);
-    hl->addWidget(m_name);
-    hl->addWidget(m_useType);
-    hl->addStretch(1);
+    for (QWidget* w : std::initializer_list<QWidget*>{m_useName, m_name, m_useType})
+        hl->addWidget(w, 0, Qt::AlignHCenter);
     m_sub = new QLabel(this);
     m_sub->setWordWrap(true);
     names->addWidget(m_header);
