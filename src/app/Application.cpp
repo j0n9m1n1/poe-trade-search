@@ -129,24 +129,17 @@ bool Application::start(QString* error)
         if (r == QSystemTrayIcon::Trigger)
             reopenLast();
     });
+    // 트레이 메뉴는 최소한만. 데이터 갱신 / 프로그램 업데이트는 설정 창에
     m_menu = new QMenu;
     m_menu->addAction(QStringLiteral("마지막 창 다시 열기"), this, &Application::reopenLast);
     m_menu->addAction(QStringLiteral("설정"), this, &Application::openSettings);
-    m_menu->addAction(QStringLiteral("PoE1 데이터 업데이트"), this, [this]() { updateGame(Game::Poe1); });
-    m_menu->addAction(QStringLiteral("PoE2 데이터 업데이트"), this, [this]() { updateGame(Game::Poe2); });
-    m_pauseAction = m_menu->addAction(QStringLiteral("일시 정지"));
-    m_pauseAction->setCheckable(true);
-    connect(m_pauseAction, &QAction::toggled, this, [this](bool on) { m_paused = on; });
     m_menu->addSeparator();
-    m_updateAction = m_menu->addAction(QStringLiteral("업데이트 확인 (현재 %1)").arg(Updater::currentVersion()));
-    connect(m_updateAction, &QAction::triggered, this, [this]() {
-        if (m_newTag.isEmpty())
-            checkForUpdate(true);
-        else
+    m_menu->addAction(QStringLiteral("종료"), qApp, &QApplication::quit);
+    // 새 버전 알림을 누르면 바로 설치 (설치 못 하는 환경이면 릴리즈 페이지)
+    connect(m_tray, &QSystemTrayIcon::messageClicked, this, [this]() {
+        if (m_updateNoticeShown && !m_newTag.isEmpty())
             installUpdate();
     });
-    m_menu->addAction(QStringLiteral("재시작"), this, &Application::restart);
-    m_menu->addAction(QStringLiteral("종료"), qApp, &QApplication::quit);
     m_tray->setContextMenu(m_menu);
     m_tray->show();
 
@@ -350,7 +343,7 @@ void Application::onHotkey(int id)
     const QString lower = value.toLower();
 
     if (lower.startsWith(kPause)) {
-        m_pauseAction->setChecked(!m_paused);
+        m_paused = !m_paused;
         notify(m_paused ? QStringLiteral("일시 정지했습니다. 같은 단축키를 한 번 더 누르면 다시 시작합니다.")
                         : QStringLiteral("다시 시작했습니다."));
         return;
@@ -614,15 +607,14 @@ void Application::checkForUpdate(bool manual)
         m_newPage = rel->page;
         QString why;
         const bool canInstall = Updater::canSelfInstall(&why);
-        m_updateAction->setText(canInstall ? QStringLiteral("업데이트 설치 (%1 → %2)").arg(Updater::currentVersion(), rel->tag)
-                                           : QStringLiteral("새 버전 %1 릴리즈 페이지 열기").arg(rel->tag));
         if (canInstall && m_cfg.appUpdate == QStringLiteral("auto") && !manual) {
             installUpdate();
             return;
         }
         if (firstSeen || manual) {
-            notify(canInstall ? QStringLiteral("새 버전(%1)이 있습니다. 트레이 메뉴의 '업데이트 설치'를 눌러 설치하세요.").arg(rel->tag)
-                              : QStringLiteral("새 버전(%1)이 있습니다 (%2). 트레이 메뉴에서 릴리즈 페이지를 열 수 있습니다.").arg(rel->tag, why));
+            notify(canInstall ? QStringLiteral("새 버전(%1)이 있습니다. 이 알림을 누르거나 설정 > 프로그램 업데이트에서 설치하세요.").arg(rel->tag)
+                              : QStringLiteral("새 버전(%1)이 있습니다 (%2). 이 알림을 누르면 릴리즈 페이지를 엽니다.").arg(rel->tag, why));
+            m_updateNoticeShown = true;
         }
         if (manual)
             installUpdate();
@@ -945,9 +937,20 @@ void Application::openSettings()
     }
     ver += QStringLiteral("\n데이터 폴더: %1").arg(QDir::toNativeSeparators(m_dataDir));
 
-    SettingsDialog dlg(m_cfg, m_dbs, &m_checked, statText, ver);
+    // 프로그램 업데이트 버튼: 새 버전을 알면 설치, 모르면 확인 (찾으면 바로 설치)
+    QString updText = QStringLiteral("지금 확인");
+    if (!m_newTag.isEmpty())
+        updText = Updater::canSelfInstall() ? QStringLiteral("%1 설치").arg(m_newTag)
+                                             : QStringLiteral("%1 릴리즈 페이지 열기").arg(m_newTag);
+    SettingsDialog dlg(m_cfg, m_dbs, &m_checked, statText, ver, updText);
     connect(&dlg, &SettingsDialog::updateDataRequested, this,
             [this](int g) { updateGame(g == 0 ? Game::Poe1 : Game::Poe2); });
+    connect(&dlg, &SettingsDialog::appUpdateRequested, this, [this]() {
+        if (m_newTag.isEmpty())
+            checkForUpdate(true);
+        else
+            installUpdate();
+    });
     if (dlg.exec() == QDialog::Accepted) {
         unregisterHotkeys();
         m_cfg = dlg.result();
@@ -985,6 +988,7 @@ void Application::restart()
 
 void Application::notify(const QString& msg, QSystemTrayIcon::MessageIcon icon)
 {
+    m_updateNoticeShown = false; // 마지막 알림이 새 버전 알림일 때만 눌러서 설치
     if (m_tray && QSystemTrayIcon::supportsMessages())
         m_tray->showMessage(QStringLiteral("Poe Trade Search"), msg, icon, 5000);
     qInfo().noquote() << msg;

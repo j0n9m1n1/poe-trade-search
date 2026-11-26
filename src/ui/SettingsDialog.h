@@ -25,12 +25,13 @@ public:
     using StatTextFn = std::function<QString(const QString& statKey)>;
 
     SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStore* checked, StatTextFn statText,
-                   const QString& versionInfo, QWidget* parent = nullptr);
+                   const QString& versionInfo, const QString& appUpdateText = QString(), QWidget* parent = nullptr);
 
     Config result() const;
 
 signals:
     void updateDataRequested(int game); // 0 = poe1, 1 = poe2
+    void appUpdateRequested();          // 프로그램 업데이트 확인/설치 버튼
 
 private:
     void addShortcutRow(const Shortcut& s);

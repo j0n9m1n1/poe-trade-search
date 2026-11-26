@@ -24,7 +24,8 @@
 namespace pts {
 
 SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStore* checked, StatTextFn statText,
-                               const QString& versionInfo, QWidget* parent)
+                               const QString& versionInfo,
+                               const QString& appUpdateText, QWidget* parent)
     : QDialog(parent), m_cfg(cfg), m_checked(checked), m_statText(std::move(statText))
 {
     setWindowTitle(QStringLiteral("설정"));
@@ -163,7 +164,19 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_appUpdate->addItem(QStringLiteral("확인 안 함"), QStringLiteral("off"));
     m_appUpdate->setCurrentIndex(qMax(0, m_appUpdate->findData(cfg.appUpdate)));
     m_appUpdate->setToolTip(QStringLiteral("GitHub Release를 기준으로 확인합니다. 자동 설치는 배포 빌드에서만 동작합니다"));
-    f->addRow(QStringLiteral("프로그램 업데이트:"), m_appUpdate);
+    {
+        auto* row = new QHBoxLayout;
+        row->addWidget(m_appUpdate, 1);
+        auto* btn = new QPushButton(appUpdateText.isEmpty() ? QStringLiteral("지금 확인") : appUpdateText, basic);
+        btn->setToolTip(QStringLiteral("새 버전을 확인하고, 있으면 받아서 설치합니다"));
+        connect(btn, &QPushButton::clicked, this, [this, btn]() {
+            btn->setEnabled(false);
+            btn->setText(QStringLiteral("진행 중... (결과는 트레이 알림)"));
+            emit appUpdateRequested();
+        });
+        row->addWidget(btn);
+        f->addRow(QStringLiteral("프로그램 업데이트:"), row);
+    }
 
     m_updates = new QCheckBox(QStringLiteral("시작할 때 거래소 데이터가 오래되었으면 자동 갱신"), basic);
     m_updates->setChecked(cfg.checkUpdates);

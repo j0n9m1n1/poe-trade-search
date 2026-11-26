@@ -102,16 +102,15 @@ private:
     DataManager* m_data = nullptr;
     IconCache* m_icons = nullptr;
     Updater* m_updater = nullptr;
-    QAction* m_updateAction = nullptr;
     QTimer m_updateTimer;
     Updater::Release m_newRelease; // 찾은 새 버전
+    bool m_updateNoticeShown = false; // 마지막 트레이 알림이 새 버전 알림
     QString m_newTag, m_newPage;
     QString m_downloadedZip;
     std::unique_ptr<ItemParser> m_parser;
     MainPopup* m_popup = nullptr;
     QSystemTrayIcon* m_tray = nullptr;
     QMenu* m_menu = nullptr;
-    QAction* m_pauseAction = nullptr;
     HotkeyManager* m_hotkeys = nullptr;
 
     QTimer m_fgTimer;

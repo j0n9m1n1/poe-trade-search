@@ -60,7 +60,7 @@
 | # | 기능 | 원본 위치 | 판정 | 비고 / Qt 대응 |
 |---|---|---|---|---|
 | A1 | 중복 실행 방지 (Mutex), `/wait_shutdown` 으로 재시작 시 이전 프로세스 종료 대기 | App.xaml.cs | 유지 | `QLockFile` 또는 `QLocalServer` |
-| A2 | 트레이 아이콘 + 메뉴(설정/재시작/업데이트/종료), 시작 풍선 알림 | App.xaml.cs, WinMain.xaml.cs | 유지 | `QSystemTrayIcon` |
+| A2 | 트레이 아이콘 + 메뉴(설정/재시작/업데이트/종료), 시작 풍선 알림 | App.xaml.cs, WinMain.xaml.cs | 수정 | `QSystemTrayIcon`. 메뉴는 마지막 창 다시 열기/설정/종료만 두고, 데이터 갱신과 프로그램 업데이트는 설정 창으로 옮겼습니다 |
 | A3 | 관리자 권한 확인 (단축키/마우스 훅은 관리자일 때만) | App.xaml.cs | 유지(Win) | PoE가 관리자 권한으로 실행되면 일반 권한 앱은 키 주입이 막힙니다(UIPI) |
 | A4 | 처리 안 된 예외를 `.log`로 기록 후 종료 | App.xaml.cs | 유지 | `qInstallMessageHandler` + 파일 로그 |
 | A5 | 자동 업데이트: 원작자 repo `VERSIONS` 확인 → `_POE_EXE.zip` 받아서 `update.cmd` 실행 | App.xaml.cs, Updates.cs | **삭제** | 원작자 바이너리를 받아서 덮어쓰는 구조라 의미가 없습니다. 나중에 자체 릴리즈 체크로 대체할 수 있습니다 |
