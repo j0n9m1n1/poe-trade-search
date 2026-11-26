@@ -1,0 +1,11 @@
+/build/
+/build-*/
+/out/
+CMakeUserPresets.json
+*.user
+.vs/
+.vscode/
+.idea/
+# 실행 시 생기는 데이터 폴더 (포터블 모드)
+/data/
+*.log

@@ -1,0 +1,18 @@
+Item Class: Skill Gems
+Rarity: Gem
+Arc of Oscillating
+--------
+Spell, Lightning, Chaining
+Level: 20 (Max)
+Cost: 18 Mana
+Cast Time: 0.70 sec
+Critical Strike Chance: 6.00%
+Quality: +20% (augmented)
+--------
+Requirements:
+Level: 70
+Int: 155
+--------
+An arc of lightning stretches from the caster to a targeted enemy and chains on to other nearby enemies.
+--------
+Place into an item socket of the right colour to gain this skill. Right click to remove from a socket.

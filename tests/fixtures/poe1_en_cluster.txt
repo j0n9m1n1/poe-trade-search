@@ -1,0 +1,16 @@
+Item Class: Jewels
+Rarity: Rare
+Grim Bane
+Large Cluster Jewel
+--------
+Requirements:
+Level: 54
+--------
+Item Level: 84
+--------
+Adds 8 Passive Skills (enchant)
+2 Added Passive Skills are Jewel Sockets (enchant)
+Added Small Passive Skills grant: 12% increased Fire Damage (enchant)
+--------
+1 Added Passive Skill is Prodigious Defence
+--------

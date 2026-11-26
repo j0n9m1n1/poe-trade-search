@@ -1,0 +1,21 @@
+Item Class: Body Armours
+Rarity: Rare
+Kraken Pelt
+Conqueror Plate
+--------
+Quality: +20% (augmented)
+Armour: 812 (augmented)
+--------
+Requires: Level 65, 121 Str
+--------
+Sockets: S S 
+--------
+Item Level: 80
+--------
++12% to Cold Resistance (rune)
+--------
++85 to maximum Life
++35% to Fire Resistance
+42% increased Armour
+--------
+Corrupted

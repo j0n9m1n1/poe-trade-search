@@ -1,0 +1,26 @@
+Item Class: Thrusting One Hand Swords
+Rarity: Rare
+Havoc Edge
+Jewelled Foil
+--------
+Thrusting One Hand Sword
+Quality: +20% (augmented)
+Physical Damage: 46-85 (augmented)
+Elemental Damage: 10-20 (augmented)
+Critical Strike Chance: 5.50%
+Attacks per Second: 2.02 (augmented)
+Weapon Range: 1.4 metres
+--------
+Requirements:
+Level: 68
+Dex: 212
+--------
+Sockets: R-G-B B 
+--------
+Item Level: 84
+--------
++25% to Global Critical Strike Multiplier (implicit)
+--------
+Adds 10 to 20 Fire Damage
+24% increased Attack Speed
+65% increased Physical Damage

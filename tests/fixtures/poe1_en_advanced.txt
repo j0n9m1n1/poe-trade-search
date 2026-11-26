@@ -1,0 +1,19 @@
+Item Class: Boots
+Rarity: Rare
+Dusk Track
+Two-Toned Boots
+--------
+Requirements:
+Level: 70
+--------
+Item Level: 86
+--------
+{ Implicit Modifier — Elemental, Fire, Cold, Resistance }
++12% to Fire and Cold Resistances (implicit)
+--------
+{ Prefix Modifier "Fleet" (Tier: 1) — Speed }
+30% increased Movement Speed
+{ Prefix Modifier "Virile" (Tier: 5) — Life }
++64(60-69) to maximum Life
+{ Suffix Modifier "of the Volcano" (Tier: 3) — Elemental, Fire, Resistance }
++38(36-41)% to Fire Resistance

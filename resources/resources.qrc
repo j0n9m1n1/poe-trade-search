@@ -1,0 +1,9 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/data">
+        <file>parser.json</file>
+    </qresource>
+    <qresource prefix="/icons">
+        <file alias="app.ico">app.ico</file>
+    </qresource>
+</RCC>
