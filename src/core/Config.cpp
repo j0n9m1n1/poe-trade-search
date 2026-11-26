@@ -13,11 +13,48 @@ Config Config::defaults()
     Config c;
     c.shortcuts = {
         {0, 0, QStringLiteral("{Run} 작동 (기본값: Ctrl+C)")},
+        {113, 0, QStringLiteral("{Enter}/hideout{Enter}")}, // F2 은신처
+        {115, 0, QStringLiteral("{Enter}/exit{Enter}")},    // F4 로그아웃 (캐릭터 선택)
         {122, 0, QStringLiteral("{Restart} 프로그램 재시작")},
-        {72, 2, QStringLiteral("{Wiki} 아이템의 위키 보기")},
-        {78, 2, QStringLiteral("{Link}https://poe.ninja/{Link}")},
     };
     return c;
+}
+
+void Config::migrate()
+{
+    if (configVersion >= kConfigVersion)
+        return;
+    if (configVersion < 2) {
+        // v2: 위키/닌자 단축키 제거, 은신처/로그아웃 채팅 매크로 기본 추가
+        QVector<Shortcut> keep;
+        for (const Shortcut& s : shortcuts) {
+            const QString v = s.value.trimmed().toLower();
+            if (v.startsWith(QStringLiteral("{wiki}")) || v == QStringLiteral("{link}https://poe.ninja/{link}"))
+                continue;
+            keep.push_back(s);
+        }
+        auto has = [&](const QString& cmd) {
+            for (const Shortcut& s : keep) {
+                if (s.value.toLower().contains(cmd))
+                    return true;
+            }
+            return false;
+        };
+        auto keyUsed = [&](int vk) {
+            for (const Shortcut& s : keep) {
+                if (s.keycode == vk && s.modifiers == 0)
+                    return true;
+            }
+            return false;
+        };
+        if (!has(QStringLiteral("/hideout")))
+            keep.push_back({keyUsed(113) ? 0 : 113, 0, QStringLiteral("{Enter}/hideout{Enter}")});
+        if (!has(QStringLiteral("/exit")))
+            keep.push_back({keyUsed(115) ? 0 : 115, 0, QStringLiteral("{Enter}/exit{Enter}")});
+        shortcuts = keep;
+    }
+    configVersion = kConfigVersion;
+    migrated = true;
 }
 
 QStringList Config::byTypeList() const
@@ -83,6 +120,8 @@ bool Config::load(const QString& path, QString* error)
     } else {
         shortcuts = d.shortcuts;
     }
+    configVersion = root.value(QStringLiteral("config_version")).toInt(1);
+    migrate();
     return true;
 }
 
@@ -117,6 +156,7 @@ bool Config::save(const QString& path, QString* error) const
                               {QStringLiteral("value"), s.value}});
     }
     QJsonObject root;
+    root.insert(QStringLiteral("config_version"), configVersion);
     root.insert(QStringLiteral("options"), o);
     root.insert(QStringLiteral("shortcuts"), sc);
     return json::writeFile(path, QJsonDocument(root), true, true, error);

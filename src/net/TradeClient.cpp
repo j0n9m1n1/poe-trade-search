@@ -182,6 +182,7 @@ void TradeClient::priceCheck(Game g, Lang server, const QString& league, const Q
                                 QJsonDocument::fromJson(body).object().value(QStringLiteral("result")).toArray();
                             for (const auto& v : res) {
                                 const QJsonObject l = v.toObject().value(QStringLiteral("listing")).toObject();
+                                const QJsonObject item = v.toObject().value(QStringLiteral("item")).toObject();
                                 const QJsonObject price = l.value(QStringLiteral("price")).toObject();
                                 if (price.isEmpty())
                                     continue;
@@ -190,6 +191,9 @@ void TradeClient::priceCheck(Game g, Lang server, const QString& league, const Q
                                 x.currency = price.value(QStringLiteral("currency")).toString();
                                 x.account = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("name")).toString();
                                 x.indexed = parseTime(l.value(QStringLiteral("indexed")).toString());
+                                x.icon = item.value(QStringLiteral("icon")).toString();
+                                x.itemName = item.value(QStringLiteral("name")).toString();
+                                x.baseType = item.value(QStringLiteral("baseType")).toString();
                                 if (x.amount > 0)
                                     step.listings.push_back(x);
                             }

@@ -86,6 +86,13 @@ bool Keywords::load(const QString& path, QString* error)
     for (auto it = sc.begin(); it != sc.end(); ++it)
         m_scopes.insert(it.key(), it.value().toString());
 
+    for (Lang l : {Lang::Ko, Lang::En}) {
+        m_alias[li(l)].clear();
+        const QJsonObject al = root.value(QStringLiteral("aliases")).toObject().value(langKey(l)).toObject();
+        for (auto it = al.begin(); it != al.end(); ++it)
+            m_alias[li(l)].insert(it.key(), it.value().toString());
+    }
+
     return !m_kw.isEmpty();
 }
 

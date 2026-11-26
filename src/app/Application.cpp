@@ -6,6 +6,7 @@
 #include "core/SearchDefaults.h"
 #include "net/DataManager.h"
 #include "net/Endpoints.h"
+#include "net/IconCache.h"
 #include "net/TradeClient.h"
 #include "platform/HotkeyManager.h"
 #include "platform/Platform.h"
@@ -32,7 +33,7 @@ namespace {
 constexpr int kEscId = 99;
 constexpr int kShortcutBase = 100;
 const QString kRun = QStringLiteral("{run}");
-const QString kWiki = QStringLiteral("{wiki}");
+const QString kEnter = QStringLiteral("{enter}");
 const QString kPause = QStringLiteral("{pause}");
 const QString kRestart = QStringLiteral("{restart}");
 const QString kLink = QStringLiteral("{link}");
@@ -67,6 +68,8 @@ bool Application::start(QString* error)
             QMessageBox::warning(nullptr, QStringLiteral("설정 오류"),
                                  QStringLiteral("Config.txt 를 읽지 못해 기본값으로 시작함\n%1").arg(e));
             m_cfg = Config::defaults();
+        } else if (m_cfg.migrated) {
+            saveConfig();
         }
     } else {
         m_cfg = Config::defaults();
@@ -89,6 +92,7 @@ bool Application::start(QString* error)
 
     m_client = new TradeClient(this);
     m_data = new DataManager(m_dataDir, m_client, this);
+    m_icons = new IconCache(QDir(m_dataDir).filePath(QStringLiteral("cache/icons")), this);
     m_parser = std::make_unique<ItemParser>(m_kw, m_dbs, &m_checked);
     m_hotkeys = new HotkeyManager(this);
     connect(m_hotkeys, &HotkeyManager::activated, this, &Application::onHotkey);
@@ -102,10 +106,6 @@ bool Application::start(QString* error)
     connect(m_popup, &MainPopup::openTradeRequested, this, &Application::openTrade);
     connect(m_popup, &MainPopup::priceCheckRequested, this, &Application::priceCheck);
     connect(m_popup, &MainPopup::settingsRequested, this, &Application::openSettings);
-    connect(m_popup, &MainPopup::wikiRequested, this, [this]() {
-        if (m_popup->hasItem())
-            openWiki(m_popup->collectItem());
-    });
     connect(m_popup, &MainPopup::rememberToggled, this, &Application::onRemember);
     connect(m_popup, &MainPopup::popupHidden, this, [this]() {
         m_popupPos = m_popup->pos();
@@ -243,17 +243,16 @@ void Application::onClipboardChanged()
     if (m_expect != Expect::None) {
         if (text.trimmed().isEmpty())
             return; // 우리가 비운 것
-        const bool wiki = m_expect == Expect::Wiki;
         m_expect = Expect::None;
         m_expectTimer.stop();
-        handleItemText(text, wiki);
+        handleItemText(text);
         return;
     }
     if (m_paused || m_customRun)
         return;
     if (!platform::foregroundGame().foreground)
         return;
-    handleItemText(text, false);
+    handleItemText(text);
 }
 
 void Application::onForegroundTick()
@@ -324,12 +323,25 @@ void Application::onHotkey(int id)
     }
     if (m_paused)
         return;
-    if (lower.startsWith(kRun) || lower.startsWith(kWiki)) {
-        m_expect = lower.startsWith(kWiki) ? Expect::Wiki : Expect::Search;
+    if (lower.startsWith(kRun)) {
+        m_expect = Expect::Search;
         QGuiApplication::clipboard()->clear();
         m_expectTimer.start(1500);
         // {Run} 은 Ctrl+Alt+C(고급 설명)로 복사해서 등급까지 가져옴
-        platform::sendCopy(m_expect == Expect::Search);
+        platform::sendCopy(true);
+        return;
+    }
+    if (lower.startsWith(kEnter) || lower.startsWith(QStringLiteral("^") + kEnter)) {
+        // 채팅 명령: "{Enter}/hideout{Enter}", "^{Enter}고마워{Enter}" (^ = 마지막 귓말 답장)
+        // 한 번 누르면 명령 하나만 보냄 (GGG 1키 1동작 원칙)
+        const bool reply = lower.startsWith(QLatin1Char('^'));
+        QString body = value.mid(reply ? 1 + kEnter.size() : kEnter.size());
+        const int end = body.toLower().indexOf(kEnter);
+        if (end >= 0)
+            body = body.left(end);
+        body = body.trimmed();
+        if (!body.isEmpty() || reply)
+            platform::sendChat(body, reply);
         return;
     }
     if (lower.startsWith(kLink)) {
@@ -360,7 +372,7 @@ ParseOptions Application::parseOptions() const
     return o;
 }
 
-void Application::handleItemText(const QString& text, bool wiki)
+void Application::handleItemText(const QString& text)
 {
     if (!m_parser->looksLikeItem(text))
         return;
@@ -382,12 +394,9 @@ void Application::handleItemText(const QString& text, bool wiki)
         }
         return;
     }
-    if (wiki) {
-        openWiki(*it);
-        return;
-    }
 
     m_popup->showItem(*it, &m_dbs[gi(g)], m_cfg, serverFor(it->lang));
+    showIconFor(*it);
     if (m_popupPos.isNull()) {
         const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
         m_popupPos = avail.topLeft() + QPoint(30, 30);
@@ -538,11 +547,12 @@ void Application::priceCheck()
                                   PriceSummary::ago(l.indexed));
             }
             m_popup->priceAppend(lines);
-            m_popup->priceBusy(QStringLiteral("시세 확인중... %1/%2").arg(p.fetched).arg(p.requested));
+            m_popup->priceStatus(QStringLiteral("시세 확인중... %1/%2").arg(p.fetched).arg(p.requested));
         },
-        [this, token, g, lang](const TradeClient::PriceProgress& all, const QString& error) {
+        [this, token, g, lang, it](const TradeClient::PriceProgress& all, const QString& error) {
             if (token != m_priceToken)
                 return;
+            learnIcon(it, all.listings);
             if (!error.isEmpty()) {
                 m_popup->priceIdle(QStringLiteral("시세 조회 실패: %1 (클릭해서 다시)").arg(error));
                 return;
@@ -557,26 +567,50 @@ void Application::priceCheck()
         token);
 }
 
-void Application::openWiki(const ParsedItem& it)
+// ------------------------------------------------------------ 아이콘
+
+QString Application::iconKey(const ParsedItem& it)
 {
-    QString name = it.rarityId == QStringLiteral("unique") ? it.name : (it.transfigured ? it.rawType : it.type);
-    if (it.lang == Lang::Ko) {
-        QString t, n;
-        if (m_dbs[gi(it.game)].translateItem(Lang::Ko, Lang::En, it.type, it.name, &t, &n)) {
-            name = it.rarityId == QStringLiteral("unique") ? n : t;
-        } else {
-            // 영어 이름을 못 찾으면 한글 지원하는 poedb 검색으로
-            QUrl u(it.game == Game::Poe1 ? QStringLiteral("https://poedb.tw/kr/search")
-                                         : QStringLiteral("https://poe2db.tw/kr/search"));
-            QUrlQuery q;
-            q.addQueryItem(QStringLiteral("q"), name);
-            u.setQuery(q);
-            QDesktopServices::openUrl(u);
+    // 고유는 이름별, 나머지는 베이스별 그림 (언어마다 이름이 달라서 언어도 키에 포함)
+    const bool unique = it.rarityId == QStringLiteral("unique") && !it.name.isEmpty();
+    return QStringLiteral("%1|%2|%3").arg(gameKey(it.game), langKey(it.lang),
+                                          unique ? QStringLiteral("u:") + it.name + QLatin1Char('|') + it.type
+                                                 : QStringLiteral("b:") + it.type + QLatin1Char('|') + it.disc);
+}
+
+void Application::showIconFor(const ParsedItem& it)
+{
+    QString url;
+    if (!it.exchangeId.isEmpty()) {
+        if (const StaticEntry* s = m_dbs[gi(it.game)][it.lang].staticById(it.exchangeId))
+            url = s->image;
+    }
+    if (url.isEmpty())
+        url = m_icons->urlFor(iconKey(it));
+    if (url.isEmpty())
+        return; // 처음 보는 아이템: 시세 조회하면 그때 배움
+    const QString key = iconKey(it);
+    m_icons->get(url, [this, key](const QString& path) {
+        if (!path.isEmpty() && m_popup->hasItem() && iconKey(m_popup->collectItem()) == key)
+            m_popup->setIcon(path);
+    });
+}
+
+void Application::learnIcon(const ParsedItem& it, const QVector<Listing>& listings)
+{
+    const bool unique = it.rarityId == QStringLiteral("unique") && !it.name.isEmpty();
+    for (const Listing& l : listings) {
+        if (l.icon.isEmpty())
+            continue;
+        // 유형으로 검색 등으로 다른 베이스가 섞일 수 있으니 같은 아이템일 때만
+        if (it.transfigured || l.baseType == it.type) {
+            if (unique && l.itemName != it.name)
+                continue;
+            m_icons->remember(iconKey(it), l.icon);
+            showIconFor(it);
             return;
         }
     }
-    if (!name.isEmpty())
-        QDesktopServices::openUrl(endpoints::wiki(it.game, name));
 }
 
 void Application::onRemember(const QString& statKey, const QString& top, bool on)

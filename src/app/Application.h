@@ -21,6 +21,8 @@ namespace pts {
 
 class DataManager;
 class HotkeyManager;
+class IconCache;
+struct Listing;
 class MainPopup;
 class TradeClient;
 
@@ -33,7 +35,7 @@ public:
     bool start(QString* error);
 
     // 개발용: 아이템 텍스트를 클립보드 거치지 않고 바로 띄움
-    void devShowItem(const QString& text) { handleItemText(text, false); }
+    void devShowItem(const QString& text) { handleItemText(text); }
     QWidget* popupWidget() const;
 
 private:
@@ -43,11 +45,15 @@ private:
     void onHotkey(int id);
 
     // 동작
-    void handleItemText(const QString& text, bool wiki);
+    void handleItemText(const QString& text);
     void openTrade();
     void priceCheck();
-    void openWiki(const ParsedItem& it);
     void openSettings();
+
+    // 아이콘
+    static QString iconKey(const ParsedItem& it);
+    void showIconFor(const ParsedItem& it);
+    void learnIcon(const ParsedItem& it, const QVector<Listing>& listings);
     void onRemember(const QString& statKey, const QString& top, bool on);
 
     // 데이터
@@ -78,6 +84,7 @@ private:
 
     TradeClient* m_client = nullptr;
     DataManager* m_data = nullptr;
+    IconCache* m_icons = nullptr;
     std::unique_ptr<ItemParser> m_parser;
     MainPopup* m_popup = nullptr;
     QSystemTrayIcon* m_tray = nullptr;
@@ -87,7 +94,7 @@ private:
 
     QTimer m_fgTimer;
     QTimer m_expectTimer;
-    enum class Expect { None, Search, Wiki };
+    enum class Expect { None, Search };
     Expect m_expect = Expect::None;
     bool m_paused = false;
     bool m_customRun = false;

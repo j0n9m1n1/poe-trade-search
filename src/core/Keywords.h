@@ -59,6 +59,8 @@ public:
     QString physicalDamageIncrease() const { return m_physIncr; }
     const QVector<IdTexts>& ultimatumRewards() const { return m_ultimatumRewards; }
     QString scopeOfQualifier(const QString& enQualifier) const { return m_scopes.value(enQualifier); }
+    // 게임 표기와 거래소 stat 표기가 다른 줄 치환 (예: 숫자 빠진 100% 확률 옵션)
+    QString alias(Lang l, const QString& line) const { return m_alias[li(l)].value(line); }
 
 private:
     static Texts readTexts(const QJsonValue& v);
@@ -73,6 +75,7 @@ private:
     QString m_localAttackSpeed, m_physIncr;
     QVector<IdTexts> m_ultimatumRewards;
     QHash<QString, QString> m_scopes;
+    QHash<QString, QString> m_alias[2];
     Texts m_empty;
 };
 

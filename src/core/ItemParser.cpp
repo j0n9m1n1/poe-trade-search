@@ -148,8 +148,9 @@ QString ItemParser::resolveCategory(const ParsedItem& it, const TradeDb& db) con
     return {};
 }
 
-void ItemParser::buildMod(ParsedItem& it, const TradeDb& db, const QVector<StatMatch>& ms, const CleanLine& first,
-                          const QString& raw, const ParseOptions& opt, bool* optionStatSeen) const
+ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const QVector<StatMatch>& ms,
+                               const CleanLine& first, const QString& raw, const ParseOptions& opt,
+                               bool* optionStatSeen) const
 {
     const bool localContext =
         (it.top == QStringLiteral("weapon") || it.top == QStringLiteral("armour")) &&
@@ -344,7 +345,7 @@ void ItemParser::buildMod(ParsedItem& it, const TradeDb& db, const QVector<StatM
         }
     }
 
-    it.mods.push_back(mod);
+    return mod;
 }
 
 std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, const ParseOptions& opt,
@@ -643,32 +644,63 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                     x.modType = hdrType;
                 x.tier = hdrTier;
                 t = text::stripDashSuffix(text::stripAdvancedRanges(t)).trimmed();
-                x.text = t;
+                const QString al = m_kw.alias(L, t);
+                x.text = al.isEmpty() ? t : al;
                 cl.push_back(x);
             }
 
             QStringList texts;
             for (const auto& x : cl)
                 texts << x.text;
+            // 섹션 안에 매칭된 옵션이 하나라도 있어야 못 찾은 줄도 옵션으로 취급 (설명문/메모 섹션 제외)
+            QVector<ParsedMod> secMods;
+            int matched = 0;
             for (int i = 0; i < cl.size();) {
                 int consumed = 0;
-                const QVector<StatMatch> ms = db.match(texts, i, &consumed);
+                QVector<StatMatch> ms = db.match(texts, i, &consumed);
+                if (ms.isEmpty() && L == Lang::En && !texts[i].contains(QRegularExpression(QStringLiteral("\\d")))) {
+                    // "Blind Enemies on Hit" 처럼 100% 라 숫자가 빠진 줄 -> "#% chance to ..."
+                    QStringList t2 = texts;
+                    t2[i] = QStringLiteral("100% chance to ") + texts[i];
+                    ms = db.match(t2, i, &consumed);
+                }
                 if (ms.isEmpty() || consumed <= 0) {
                     it.unmatched << cl[i].raw;
+                    ParsedMod u;
+                    u.raw = cl[i].raw;
+                    u.text = cl[i].text;
+                    u.modType = cl[i].modType;
+                    u.tier = cl[i].tier;
+                    u.unmatched = true;
+                    u.lockedOff = true;
+                    u.color = colorForType(u.modType);
+                    secMods.push_back(u);
                     ++i;
                     continue;
                 }
                 QStringList raws;
                 for (int k = i; k < i + consumed; ++k)
                     raws << cl[k].raw;
-                buildMod(it, db, ms, cl[i], raws.join(QLatin1Char('\n')), opt, &optionStatSeen);
+                secMods.push_back(buildMod(it, db, ms, cl[i], raws.join(QLatin1Char('\n')), opt, &optionStatSeen));
+                ++matched;
                 i += consumed;
+            }
+            for (const ParsedMod& m : secMods) {
+                if (!m.unmatched || matched > 0)
+                    it.mods.push_back(m);
             }
         }
     }
     // 성단 주얼: 인챈트(옵션형)가 있으면 패시브 개수 줄도 자동 체크 (원본 동작)
-    if (optionStatSeen && !it.mods.isEmpty() && !it.mods[0].lockedOff)
-        it.mods[0].checked = true;
+    if (optionStatSeen) {
+        for (auto& m : it.mods) {
+            if (!m.unmatched) {
+                if (!m.lockedOff)
+                    m.checked = true;
+                break;
+            }
+        }
+    }
 
     // ---- 설명 텍스트
     if (it.detail) {

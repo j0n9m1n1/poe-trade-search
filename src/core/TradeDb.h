@@ -47,6 +47,7 @@ struct StaticEntry {
     QString text;
     QString group;
     QString groupLabel;
+    QString image; // "/gen/image/..." (web.poecdn.com 기준 상대 경로)
 };
 
 struct FilterOption {

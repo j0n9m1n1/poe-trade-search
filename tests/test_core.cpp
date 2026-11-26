@@ -4,6 +4,8 @@
 //   PTS_TEST_DATA=<dir>  (안에 cache/poe1/en/stats.json 등)
 // 없으면 해당 테스트는 SKIP.
 #include "core/CheckedStore.h"
+#include "core/Config.h"
+#include "core/SearchDefaults.h"
 #include "core/ItemParser.h"
 #include "core/JsonUtil.h"
 #include "core/Keywords.h"
@@ -144,8 +146,12 @@ private slots:
     void priceSummary()
     {
         QVector<Listing> v;
-        for (double a : {1.0, 1.0, 2.0, 2.0, 2.0, 5.0})
-            v.push_back({a, QStringLiteral("chaos"), {}, {}});
+        for (double a : {1.0, 1.0, 2.0, 2.0, 2.0, 5.0}) {
+            Listing l;
+            l.amount = a;
+            l.currency = QStringLiteral("chaos");
+            v.push_back(l);
+        }
         const QString s = PriceSummary::summarize(v, [](const QString&) { return QStringLiteral("카오스"); });
         QCOMPARE(s, QStringLiteral("1 카오스 ~ 5 카오스 = 2 카오스[3], 1 카오스[2]"));
         const QDateTime now = QDateTime::fromString(QStringLiteral("2026-11-26T12:00:00Z"), Qt::ISODate);
@@ -347,6 +353,76 @@ private slots:
         QCOMPARE(life->tier, 5);
         QCOMPARE(*life->min, 64.0);
         QVERIFY(life->text.startsWith(QStringLiteral("T5 ")));
+    }
+
+    void configMigration()
+    {
+        const QString path = QDir::temp().filePath(QStringLiteral("pts_cfg_test.txt"));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write("{\"options\":{\"league\":\"Scourge\"},\"shortcuts\":["
+                "{\"keycode\":0,\"modifiers\":0,\"value\":\"{Run}\"},"
+                "{\"keycode\":72,\"modifiers\":2,\"value\":\"{Wiki} 위키\"},"
+                "{\"keycode\":78,\"modifiers\":2,\"value\":\"{Link}https://poe.ninja/{Link}\"},"
+                "{\"keycode\":113,\"modifiers\":0,\"value\":\"{Restart}\"}]}");
+        f.close();
+        Config c;
+        QVERIFY(c.load(path));
+        QVERIFY(c.migrated);
+        QStringList vals;
+        for (const auto& s : c.shortcuts)
+            vals << s.value;
+        QVERIFY(!vals.join(QLatin1Char('|')).contains(QStringLiteral("{Wiki}")));
+        QVERIFY(!vals.join(QLatin1Char('|')).contains(QStringLiteral("poe.ninja")));
+        QVERIFY(vals.contains(QStringLiteral("{Enter}/hideout{Enter}")));
+        QVERIFY(vals.contains(QStringLiteral("{Enter}/exit{Enter}")));
+        for (const auto& s : c.shortcuts) {
+            if (s.value == QStringLiteral("{Enter}/hideout{Enter}"))
+                QCOMPARE(s.keycode, 0); // F2 는 이미 {Restart} 가 써서 비워둠
+        }
+        QVERIFY(c.save(path));
+        Config c2;
+        QVERIFY(c2.load(path));
+        QVERIFY(!c2.migrated);
+        QFile::remove(path);
+    }
+
+    void poe1KoreanUniqueClaw()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        auto it = parse(QStringLiteral("poe1_ko_unique_claw.txt"), Game::Poe1);
+        QVERIFY(it);
+        QCOMPARE(it->name, QStringLiteral("탐하는 어둠"));
+        QCOMPARE(it->type, QStringLiteral("눈 후비개"));
+        const ParsedMod* blind = findMod(*it, QStringLiteral("stat_2301191210"));
+        QVERIFY2(blind, "명중 시 적 실명 유발 -> 별칭으로 100% 확률 stat");
+        QCOMPARE(*blind->min, 100.0);
+        const ParsedMod* phys = findMod(*it, QStringLiteral("stat_1940865751"));
+        QVERIFY2(phys, "무기의 물리 피해 #~# 추가는 로컬");
+        QCOMPARE(*phys->min, 47.5);
+        QVERIFY(findMod(*it, QStringLiteral("stat_3653779134"))); // 2줄 옵션
+        for (const auto& m : it->mods)
+            QVERIFY2(!m.unmatched, qPrintable(m.raw));
+        QVERIFY(it->hasDps);
+    }
+
+    void poe1EnglishBlindAndUnmatched()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        auto it = parse(QStringLiteral("poe1_en_blind.txt"), Game::Poe1);
+        QVERIFY(it);
+        const ParsedMod* blind = findMod(*it, QStringLiteral("stat_2301191210"));
+        QVERIFY2(blind, "Blind Enemies on Hit -> #% chance to Blind Enemies on Hit");
+        QCOMPARE(*blind->min, 100.0);
+        QCOMPARE(it->mods.size(), 3);
+        QVERIFY(it->mods[2].unmatched);
+        QVERIFY(it->mods[2].lockedOff);
+
+        // 매칭 못 한 줄은 검색 요청에 안 들어감
+        const SearchRequest r = makeRequest(*it, defaultFilterState(*it), kw, &dbs[0], RequestContext{});
+        QCOMPARE(r.stats.size(), 2);
     }
 
     void poe2RareArmour()

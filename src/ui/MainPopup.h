@@ -42,8 +42,11 @@ public:
     QString exchangeWant() const;
     QString exchangeHave() const { return m_item.exchangeId; }
 
+    void setIcon(const QString& imagePath);
+
     // 시세 표시
-    void priceBusy(const QString& msg);
+    void priceBusy(const QString& msg);   // 새 조회 시작 (목록 비움)
+    void priceStatus(const QString& msg); // 진행 문구만 바꿈
     void priceAppend(const QStringList& lines);
     void priceDone(const QString& summary, const QString& count);
     void priceIdle(const QString& msg);
@@ -53,7 +56,6 @@ public:
 signals:
     void openTradeRequested();
     void priceCheckRequested();
-    void wikiRequested();
     void settingsRequested();
     void rememberToggled(const QString& statKey, const QString& top, bool on);
     void popupHidden();
@@ -78,8 +80,8 @@ private:
 
     QComboBox* m_rarity;
     QComboBox* m_server;
-    QPushButton* m_wiki;
     QPushButton* m_settings;
+    QLabel* m_icon;
     QLabel* m_name;
     QLabel* m_sub;
     QLabel* m_info;

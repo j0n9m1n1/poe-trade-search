@@ -13,6 +13,10 @@ struct Listing {
     QString currency;
     QString account;
     QDateTime indexed;
+    // 아이콘 캐시용 (fetch 결과의 item)
+    QString icon;
+    QString itemName;
+    QString baseType;
     // 일괄 교환용
     double payAmount = 0; // 내가 내는 양 (have)
     double getAmount = 0; // 받는 양 (want)

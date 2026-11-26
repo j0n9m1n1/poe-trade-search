@@ -25,6 +25,8 @@ void focusGame();
 // 키 입력 주입 (Windows SendInput)
 void sendCopy(bool advanced);       // Ctrl+C / Ctrl+Alt+C
 void sendKeyToGame(int virtualKey); // ESC 넘겨주기 등
+// 채팅 명령 1개: Enter(또는 Ctrl+Enter=마지막 귓말 답장) -> 텍스트 -> Enter
+void sendChat(const QString& text, bool replyToLastWhisper);
 
 // 포커스 안 뺏는 팝업 (WS_EX_NOACTIVATE)
 void setNoActivate(QWidget* w, bool on);

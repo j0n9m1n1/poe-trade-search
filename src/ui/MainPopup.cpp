@@ -17,6 +17,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMouseEvent>
+#include <QPixmap>
 #include <QPushButton>
 #include <QRegularExpressionValidator>
 #include <QScrollArea>
@@ -94,17 +95,22 @@ void MainPopup::buildUi()
     m_server = new QComboBox(this);
     m_server->addItem(QStringLiteral("한국 서버"), li(Lang::Ko));
     m_server->addItem(QStringLiteral("글로벌 서버"), li(Lang::En));
-    m_wiki = new QPushButton(QStringLiteral("위키"), this);
     m_settings = new QPushButton(QStringLiteral("설정"), this);
-    for (QPushButton* b : {m_wiki, m_settings})
-        b->setFixedWidth(48);
+    m_settings->setFixedWidth(52);
     top->addWidget(m_rarity);
     top->addStretch(1);
     top->addWidget(m_server);
-    top->addWidget(m_wiki);
     top->addWidget(m_settings);
     root->addLayout(top);
 
+    // 아이콘 + 이름
+    auto* head = new QHBoxLayout;
+    m_icon = new QLabel(this);
+    m_icon->setFixedSize(52, 52);
+    m_icon->setAlignment(Qt::AlignCenter);
+    m_icon->setVisible(false);
+    auto* names = new QVBoxLayout;
+    names->setSpacing(1);
     m_name = new QLabel(this);
     QFont nf = m_name->font();
     nf.setBold(true);
@@ -112,9 +118,12 @@ void MainPopup::buildUi()
     m_name->setFont(nf);
     m_name->setWordWrap(true);
     m_sub = new QLabel(this);
-    m_sub->setStyleSheet(QStringLiteral("color:palette(mid);"));
-    root->addWidget(m_name);
-    root->addWidget(m_sub);
+    m_sub->setWordWrap(true);
+    names->addWidget(m_name);
+    names->addWidget(m_sub);
+    head->addWidget(m_icon, 0, Qt::AlignTop);
+    head->addLayout(names, 1);
+    root->addLayout(head);
 
     auto* hdr = new QHBoxLayout;
     m_info = new QLabel(QStringLiteral("옵션"), this);
@@ -251,7 +260,6 @@ void MainPopup::buildUi()
     p1->addWidget(m_miscBox);
 
     m_byCategory = new QCheckBox(QStringLiteral("아이템 유형으로 검색 (이름/베이스 무시)"), page1);
-    m_byCategory->setStyleSheet(QStringLiteral("color:palette(mid);"));
     p1->addWidget(m_byCategory);
 
     m_tabs->addTab(page1, QStringLiteral("간략히"));
@@ -303,12 +311,23 @@ void MainPopup::buildUi()
     bottom->addWidget(m_close, 1);
     root->addLayout(bottom);
 
-    setMinimumWidth(540);
+    setMinimumWidth(640);
+
+    // 다크 테마에서도 보이게: 글자색과 배경색 중간값으로 흐린 글씨
+    {
+        const QPalette pal = palette();
+        const QColor fg = pal.color(QPalette::WindowText);
+        const QColor bg = pal.color(QPalette::Window);
+        const QColor dim((fg.red() * 3 + bg.red() * 2) / 5, (fg.green() * 3 + bg.green() * 2) / 5,
+                         (fg.blue() * 3 + bg.blue() * 2) / 5);
+        const QString css = QStringLiteral("color:%1;").arg(dim.name());
+        m_sub->setStyleSheet(css);
+        m_byCategory->setStyleSheet(css);
+    }
 
     // ---- 연결
     connect(m_search, &QPushButton::clicked, this, &MainPopup::openTradeRequested);
     connect(m_close, &QPushButton::clicked, this, &QWidget::hide);
-    connect(m_wiki, &QPushButton::clicked, this, &MainPopup::wikiRequested);
     connect(m_settings, &QPushButton::clicked, this, &MainPopup::settingsRequested);
     connect(m_price, &QPushButton::clicked, this, &MainPopup::priceCheckRequested);
     connect(m_all, &QCheckBox::toggled, this, [this](bool on) {
@@ -401,6 +420,8 @@ void MainPopup::showItem(const ParsedItem& it, const GameDb* gdb, const Config& 
     if (it.transfigured)
         title = it.rawType;
     m_name->setText(title.isEmpty() ? it.rawType : title);
+    m_icon->clear();
+    m_icon->setVisible(false);
     QStringList sub;
     sub << (poe1 ? QStringLiteral("PoE1") : QStringLiteral("PoE2")) << it.itemClass;
     if (!it.rarityText.isEmpty())
@@ -627,10 +648,24 @@ QString MainPopup::exchangeWant() const
     return {};
 }
 
+void MainPopup::setIcon(const QString& imagePath)
+{
+    QPixmap px(imagePath);
+    if (px.isNull())
+        return;
+    m_icon->setPixmap(px.scaled(m_icon->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    m_icon->setVisible(true);
+}
+
 void MainPopup::priceBusy(const QString& msg)
 {
     m_prices->clear();
     m_priceCount->clear();
+    priceStatus(msg);
+}
+
+void MainPopup::priceStatus(const QString& msg)
+{
     m_price->setStyleSheet(QStringLiteral("text-align:right; padding:2px;"));
     m_price->setText(msg);
 }

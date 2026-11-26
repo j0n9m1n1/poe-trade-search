@@ -23,7 +23,6 @@ QUrl exchange(Game g, Lang server, const QString& league);
 QUrl webSearch(Game g, Lang server, const QString& league, const QString& id);
 QUrl webExchange(Game g, Lang server, const QString& league, const QString& id);
 QUrl redirectSearch(Game g, Lang server, const QString& league, const QByteArray& queryJson);
-QUrl wiki(Game g, const QString& title);
 
 } // namespace endpoints
 } // namespace pts

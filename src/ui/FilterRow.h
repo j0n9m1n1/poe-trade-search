@@ -46,6 +46,7 @@ private:
     QString m_color;
     bool m_optionStat = false;
     bool m_remembered = false;
+    bool m_unmatched = false;
 };
 
 } // namespace pts

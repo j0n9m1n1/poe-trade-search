@@ -54,6 +54,8 @@ FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
     m_type->setToolTip(QStringLiteral("검색할 옵션 종류"));
     m_text = new QLabel(this);
     m_text->setMinimumWidth(200);
+    m_text->setWordWrap(true); // 긴 옵션은 줄바꿈
+    m_text->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::MinimumExpanding);
     m_text->setTextInteractionFlags(Qt::NoTextInteraction);
     m_res = new QCheckBox(this);
     m_res->setToolTip(QStringLiteral("저항 합산 검색"));
@@ -89,10 +91,16 @@ void FilterRow::setMod(const ParsedMod& m)
     m_type->clear();
     for (const auto& c : m.cands)
         m_type->addItem(c.label, c.id);
-    m_type->setCurrentIndex(m.selected);
+    if (m.unmatched)
+        m_type->addItem(QStringLiteral("검색 불가"));
+    m_type->setCurrentIndex(m.unmatched ? 0 : m.selected);
     m_type->setEnabled(m.cands.size() > 1);
+    m_unmatched = m.unmatched;
 
-    m_text->setText(m.text);
+    QString shown = m.text;
+    if (m.unmatched)
+        shown = QStringLiteral("%1  (거래소 옵션을 못 찾음)").arg(m.text);
+    m_text->setText(shown);
     m_text->setToolTip(m.text == m.raw ? m.raw : m.text + QStringLiteral("\n\n") + m.raw);
     m_color = m.color;
     m_optionStat = m.optionStat;
@@ -102,8 +110,8 @@ void FilterRow::setMod(const ParsedMod& m)
     m_res->setChecked(m.totalRes);
     m_min->setText(fromOpt(m.min));
     m_max->setText(fromOpt(m.max));
-    m_min->setEnabled(!m.optionStat);
-    m_max->setEnabled(!m.optionStat);
+    m_min->setEnabled(!m.optionStat && !m.unmatched);
+    m_max->setEnabled(!m.optionStat && !m.unmatched);
     m_use->setChecked(m.checked && !m.lockedOff);
     m_use->setEnabled(!m.lockedOff);
     updateStyle();
@@ -135,8 +143,11 @@ bool FilterRow::isCheckable() const
 void FilterRow::updateStyle()
 {
     const QString c = colorHex(m_color);
-    m_text->setStyleSheet(c.isEmpty() ? QStringLiteral("QLabel{border-bottom:1px solid palette(mid);}")
-                                      : QStringLiteral("QLabel{color:%1;border-bottom:1px solid %1;}").arg(c));
+    if (m_unmatched)
+        m_text->setStyleSheet(QStringLiteral("QLabel{color:palette(mid);font-style:italic;border-bottom:1px dotted palette(mid);}"));
+    else
+        m_text->setStyleSheet(c.isEmpty() ? QStringLiteral("QLabel{border-bottom:1px solid palette(mid);}")
+                                          : QStringLiteral("QLabel{color:%1;border-bottom:1px solid %1;}").arg(c));
     QFont f = m_use->font();
     f.setBold(m_remembered);
     m_use->setFont(f);

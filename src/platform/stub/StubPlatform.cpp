@@ -21,6 +21,7 @@ GameWindow foregroundGame()
 void focusGame() {}
 void sendCopy(bool) {}
 void sendKeyToGame(int) {}
+void sendChat(const QString&, bool) {}
 
 void setNoActivate(QWidget* w, bool on)
 {

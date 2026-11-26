@@ -12,7 +12,7 @@ namespace pts {
 struct Shortcut {
     int keycode = 0;   // Windows VK 코드 (원본 Config.txt 와 같음)
     int modifiers = 0; // 1=Alt 2=Ctrl 4=Shift 8=Win (RegisterHotKey MOD_* 와 같음)
-    QString value;     // "{Run}", "{Wiki}", "{Pause}", "{Restart}", "{Link}URL{Link}" ...
+    QString value;     // "{Run}", "{Pause}", "{Restart}", "{Link}URL{Link}", "{Enter}/hideout{Enter}" ...
 };
 
 // 원본 Config.txt 포맷 호환 + 확장 키
@@ -43,7 +43,12 @@ struct Config {
 
     QVector<Shortcut> shortcuts;
 
+    static constexpr int kConfigVersion = 2;
+    int configVersion = kConfigVersion;
+    bool migrated = false; // load 때 마이그레이션 했으면 true -> 저장 필요
+
     bool load(const QString& path, QString* error = nullptr);
+    void migrate(); // 예전 설정 고치기 (load 에서 자동 호출)
     bool save(const QString& path, QString* error = nullptr) const;
     static Config defaults();
 

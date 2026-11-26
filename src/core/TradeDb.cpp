@@ -122,7 +122,7 @@ bool TradeDb::load(const QString& dir, QString* error)
         for (const auto& ev : g.value(QStringLiteral("entries")).toArray()) {
             const QJsonObject e = ev.toObject();
             StaticEntry s{e.value(QStringLiteral("id")).toString(), e.value(QStringLiteral("text")).toString(), gid,
-                          glabel};
+                          glabel, e.value(QStringLiteral("image")).toString()};
             if (s.id.isEmpty() || s.text.isEmpty())
                 continue;
             const int idx = m_static.size();

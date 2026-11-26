@@ -252,6 +252,14 @@
         {"id": "ExchangeUnique", "text": ["유니크 아이템", "Unique Item"]}
     ],
 
+    "_aliases": "게임 표기 -> 거래소 stat 표기 치환. 영어는 숫자 없는 줄을 '100% chance to ...' 로 자동 재시도하므로 한국어 위주로 추가",
+    "aliases": {
+        "ko": {
+            "명중 시 적 실명 유발": "명중 시 100% 확률로 적 실명 유발"
+        },
+        "en": {}
+    },
+
     "scope_qualifiers": {
         "Local": "local",
         "Staves": "staff",

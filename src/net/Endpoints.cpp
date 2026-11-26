@@ -75,13 +75,4 @@ QUrl redirectSearch(Game g, Lang server, const QString& league, const QByteArray
     return u;
 }
 
-QUrl wiki(Game g, const QString& title)
-{
-    QString t = title;
-    t.replace(QLatin1Char(' '), QLatin1Char('_'));
-    const QString host = g == Game::Poe1 ? QStringLiteral("https://www.poewiki.net/wiki/")
-                                         : QStringLiteral("https://www.poe2wiki.net/wiki/");
-    return QUrl(host + enc(t));
-}
-
 } // namespace pts::endpoints

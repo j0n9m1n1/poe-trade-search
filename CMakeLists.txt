@@ -29,6 +29,7 @@ add_library(pts_core STATIC
     src/net/RateLimiter.h src/net/RateLimiter.cpp
     src/net/TradeClient.h src/net/TradeClient.cpp
     src/net/DataManager.h src/net/DataManager.cpp
+    src/net/IconCache.h src/net/IconCache.cpp
     resources/resources.qrc
 )
 target_include_directories(pts_core PUBLIC src)

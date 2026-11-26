@@ -38,6 +38,7 @@ struct ParsedMod {
     bool lockedOff = false;  // 검색 불가 옵션
     bool checked = false;
     bool autoChecked = false; // Checked.txt 로 자동 체크됨
+    bool unmatched = false;   // 거래소 stat 을 못 찾은 줄 (표시만, 검색 불가)
     QString color;            // implicit / crafted / enchant / scourge / rune / desecrated / ambiguous / ""
 
     const ModCandidate* current() const { return selected >= 0 && selected < cands.size() ? &cands[selected] : nullptr; }
@@ -96,8 +97,8 @@ struct ParsedItem {
     bool hasDps = false;
     double pdps = 0, edps = 0, cdps = 0;
 
-    QVector<ParsedMod> mods;
-    QStringList unmatched;
+    QVector<ParsedMod> mods; // 매칭 못 한 옵션 줄도 unmatched=true 로 순서대로 들어감
+    QStringList unmatched;   // 매칭 못 한 줄 전부 (설명문 포함, 디버그용)
 
     // UI 기본값
     bool checkLevel = false, checkQuality = false, checkSockets = false, byCategory = false;
@@ -137,8 +138,8 @@ private:
 
     QString resolveCategory(const ParsedItem& it, const TradeDb& db) const;
     QString findBaseInName(const TradeDb& db, const QString& s) const;
-    void buildMod(ParsedItem& it, const TradeDb& db, const QVector<StatMatch>& ms, const CleanLine& first,
-                  const QString& raw, const ParseOptions& opt, bool* optionStatSeen) const;
+    ParsedMod buildMod(const ParsedItem& it, const TradeDb& db, const QVector<StatMatch>& ms, const CleanLine& first,
+                       const QString& raw, const ParseOptions& opt, bool* optionStatSeen) const;
 
     const Keywords& m_kw;
     const GameDb* m_dbs;

@@ -13,6 +13,7 @@
 #include <QMessageBox>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QTabWidget>
 #include <QTimer>
 #include <QWidget>
 #include <memory>
@@ -99,9 +100,15 @@ int main(int argc, char** argv)
             QTimer::singleShot(300, &a, [&a, text]() { a.devShowItem(text); });
             const QString shot = qEnvironmentVariable("PTS_DEV_SHOT");
             if (!shot.isEmpty()) {
-                QTimer::singleShot(1500, &a, [&a, shot]() {
-                    if (QWidget* w = a.popupWidget())
+                const int delay = qEnvironmentVariableIsSet("PTS_DEV_SHOT_DELAY") ? qEnvironmentVariableIntValue("PTS_DEV_SHOT_DELAY") : 1500;
+                QTimer::singleShot(delay, &a, [&a, shot]() {
+                    if (QWidget* w = a.popupWidget()) {
+                        if (qEnvironmentVariableIsSet("PTS_DEV_TAB")) {
+                            if (auto* tabs = w->findChild<QTabWidget*>())
+                                tabs->setCurrentIndex(qEnvironmentVariableIntValue("PTS_DEV_TAB"));
+                        }
                         w->grab().save(shot);
+                    }
                     QCoreApplication::quit();
                 });
             }

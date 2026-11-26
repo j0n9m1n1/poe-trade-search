@@ -117,6 +117,65 @@ void sendKeyToGame(int virtualKey)
     SendInput(static_cast<UINT>(v.size()), v.data(), sizeof(INPUT));
 }
 
+void sendChat(const QString& text, bool replyToLastWhisper)
+{
+    std::vector<INPUT> v;
+    // 단축키 누르느라 잡고 있는 수식키 떼기
+    for (int vk : {VK_LSHIFT, VK_RSHIFT, VK_LMENU, VK_RMENU, VK_LCONTROL, VK_RCONTROL, VK_LWIN, VK_RWIN}) {
+        if (isDown(vk))
+            pushKey(v, static_cast<WORD>(vk), true);
+    }
+    // 채팅창 열기 (Ctrl+Enter = "@마지막귓말상대 " 가 채워진 채로 열림)
+    if (replyToLastWhisper)
+        pushKey(v, VK_CONTROL, false);
+    pushKey(v, VK_RETURN, false);
+    pushKey(v, VK_RETURN, true);
+    if (replyToLastWhisper)
+        pushKey(v, VK_CONTROL, true);
+    SendInput(static_cast<UINT>(v.size()), v.data(), sizeof(INPUT));
+    Sleep(40);
+
+    v.clear();
+    if (!replyToLastWhisper) {
+        // 쓰다 만 글이 있으면 덮어쓰기
+        pushKey(v, VK_CONTROL, false);
+        pushKey(v, 'A', false);
+        pushKey(v, 'A', true);
+        pushKey(v, VK_CONTROL, true);
+    }
+    // 유니코드 직접 입력 (한글 IME 상태와 무관)
+    auto unicode = [&v](char16_t ch, bool up) {
+        INPUT in{};
+        in.type = INPUT_KEYBOARD;
+        in.ki.wVk = 0;
+        in.ki.wScan = static_cast<WORD>(ch);
+        in.ki.dwFlags = KEYEVENTF_UNICODE | (up ? KEYEVENTF_KEYUP : 0);
+        v.push_back(in);
+    };
+    const std::u16string w = text.toStdU16String();
+    for (size_t i = 0; i < w.size(); ++i) {
+        const char16_t ch = w[i];
+        if (ch >= 0xD800 && ch <= 0xDBFF && i + 1 < w.size()) {
+            // 서로게이트 쌍은 둘 다 누르고 둘 다 뗌
+            const char16_t lo = w[++i];
+            unicode(ch, false);
+            unicode(lo, false);
+            unicode(ch, true);
+            unicode(lo, true);
+        } else {
+            unicode(ch, false);
+            unicode(ch, true);
+        }
+    }
+    SendInput(static_cast<UINT>(v.size()), v.data(), sizeof(INPUT));
+    Sleep(20);
+
+    v.clear();
+    pushKey(v, VK_RETURN, false);
+    pushKey(v, VK_RETURN, true);
+    SendInput(static_cast<UINT>(v.size()), v.data(), sizeof(INPUT));
+}
+
 void setNoActivate(QWidget* w, bool on)
 {
     if (!w)

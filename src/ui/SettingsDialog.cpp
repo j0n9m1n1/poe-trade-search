@@ -155,10 +155,10 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     auto* keys = new QWidget(tabs);
     auto* kl = new QVBoxLayout(keys);
     auto* help = new QLabel(QStringLiteral("PoE 창이 활성일 때만 동작. 값 예시:\n"
-                                           "  {Run} 아이템 검색 (지정하면 Ctrl+C 클립보드 감시는 꺼짐)\n"
-                                           "  {Wiki} 위키 열기   {Pause} 일시정지   {Restart} 재시작\n"
-                                           "  {Link}https://poe.ninja/{Link} 링크 열기\n"
-                                           "채팅 매크로/이미지/창고 그리드는 1차 버전에서 미지원."),
+                                           "  {Run} 아이템 검색 (키 지정하면 Ctrl+C 클립보드 감시는 꺼짐)\n"
+                                           "  {Enter}/hideout{Enter} 은신처   {Enter}/exit{Enter} 로그아웃(캐릭터 선택)\n"
+                                           "  ^{Enter}고마워{Enter} 마지막 귓말에 답장 (키 한 번에 명령 하나)\n"
+                                           "  {Pause} 일시정지   {Restart} 재시작   {Link}URL{Link} 링크 열기"),
                             keys);
     help->setStyleSheet(QStringLiteral("color:palette(mid);"));
     kl->addWidget(help);

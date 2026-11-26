@@ -1,0 +1,13 @@
+Item Class: Gloves
+Rarity: Rare
+Grim Grip
+Sorcerer Gloves
+--------
+Requirements:
+Level: 69
+--------
+Item Level: 84
+--------
++60 to maximum Life
+Blind Enemies on Hit
+Some Unknown Line That Matches Nothing 12
