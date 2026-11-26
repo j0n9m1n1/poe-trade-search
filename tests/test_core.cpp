@@ -54,6 +54,16 @@ private:
     CheckedStore checked;
     bool haveData = false;
 
+    std::optional<ParsedItem> parseText(const QString& text, Game g, ParseOptions opt = {})
+    {
+        ItemParser p(kw, dbs, &checked);
+        QString err;
+        auto r = p.parse(text, g, opt, &err);
+        if (!r)
+            qWarning() << "parse failed" << err;
+        return r;
+    }
+
     std::optional<ParsedItem> parse(const QString& fx, Game g, ParseOptions opt = {})
     {
         ItemParser p(kw, dbs, &checked);
@@ -201,6 +211,90 @@ private slots:
         QVERIFY(!q.contains(QStringLiteral("name")));
     }
 
+    void queryCorruptMutated()
+    {
+        auto misc = [](const SearchRequest& r) {
+            return QueryBuilder::build(r, nullptr)
+                .value(QStringLiteral("query")).toObject()
+                .value(QStringLiteral("filters")).toObject()
+                .value(QStringLiteral("misc_filters")).toObject()
+                .value(QStringLiteral("filters")).toObject();
+        };
+        auto opt = [](const QJsonObject& o, const char* k) {
+            return o.value(QLatin1String(k)).toObject().value(QStringLiteral("option")).toString();
+        };
+        SearchRequest r;
+        r.type = QStringLiteral("Eternal Sword");
+        r.corrupted = 1;
+        r.twiceCorrupted = 1;
+        r.mutated = 2;
+        QJsonObject m = misc(r);
+        QCOMPARE(opt(m, "corrupted"), QStringLiteral("true"));
+        QCOMPARE(opt(m, "twice_corrupted"), QStringLiteral("true"));
+        QCOMPARE(opt(m, "mutated"), QStringLiteral("false"));
+        r.game = Game::Poe2;
+        r.twiceCorrupted = 2;
+        r.mutated = 0;
+        m = misc(r);
+        QCOMPARE(opt(m, "twice_corrupted"), QStringLiteral("false"));
+        QVERIFY(!m.contains(QStringLiteral("mutated")));
+
+        // 등록 기간
+        QCOMPARE(QueryBuilder::indexedFromDays(0), QString());
+        QCOMPARE(QueryBuilder::indexedFromDays(7), QStringLiteral("1week"));
+        QCOMPARE(QueryBuilder::indexedFromDays(30), QStringLiteral("1month"));
+        for (int d : {0, 1, 3, 7, 14, 30, 60}) {
+            bool found = false;
+            for (const TradeChoice& c : indexedChoices())
+                found = found || c.id == QueryBuilder::indexedFromDays(d);
+            QVERIFY(found);
+        }
+    }
+
+    void corruptedFoulbornDefaults()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        const QString ring = fixture(QStringLiteral("poe1_en_rare_ring.txt"));
+        QVERIFY(ring.contains(QStringLiteral("\nCorrupted")));
+        auto once = parseText(ring, Game::Poe1);
+        QVERIFY(once);
+        QVERIFY(once->corrupted && !once->twiceCorrupted);
+        QCOMPARE(once->corruptDefault, 1);
+        QCOMPARE(once->twiceCorruptDefault, 2); // 한 번 타락 -> 두 번 타락 제외
+        QCOMPARE(once->mutatedDefault, 0);      // 고유 아님
+
+        QString t = ring;
+        t.replace(QStringLiteral("\nCorrupted"), QStringLiteral("\nTwice Corrupted"));
+        auto twice = parseText(t, Game::Poe1);
+        QVERIFY(twice);
+        QVERIFY(twice->corrupted && twice->twiceCorrupted);
+        QCOMPARE(twice->twiceCorruptDefault, 1);
+
+        t = ring;
+        t.remove(QStringLiteral("\n--------\nCorrupted"));
+        auto clean = parseText(t, Game::Poe1);
+        QVERIFY(clean);
+        QVERIFY(!clean->corrupted);
+        QCOMPARE(clean->corruptDefault, 2); // 타락 아님 -> 타락 제외
+        QCOMPARE(clean->twiceCorruptDefault, 0);
+
+        const QString uni = fixture(QStringLiteral("poe1_en_unique.txt"));
+        auto u = parseText(uni, Game::Poe1);
+        QVERIFY(u);
+        QVERIFY(!u->foulborn);
+        QCOMPARE(u->mutatedDefault, 2);
+        const QString name = u->rawName;
+        QVERIFY(!name.isEmpty());
+        t = uni;
+        t.replace(name, QStringLiteral("Foulborn ") + name);
+        auto fb = parseText(t, Game::Poe1);
+        QVERIFY(fb);
+        QVERIFY(fb->foulborn);
+        QCOMPARE(fb->name, name);
+        QCOMPARE(fb->mutatedDefault, 1);
+    }
+
     void queryPriceCurrency()
     {
         auto priceOf = [](const SearchRequest& r) {
@@ -226,7 +320,7 @@ private slots:
         QCOMPARE(d.priceCurrencyFor(Game::Poe2), QStringLiteral("exalted_divine"));
         for (Game g : {Game::Poe1, Game::Poe2}) {
             bool found = false;
-            for (const PriceCurrency& pc : priceCurrencies(g))
+            for (const TradeChoice& pc : priceCurrencies(g))
                 found = found || pc.id == d.priceCurrencyFor(g);
             QVERIFY(found);
         }

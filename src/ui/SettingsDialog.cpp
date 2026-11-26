@@ -72,7 +72,7 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     // 가격 화폐: 등가물이면 색채 같은 잡화폐로 올린 매물까지 다 나옴
     auto currencyBox = [&](Game g, const QString& cur) {
         auto* c = new QComboBox(basic);
-        for (const PriceCurrency& pc : priceCurrencies(g))
+        for (const TradeChoice& pc : priceCurrencies(g))
             c->addItem(pc.text, pc.id);
         if (c->findData(cur) < 0)
             c->addItem(cur, cur);
@@ -88,7 +88,8 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_beforeDay = new QComboBox(basic);
     for (auto p : {qMakePair(0, QStringLiteral("모두")), qMakePair(1, QStringLiteral("1일 이내")),
                    qMakePair(3, QStringLiteral("3일 이내")), qMakePair(7, QStringLiteral("1주 이내")),
-                   qMakePair(14, QStringLiteral("2주 이내"))})
+                   qMakePair(14, QStringLiteral("2주 이내")),
+                   qMakePair(30, QStringLiteral("1달 이내")), qMakePair(60, QStringLiteral("2달 이내"))})
         m_beforeDay->addItem(p.second, p.first);
     {
         int idx = 0;

@@ -34,6 +34,7 @@
 
     "flags": {
         "corrupted": ["타락", "Corrupted"],
+        "twice_corrupted": ["두 번 타락", "Twice Corrupted"],
         "unidentified": ["미확인", "Unidentified"],
         "mirrored": [["복제됨", "복제된"], "Mirrored"],
         "split": [["분할됨", "분할된"], "Split"],

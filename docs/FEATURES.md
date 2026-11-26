@@ -114,13 +114,13 @@
 | D1 | `status: online`, 이름/베이스, 카테고리, 희귀도 | 수정 | status 옵션 설정화 (online / any 등) |
 | D2 | 홈/링크, 퀄리티, 아이템 레벨, 젬 레벨 | 유지 | |
 | D3 | 영향 6종, 결합 | **수정** | 영향은 `pseudo_has_*_influence` stat으로 |
-| D4 | 타락 예/아니오 | 유지 | |
+| D4 | 타락 무관/예/아니오/한 번만/두 번 (`corrupted` + `twice_corrupted`), 삿된(`mutated`, PoE2 는 함양된 바알 고유). 기본값은 아이템 상태 | 확장 | 원본은 타락 예/아니오만, 기본 무관 |
 | D5 | 강탈 대상 가치(`heist_objective_value`) | 유지 | |
 | D6 | 지도 등급, 역병 | 수정 | uberblighted 추가, shaped/elder 삭제 |
 | D7 | 결전 보상/결과물(`ultimatum_reward`/`ultimatum_output`) | 유지 | 필드 현행 검증 |
 | D8 | 젬 대체 퀄리티 | **삭제→수정** | 변형 젬 `type: {option, discriminator}` |
 | D9 | stats `and` 그룹 (min/max/option/disabled) | 유지 | |
-| D10 | 등록일 제한(`indexed` 1day/3days/1week/2weeks), 가격 지정 매물만(`sale_type: priced`), 최소 가격 | 유지 | |
+| D10 | 등록 기간(`indexed` 1시간~2달, 팝업 콤보), 가격 화폐(`price.option`), 판매 방식(기본 즉시 구입만), 최소 가격 | 확장 | 원본은 등록일 설정값만 |
 | D11 | "아이템 유형으로 검색" (이름·베이스 빼고 카테고리로만), `auto_select_bytype` | 유지 | |
 | D12 | 유니크 아니면 name 제거 등 조건부 필드 | 유지 | 원본은 99999 센티넬 넣고 문자열 regex로 지우는 야매 → QJsonObject로 정상 빌드 |
 | D13 | 매칭 실패 stat은 빨간 줄 + error 표시 | 유지 | |

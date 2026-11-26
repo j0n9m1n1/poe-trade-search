@@ -491,7 +491,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         }
     }
 
-    it.corrupted = flags.contains(QStringLiteral("corrupted"));
+    it.twiceCorrupted = flags.contains(QStringLiteral("twice_corrupted"));
+    it.corrupted = it.twiceCorrupted || flags.contains(QStringLiteral("corrupted"));
     it.unidentified = flags.contains(QStringLiteral("unidentified"));
     it.mirrored = flags.contains(QStringLiteral("mirrored"));
     it.fractured = flags.contains(QStringLiteral("fractured_item"));
@@ -829,12 +830,21 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         const int qmax = it.top == QStringLiteral("accessory") ? 4 : 20;
         it.highlightQuality = it.quality > qmax;
     }
-    if (it.isGear) {
+    // 타락: 원본 auto_select_corrupt 설정이 있으면 그거, 없으면 아이템 상태 그대로 (APT 와 같음)
+    //  타락 아님 -> 타락 아닌 매물만 / 한 번 타락 -> 두 번 타락 제외 / 두 번 타락 -> 두 번 타락만
+    if (it.isGear || it.isFlask || it.isGem || it.isMap) {
         if (opt.autoSelectCorrupt == QStringLiteral("yes"))
             it.corruptDefault = 1;
         else if (opt.autoSelectCorrupt == QStringLiteral("no"))
             it.corruptDefault = 2;
+        else
+            it.corruptDefault = it.corrupted ? 1 : 2;
+        if (it.corruptDefault == 1 && it.corrupted)
+            it.twiceCorruptDefault = it.twiceCorrupted ? 1 : 2;
     }
+    // 삿된 고유: 삿된이면 삿된만, 아니면 삿된 제외 (PoE2 의 같은 필터는 함양된 바알 고유라 건드리지 않음)
+    if (it.game == Game::Poe1 && it.rarityId == QStringLiteral("unique") && !it.unidentified)
+        it.mutatedDefault = it.foulborn ? 1 : 2;
     if (it.isGear && !it.checkLevel && m_checked && it.itemLevel > 0) {
         QStringList names;
         for (int i : it.influences)

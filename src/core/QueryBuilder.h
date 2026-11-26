@@ -45,6 +45,8 @@ struct SearchRequest {
     OptDouble levelMin, levelMax;
 
     int corrupted = 0; // 0 any / 1 yes / 2 no
+    int twiceCorrupted = 0; // 두 번 타락 0 any / 1 yes / 2 no
+    int mutated = 0;        // 삿된 / 함양된 바알 고유 0 any / 1 yes / 2 no
     QVector<QString> influencePseudo; // "pseudo.pseudo_has_shaper_influence" ...
     bool synthesised = false;
     bool blighted = false;
@@ -65,12 +67,15 @@ struct SearchRequest {
     QString priceOption; // 가격 화폐 필터. "" = 등가물(모든 화폐), "chaos_divine", "chaos" ...
 };
 
-// 거래소 "즉시 구입 가격" 화폐 옵션 (id, 거래소 표기). 첫 항목 id "" = 등가물
-struct PriceCurrency {
+// 거래소 드롭다운 선택지 (id, 카카오 거래소 표기). id "" = 필터 안 넣음
+struct TradeChoice {
     QString id;
     QString text;
 };
-QVector<PriceCurrency> priceCurrencies(Game g);
+// "즉시 구입 가격" 화폐. 첫 항목 = 등가물
+QVector<TradeChoice> priceCurrencies(Game g);
+// "등록 완료" 기간. 첫 항목 = 언제든
+QVector<TradeChoice> indexedChoices();
 
 class QueryBuilder {
 public:

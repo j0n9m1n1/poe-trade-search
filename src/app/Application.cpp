@@ -544,7 +544,7 @@ void Application::openTrade()
     RequestContext ctx;
     ctx.server = server;
     ctx.status = m_popup->tradeStatus();
-    ctx.indexed = QueryBuilder::indexedFromDays(m_cfg.searchBeforeDay);
+    ctx.indexed = m_popup->indexed();
     ctx.priceOption = m_popup->priceCurrency();
     ctx.forBrowser = true;
     QString warn;
@@ -783,7 +783,7 @@ void Application::priceCheck()
         RequestContext ctx;
         ctx.server = server;
         ctx.status = m_popup->tradeStatus();
-        ctx.indexed = QueryBuilder::indexedFromDays(m_cfg.searchBeforeDay);
+        ctx.indexed = m_popup->indexed();
         ctx.priceMin = m_popup->priceMin();
         ctx.priceOption = m_popup->priceCurrency();
         ctx.collapse = m_popup->collapse();

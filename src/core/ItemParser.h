@@ -65,6 +65,7 @@ struct ParsedItem {
 
     bool unidentified = false;
     bool corrupted = false;
+    bool twiceCorrupted = false; // "두 번 타락" (corrupted 도 true)
     bool mirrored = false;
     bool fractured = false;
     bool synthesised = false;
@@ -108,6 +109,8 @@ struct ParsedItem {
     bool checkLevel = false, checkQuality = false, checkSockets = false, byCategory = false;
     bool highlightQuality = false, highlightLevel = false;
     int corruptDefault = 0; // 0 any / 1 yes / 2 no
+    int twiceCorruptDefault = 0; // 두 번 타락 필터 0 any / 1 yes / 2 no
+    int mutatedDefault = 0;      // 삿된(PoE1) 필터 0 any / 1 yes / 2 no
     QString rarityFilter;   // "" / "unique" / "nonunique" ...
     bool checkAllUnique = false;
 };

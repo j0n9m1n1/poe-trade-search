@@ -40,6 +40,7 @@ public:
     bool collapse() const;
     QString tradeStatus() const;
     QString priceCurrency() const; // 가격 화폐 필터 ("" = 등가물)
+    QString indexed() const;       // 등록 기간 ("" = 언제든)
 
     // 일괄 교환: 선택된 받을 화폐 static id (없으면 빈 문자열)
     QString exchangeWant() const;
@@ -167,6 +168,7 @@ private:
     QCheckBox* m_special1;
     QCheckBox* m_special2;
     QComboBox* m_corrupt;
+    QComboBox* m_mutated;
     QComboBox* m_infl1;
     QComboBox* m_infl2;
     QComboBox* m_alt;
@@ -178,6 +180,7 @@ private:
     QComboBox* m_listCount;
     QComboBox* m_status;
     QComboBox* m_currency;
+    QComboBox* m_indexed;
     QCheckBox* m_collapse;
     QLabel* m_priceCount;
 

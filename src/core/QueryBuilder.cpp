@@ -23,6 +23,8 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("gem_level"), QStringLiteral("misc_filters")},
         {QStringLiteral("gem_transfigured"), QStringLiteral("misc_filters")},
         {QStringLiteral("corrupted"), QStringLiteral("misc_filters")},
+        {QStringLiteral("twice_corrupted"), QStringLiteral("misc_filters")},
+        {QStringLiteral("mutated"), QStringLiteral("misc_filters")},
         {QStringLiteral("synthesised_item"), QStringLiteral("misc_filters")},
         {QStringLiteral("map_tier"), QStringLiteral("map_filters")},
         {QStringLiteral("map_blighted"), QStringLiteral("map_filters")},
@@ -44,6 +46,8 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("rune_sockets"), QStringLiteral("equipment_filters")},
         {QStringLiteral("gem_level"), QStringLiteral("misc_filters")},
         {QStringLiteral("corrupted"), QStringLiteral("misc_filters")},
+        {QStringLiteral("twice_corrupted"), QStringLiteral("misc_filters")},
+        {QStringLiteral("mutated"), QStringLiteral("misc_filters")},
         {QStringLiteral("map_tier"), QStringLiteral("map_filters")},
         {QStringLiteral("indexed"), QStringLiteral("trade_filters")},
         {QStringLiteral("sale_type"), QStringLiteral("trade_filters")},
@@ -97,7 +101,21 @@ private:
 
 } // namespace
 
-QVector<PriceCurrency> priceCurrencies(Game g)
+QVector<TradeChoice> indexedChoices()
+{
+    return {{QString(), QStringLiteral("언제든")},
+            {QStringLiteral("1hour"), QStringLiteral("1시간 전까지")},
+            {QStringLiteral("3hours"), QStringLiteral("3시간 전까지")},
+            {QStringLiteral("12hours"), QStringLiteral("12시간 전까지")},
+            {QStringLiteral("1day"), QStringLiteral("1일 전까지")},
+            {QStringLiteral("3days"), QStringLiteral("3일 전까지")},
+            {QStringLiteral("1week"), QStringLiteral("1주일 전까지")},
+            {QStringLiteral("2weeks"), QStringLiteral("2주일 전까지")},
+            {QStringLiteral("1month"), QStringLiteral("1달 전까지")},
+            {QStringLiteral("2months"), QStringLiteral("2달 전까지")}};
+}
+
+QVector<TradeChoice> priceCurrencies(Game g)
 {
     // 카카오 거래소 /api/trade(2)/data/filters 의 price 옵션 표기 그대로 (자주 쓰는 것만)
     if (g == Game::Poe2) {
@@ -123,7 +141,11 @@ QString QueryBuilder::indexedFromDays(int days)
         return QStringLiteral("3days");
     if (days < 14)
         return QStringLiteral("1week");
-    return QStringLiteral("2weeks");
+    if (days < 30)
+        return QStringLiteral("2weeks");
+    if (days < 60)
+        return QStringLiteral("1month");
+    return QStringLiteral("2months");
 }
 
 QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
@@ -173,10 +195,15 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
             break;
         }
     }
-    if (r.corrupted == 1)
-        fs.add(QStringLiteral("corrupted"), option(QStringLiteral("true")));
-    else if (r.corrupted == 2)
-        fs.add(QStringLiteral("corrupted"), option(QStringLiteral("false")));
+    auto yesNo = [&](const QString& filter, int v) {
+        if (v == 1)
+            fs.add(filter, option(QStringLiteral("true")));
+        else if (v == 2)
+            fs.add(filter, option(QStringLiteral("false")));
+    };
+    yesNo(QStringLiteral("corrupted"), r.corrupted);
+    yesNo(QStringLiteral("twice_corrupted"), r.twiceCorrupted);
+    yesNo(QStringLiteral("mutated"), r.mutated);
     if (r.synthesised && r.game == Game::Poe1)
         fs.add(QStringLiteral("synthesised_item"), option(QStringLiteral("true")));
     if (r.blighted)

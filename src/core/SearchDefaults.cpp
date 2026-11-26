@@ -40,6 +40,8 @@ ItemFilterState defaultFilterState(const ParsedItem& it)
     if (it.links > 0)
         s.linksMin = it.links;
     s.corrupted = it.corruptDefault;
+    s.twiceCorrupted = it.twiceCorruptDefault;
+    s.mutated = it.mutatedDefault;
     s.rarity = it.rarityFilter;
     s.byCategory = it.byCategory;
     s.influences = it.influences;
@@ -165,6 +167,8 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
     r.levelMin = st.levelMin;
     r.levelMax = st.levelMax;
     r.corrupted = st.corrupted;
+    r.twiceCorrupted = st.corrupted == 2 ? 0 : st.twiceCorrupted;
+    r.mutated = st.mutated;
     r.synthesised = st.synthesised;
     r.blighted = st.blighted;
     r.blightRavaged = st.blightRavaged;

@@ -274,9 +274,17 @@ void MainPopup::buildUi()
     m_special1 = new QCheckBox(QStringLiteral("결합"), m_miscBox);
     m_special2 = new QCheckBox(QStringLiteral("역병 침식"), m_miscBox);
     m_corrupt = new QComboBox(m_miscBox);
-    m_corrupt->addItem(QStringLiteral("타락: 무관"));
-    m_corrupt->addItem(QStringLiteral("타락: 예"));
-    m_corrupt->addItem(QStringLiteral("타락: 아니오"));
+    // data = 타락 + 두 번 타락*10 (각각 0 무관 / 1 예 / 2 아니오)
+    m_corrupt->addItem(QStringLiteral("타락: 무관"), 0);
+    m_corrupt->addItem(QStringLiteral("타락: 예"), 1);
+    m_corrupt->addItem(QStringLiteral("타락: 아니오"), 2);
+    m_corrupt->addItem(QStringLiteral("타락: 한 번만"), 1 + 2 * 10);
+    m_corrupt->addItem(QStringLiteral("타락: 두 번"), 1 + 1 * 10);
+    m_corrupt->setToolTip(QStringLiteral("한 번만 = 두 번 타락 제외 / 두 번 = 두 번 타락만"));
+    m_mutated = new QComboBox(m_miscBox); // 이름은 게임별로 renderMisc 에서
+    m_mutated->addItem(QString(), 0);
+    m_mutated->addItem(QString(), 1);
+    m_mutated->addItem(QString(), 2);
     m_infl1 = new QComboBox(m_miscBox);
     m_infl2 = new QComboBox(m_miscBox);
     for (QComboBox* c : {m_infl1, m_infl2}) {
@@ -293,6 +301,7 @@ void MainPopup::buildUi()
     row2->addWidget(m_infl1);
     row2->addWidget(m_infl2);
     row2->addWidget(m_alt);
+    row2->addWidget(m_mutated);
     row2->addWidget(m_corrupt);
     g->addLayout(row2, 1, 0, 1, 3);
     p1->addWidget(m_miscBox);
@@ -316,35 +325,43 @@ void MainPopup::buildUi()
     m_prices->setAlternatingRowColors(true);
     m_prices->setWordWrap(false);
     p2->addWidget(m_prices, 1);
-    auto* pr = new QHBoxLayout;
     m_priceCount = new QLabel(page2);
-    pr->addWidget(m_priceCount, 1);
-    m_status = new QComboBox(page2);
+    p2->addWidget(m_priceCount);
+    m_tabs->addTab(page2, QStringLiteral("자세히"));
+
+    root->addWidget(m_tabs, 1);
+
+    // 거래 조건 줄 (두 탭 공용). 거래소 사이트 순서: 화폐 / 판매 방식 / 등록 기간
+    auto* pr = new QHBoxLayout;
+    m_currency = new QComboBox(this); // 게임별 목록은 setItem 에서 채움
+    m_currency->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    m_currency->setToolTip(QStringLiteral("가격 화폐 (등가물 = 모든 화폐. 색채 같은 잡화폐로 올린 매물을 거르려면 기준 화폐/신성만)"));
+    pr->addWidget(m_currency);
+    m_status = new QComboBox(this);
     m_status->addItem(QStringLiteral("즉시 구입만"), QStringLiteral("securable"));
     m_status->addItem(QStringLiteral("즉시 구입+직접"), QStringLiteral("available"));
     m_status->addItem(QStringLiteral("직접(접속 중)"), QStringLiteral("online"));
     m_status->addItem(QStringLiteral("전부"), QStringLiteral("any"));
     m_status->setToolTip(QStringLiteral("판매 방식"));
     pr->addWidget(m_status);
-    m_currency = new QComboBox(page2); // 게임별 목록은 setItem 에서 채움
-    m_currency->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-    m_currency->setToolTip(QStringLiteral("가격 화폐 (등가물 = 모든 화폐. 색채 같은 잡화폐로 올린 매물을 거르려면 기준 화폐/신성만)"));
-    pr->addWidget(m_currency);
-    m_collapse = new QCheckBox(QStringLiteral("계정별 묶기"), page2);
+    m_indexed = new QComboBox(this);
+    for (const TradeChoice& c : indexedChoices())
+        m_indexed->addItem(c.text, c.id);
+    m_indexed->setToolTip(QStringLiteral("등록 기간 (기본값은 설정 > 등록일 제한)"));
+    pr->addWidget(m_indexed);
+    pr->addStretch(1);
+    m_collapse = new QCheckBox(QStringLiteral("계정별 묶기"), this);
     pr->addWidget(m_collapse);
-    pr->addWidget(new QLabel(QStringLiteral("최소:"), page2));
-    m_priceMin = numEdit(page2, 44);
+    pr->addWidget(new QLabel(QStringLiteral("최소:"), this));
+    m_priceMin = numEdit(this, 44);
     m_priceMin->setToolTip(QStringLiteral("최소 가격 (PoE1 카오스 / PoE2 엑잘티드 환산)"));
     pr->addWidget(m_priceMin);
-    m_listCount = new QComboBox(page2);
+    m_listCount = new QComboBox(this);
     for (int n : {10, 20, 40, 60, 80})
         m_listCount->addItem(QStringLiteral("%1개").arg(n), n);
     m_listCount->setToolTip(QStringLiteral("목록 수 (많을수록 느림)"));
     pr->addWidget(m_listCount);
-    p2->addLayout(pr);
-    m_tabs->addTab(page2, QStringLiteral("자세히"));
-
-    root->addWidget(m_tabs, 1);
+    root->addLayout(pr);
 
     // 시세 줄
     m_price = new QPushButton(this);
@@ -391,7 +408,7 @@ void MainPopup::buildUi()
         }
     });
     auto stale = [this]() { markStale(); };
-    for (QComboBox* c : {m_rarity, m_server, m_corrupt, m_infl1, m_infl2, m_alt, m_status, m_currency, m_listCount})
+    for (QComboBox* c : {m_rarity, m_server, m_corrupt, m_mutated, m_infl1, m_infl2, m_alt, m_status, m_currency, m_indexed, m_listCount})
         connect(c, qOverload<int>(&QComboBox::currentIndexChanged), this, stale);
     for (QCheckBox* c : {m_lv, m_q, m_sock, m_special1, m_special2, m_byCategory, m_collapse})
         connect(c, &QCheckBox::toggled, this, stale);
@@ -567,7 +584,9 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     if (it.itemLevel > 0)
         sub << QStringLiteral("ilvl %1").arg(it.itemLevel);
     if (it.corrupted)
-        sub << QStringLiteral("타락");
+        sub << (it.twiceCorrupted ? QStringLiteral("두 번 타락") : QStringLiteral("타락"));
+    if (it.foulborn)
+        sub << QStringLiteral("삿된");
     m_sub->setText(sub.join(QStringLiteral(" · ")));
 
     {
@@ -638,14 +657,16 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     m_prices->setColumnCount(0);
     m_priceCount->clear();
     {
-        QSignalBlocker b1(m_listCount), b2(m_status), b3(m_collapse), b4(m_currency);
+        QSignalBlocker b1(m_listCount), b2(m_status), b3(m_collapse), b4(m_currency), b5(m_indexed);
+        const int ii = m_indexed->findData(QueryBuilder::indexedFromDays(cfg.searchBeforeDay));
+        m_indexed->setCurrentIndex(ii < 0 ? 0 : ii);
         const int lc = m_listCount->findData(cfg.searchListCount);
         m_listCount->setCurrentIndex(lc < 0 ? 1 : lc);
         const int si = m_status->findData(cfg.tradeStatus);
         m_status->setCurrentIndex(si < 0 ? 0 : si);
         m_collapse->setChecked(cfg.collapseListings);
         m_currency->clear();
-        for (const PriceCurrency& pc : priceCurrencies(it.game))
+        for (const TradeChoice& pc : priceCurrencies(it.game))
             m_currency->addItem(pc.text, pc.id);
         const QString cur = cfg.priceCurrencyFor(it.game);
         int ci = m_currency->findData(cur);
@@ -711,7 +732,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
                   : kind == SearchRequest::LevelKind::MapTier ? QStringLiteral("지도 등급")
                                                                : QStringLiteral("아이템 레벨"));
     auto setOpt = [](QLineEdit* e, const OptDouble& v) { e->setText(v ? QString::number(*v) : QString()); };
-    QSignalBlocker b1(m_lv), b2(m_q), b3(m_sock), b4(m_special1), b5(m_special2), b6(m_corrupt), b7(m_infl1),
+    QSignalBlocker b1(m_lv), b2(m_q), b3(m_sock), b4(m_special1), b5(m_special2), b6(m_corrupt), b6b(m_mutated), b7(m_infl1),
         b8(m_infl2), b9(m_alt), b10(m_byCategory), b11(m_rarity);
     m_lv->setChecked(st.useLevel);
     setOpt(m_lvMin, st.levelMin);
@@ -740,8 +761,21 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     m_special2->setVisible(mapP1);
     m_special2->setChecked(st.blightRavaged);
 
-    m_corrupt->setCurrentIndex(st.corrupted);
+    {
+        const int twice = st.corrupted == 1 ? st.twiceCorrupted : 0;
+        const int ci = m_corrupt->findData(st.corrupted + twice * 10);
+        m_corrupt->setCurrentIndex(ci < 0 ? 0 : ci);
+    }
     setBold(m_corrupt, it.corrupted, QStringLiteral("#8B0000"));
+
+    // 삿된(PoE1) / 함양된 바알 고유(PoE2): 같은 거래소 필터(mutated), 고유만
+    const QString mu = poe1 ? QStringLiteral("삿된") : QStringLiteral("함양된 바알");
+    m_mutated->setItemText(0, mu + QStringLiteral(": 무관"));
+    m_mutated->setItemText(1, mu + QStringLiteral(": 예"));
+    m_mutated->setItemText(2, mu + QStringLiteral(": 아니오"));
+    m_mutated->setCurrentIndex(qBound(0, st.mutated, 2));
+    m_mutated->setVisible(it.rarityId == QStringLiteral("unique"));
+    setBold(m_mutated, it.foulborn, QStringLiteral("#8B0000"));
 
     const bool showInfl = poe1 && it.isGear;
     m_infl1->setVisible(showInfl);
@@ -794,7 +828,12 @@ ItemFilterState MainPopup::collectState() const
     s.socketsMax = toOpt(m_sMax);
     s.linksMin = m_item.game == Game::Poe1 ? toOpt(m_lMin) : std::nullopt;
     s.linksMax = m_item.game == Game::Poe1 ? toOpt(m_lMax) : std::nullopt;
-    s.corrupted = m_corrupt->currentIndex();
+    {
+        const int v = m_corrupt->currentData().toInt();
+        s.corrupted = v % 10;
+        s.twiceCorrupted = v / 10;
+    }
+    s.mutated = m_mutated->isHidden() ? 0 : m_mutated->currentIndex();
     s.rarity = m_rarity->currentData().toString();
     s.byCategory = m_byCategory->isChecked();
     s.influences.clear();
@@ -846,6 +885,11 @@ QString MainPopup::tradeStatus() const
 QString MainPopup::priceCurrency() const
 {
     return m_currency->currentData().toString();
+}
+
+QString MainPopup::indexed() const
+{
+    return m_indexed->currentData().toString();
 }
 
 QString MainPopup::exchangeWant() const

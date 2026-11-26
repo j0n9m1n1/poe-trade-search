@@ -17,7 +17,9 @@ struct ItemFilterState {
     OptDouble qualityMin, qualityMax;
     bool useSockets = false;
     OptDouble socketsMin, socketsMax, linksMin, linksMax;
-    int corrupted = 0;
+    int corrupted = 0;      // 0 any / 1 yes / 2 no
+    int twiceCorrupted = 0; // 0 any / 1 yes / 2 no
+    int mutated = 0;        // 삿된(PoE1) / 함양된 바알 고유(PoE2) 0 any / 1 yes / 2 no
     QString rarity;
     bool byCategory = false;
     QVector<int> influences; // Keywords::influences() 인덱스
