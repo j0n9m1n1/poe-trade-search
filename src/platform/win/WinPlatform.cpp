@@ -210,6 +210,11 @@ bool isAdministrator()
     return member != FALSE;
 }
 
+bool mouseButtonDown()
+{
+    return isDown(VK_LBUTTON) || isDown(VK_RBUTTON) || isDown(VK_MBUTTON);
+}
+
 int qtKeyToVk(int qtKey)
 {
     return keys::qtKeyToVk(qtKey);

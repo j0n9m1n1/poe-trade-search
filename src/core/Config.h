@@ -12,7 +12,7 @@ namespace pts {
 struct Shortcut {
     int keycode = 0;   // Windows VK 코드 (원본 Config.txt 와 같음)
     int modifiers = 0; // 1=Alt 2=Ctrl 4=Shift 8=Win (RegisterHotKey MOD_* 와 같음)
-    QString value;     // "{Run}", "{Pause}", "{Restart}", "{Link}URL{Link}", "{Enter}/hideout{Enter}" ...
+    QString value;     // "{Run}", "{Last}", "{Pause}", "{Restart}", "{Link}URL{Link}", "{Enter}/hideout{Enter}" ...
 };
 
 // 원본 Config.txt 포맷 호환 + 확장 키
@@ -39,13 +39,15 @@ struct Config {
     QString game = QStringLiteral("auto"); // auto / poe1 / poe2
     QString tradeStatus = QStringLiteral("available");
     int dataMaxAgeDays = 7;
-    bool autoPriceCheck = false; // 창 뜰 때 바로 시세 조회 (원본: search_auto_delay > 0)
+    bool autoPriceCheck = true;  // 창 뜰 때 바로 시세 조회 (원본: search_auto_delay > 0)
+    bool popupNearCursor = true; // 커서 근처에 띄움 (false 면 마지막 위치)
+    bool closeOnOutsideClick = true; // 팝업 바깥을 누르면 닫음
     int searchStatRange = 10;    // 옵션 최소값을 값의 N% 낮춰서 채움 (0 = 정확값)
     bool collapseListings = true; // 시세 조회 시 계정별 묶기
 
     QVector<Shortcut> shortcuts;
 
-    static constexpr int kConfigVersion = 2;
+    static constexpr int kConfigVersion = 3;
     int configVersion = kConfigVersion;
     bool migrated = false; // load 때 마이그레이션 했으면 true -> 저장 필요
 

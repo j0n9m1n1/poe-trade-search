@@ -4,6 +4,7 @@
 [phiDelPark/PoeTradeSearch](https://github.com/phiDelPark/PoeTradeSearch) (C#/WPF, 3.16 기준)를 C++17 / Qt 6 로 다시 짠 것이고, 현행 PoE1 + PoE2 거래소 API 기준으로 맞춤.
 
 - 라이선스: **GPL-3.0** (원본이 GPL-3.0 이라 파생 저작물도 GPL-3.0). `LICENSE` 참고.
+- 아이콘은 이 프로젝트에서 새로 그림 (`resources/app.svg` → `make_icon` 으로 `app.ico`/`app.png` 생성). 원본 아이콘은 안 씀.
 - 원본 대비 바뀐 점 / 뺀 기능 전체 목록: [`docs/FEATURES.md`](docs/FEATURES.md)
 
 ## 1차 버전 기능
@@ -11,6 +12,9 @@
 - PoE1 / PoE2 둘 다. 게임 창 제목(`Path of Exile 2`)으로 자동 구분 (설정에서 고정 가능)
 - 한국어 / 영어 클라이언트 둘 다. 한글 아이템은 카카오(`poe.kakaogames.com`), 영문은 글로벌(`www.pathofexile.com`)
 - Ctrl+C 클립보드 감시 (PoE 창이 앞에 있을 때만), 또는 `{Run}` 단축키로 Ctrl+Alt+C 주입
+- 창은 마우스 커서 근처에 뜨고 바로 시세 조회 시작. 창 바깥을 누르면 닫힘
+  - 실수로 닫았으면 트레이 아이콘 클릭 / `{Last}` 단축키로 다시 열기
+  - 직전 아이템 이름·추정가를 위에 한 줄로 보여주고, "직전 보기" 로 시세 표까지 바꿔 볼 수 있음
 - 옵션 → 거래소 stat 자동 매칭 (로컬 옵션, 다중 줄, 성단 주얼 인챈트, 변형 젬, 룬/훼손 옵션 포함)
   - 게임 문구가 거래소 문구랑 다른 경우(숫자 없는 100% 옵션, "감소" 표기 등)는 APT/EE2 매처 데이터로 보정
 - 옵션 값 완화: 최소값을 값의 N%(기본 10%) 낮춰서 채움, 낮을수록 좋은 옵션은 최대값 쪽. 고유는 롤 범위 폭 기준
@@ -34,7 +38,14 @@
 뺀 것: 위키/닌자 링크, 이미지 팝업, 창고 좌표 그리드, Ctrl+휠 창고 탭 이동, POESESSID 특수 창고 시세, 자동 업데이트.
 다른 툴(APT, PoE Overlay 등) 비교와 다음 채택 후보: [`docs/REFERENCE.md`](docs/REFERENCE.md)
 
-예전 설정 파일(`Config.txt`)은 처음 실행할 때 자동으로 고쳐짐: `{Wiki}` / poe.ninja 링크 단축키 삭제, `/hideout`·`/exit` 추가 (키가 겹치면 키 없이 추가 → 설정에서 지정).
+예전 설정 파일(`Config.txt`)은 처음 실행할 때 자동으로 고쳐짐: `{Wiki}` / poe.ninja 링크 단축키 삭제, `/hideout`·`/exit`·`{Last}` 추가 (키가 겹치면 키 없이 추가 → 설정에서 지정), 뜨자마자 시세 조회 켜짐.
+
+아이콘을 고치려면 `resources/app.svg` 수정 후:
+
+```sh
+cmake -S . -B build -DPTS_BUILD_TOOLS=ON && cmake --build build --target make_icon
+QT_QPA_PLATFORM=offscreen ./build/make_icon resources/app.svg resources/app.ico resources/app.png
+```
 
 ## 빌드 (Windows)
 

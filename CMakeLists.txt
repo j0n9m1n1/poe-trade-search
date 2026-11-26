@@ -75,6 +75,13 @@ endif()
 add_executable(pts_cli tools/pts_cli.cpp)
 target_link_libraries(pts_cli PRIVATE pts_core)
 
+# ---- 아이콘 생성기 (resources/app.svg -> app.ico/app.png, 결과물은 저장소에 커밋됨)
+option(PTS_BUILD_TOOLS "Build maintenance tools (make_icon)" OFF)
+if(PTS_BUILD_TOOLS)
+    add_executable(make_icon tools/make_icon.cpp)
+    target_link_libraries(make_icon PRIVATE Qt6::Gui)
+endif()
+
 # ---- 테스트
 if(PTS_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)

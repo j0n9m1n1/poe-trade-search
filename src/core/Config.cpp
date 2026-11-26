@@ -13,6 +13,7 @@ Config Config::defaults()
     Config c;
     c.shortcuts = {
         {0, 0, QStringLiteral("{Run} 작동 (기본값: Ctrl+C)")},
+        {0, 0, QStringLiteral("{Last} 마지막 창 다시 열기")},
         {113, 0, QStringLiteral("{Enter}/hideout{Enter}")}, // F2 은신처
         {115, 0, QStringLiteral("{Enter}/exit{Enter}")},    // F4 로그아웃 (캐릭터 선택)
         {122, 0, QStringLiteral("{Restart} 프로그램 재시작")},
@@ -52,6 +53,15 @@ void Config::migrate()
         if (!has(QStringLiteral("/exit")))
             keep.push_back({keyUsed(115) ? 0 : 115, 0, QStringLiteral("{Enter}/exit{Enter}")});
         shortcuts = keep;
+    }
+    if (configVersion < 3) {
+        // v3: 단축키로 뜨면 바로 시세 조회, 마지막 창 다시 열기 명령 추가
+        autoPriceCheck = true;
+        bool hasLast = false;
+        for (const Shortcut& s : shortcuts)
+            hasLast = hasLast || s.value.toLower().startsWith(QStringLiteral("{last}"));
+        if (!hasLast)
+            shortcuts.insert(qMin<qsizetype>(1, shortcuts.size()), {0, 0, QStringLiteral("{Last} 마지막 창 다시 열기")});
     }
     configVersion = kConfigVersion;
     migrated = true;
@@ -104,7 +114,9 @@ bool Config::load(const QString& path, QString* error)
     game = s("game", d.game);
     tradeStatus = s("trade_status", d.tradeStatus);
     dataMaxAgeDays = i("data_max_age_days", d.dataMaxAgeDays);
-    autoPriceCheck = b("auto_price_check", searchAutoDelay > 0);
+    autoPriceCheck = b("auto_price_check", d.autoPriceCheck);
+    popupNearCursor = b("popup_near_cursor", d.popupNearCursor);
+    closeOnOutsideClick = b("close_on_outside_click", d.closeOnOutsideClick);
     searchStatRange = qBound(0, i("search_stat_range", d.searchStatRange), 50);
     collapseListings = b("collapse_listings", d.collapseListings);
 
@@ -139,6 +151,8 @@ bool Config::save(const QString& path, QString* error) const
     o.insert(QStringLiteral("trade_status"), tradeStatus);
     o.insert(QStringLiteral("search_auto_delay"), searchAutoDelay);
     o.insert(QStringLiteral("auto_price_check"), autoPriceCheck);
+    o.insert(QStringLiteral("popup_near_cursor"), popupNearCursor);
+    o.insert(QStringLiteral("close_on_outside_click"), closeOnOutsideClick);
     o.insert(QStringLiteral("search_list_count"), searchListCount);
     o.insert(QStringLiteral("search_stat_range"), searchStatRange);
     o.insert(QStringLiteral("collapse_listings"), collapseListings);

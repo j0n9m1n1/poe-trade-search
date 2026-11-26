@@ -377,6 +377,9 @@ private slots:
         QVERIFY(!vals.join(QLatin1Char('|')).contains(QStringLiteral("poe.ninja")));
         QVERIFY(vals.contains(QStringLiteral("{Enter}/hideout{Enter}")));
         QVERIFY(vals.contains(QStringLiteral("{Enter}/exit{Enter}")));
+        QVERIFY(vals.join(QLatin1Char('|')).contains(QStringLiteral("{Last}")));
+        QVERIFY(c.autoPriceCheck); // v3: 뜨자마자 시세 조회
+        QCOMPARE(c.configVersion, Config::kConfigVersion);
         for (const auto& s : c.shortcuts) {
             if (s.value == QStringLiteral("{Enter}/hideout{Enter}"))
                 QCOMPARE(s.keycode, 0); // F2 는 이미 {Restart} 가 써서 비워둠

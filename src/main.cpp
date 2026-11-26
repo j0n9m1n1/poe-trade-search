@@ -92,16 +92,26 @@ int main(int argc, char** argv)
         return 2;
     }
     // 개발용: PTS_DEV_ITEM=<아이템 텍스트 파일> [PTS_DEV_SHOT=<png>] 로 팝업 확인
-    const QString devItem = qEnvironmentVariable("PTS_DEV_ITEM");
-    if (!devItem.isEmpty()) {
-        QFile f(devItem);
-        if (f.open(QIODevice::ReadOnly)) {
+    // PTS_DEV_ITEM 에 ';' 로 여러 파일 주면 PTS_DEV_STEP(ms) 간격으로 차례로 띄움, PTS_DEV_SWAP=1 이면 찍기 전에 직전 보기
+    const QStringList devItems = qEnvironmentVariable("PTS_DEV_ITEM").split(QLatin1Char(';'), Qt::SkipEmptyParts);
+    if (!devItems.isEmpty()) {
+        const int step = qEnvironmentVariableIsSet("PTS_DEV_STEP") ? qEnvironmentVariableIntValue("PTS_DEV_STEP") : 300;
+        int at = 300;
+        for (const QString& path : devItems) {
+            QFile f(path);
+            if (!f.open(QIODevice::ReadOnly))
+                continue;
             const QString text = QString::fromUtf8(f.readAll());
-            QTimer::singleShot(300, &a, [&a, text]() { a.devShowItem(text); });
+            QTimer::singleShot(at, &a, [&a, text]() { a.devShowItem(text); });
+            at += step;
+        }
+        {
             const QString shot = qEnvironmentVariable("PTS_DEV_SHOT");
             if (!shot.isEmpty()) {
                 const int delay = qEnvironmentVariableIsSet("PTS_DEV_SHOT_DELAY") ? qEnvironmentVariableIntValue("PTS_DEV_SHOT_DELAY") : 1500;
-                QTimer::singleShot(delay, &a, [&a, shot]() {
+                QTimer::singleShot(at + delay, &a, [&a, shot]() {
+                    if (qEnvironmentVariableIntValue("PTS_DEV_SWAP") == 1)
+                        a.devSwap();
                     if (QWidget* w = a.popupWidget()) {
                         if (qEnvironmentVariableIsSet("PTS_DEV_TAB")) {
                             if (auto* tabs = w->findChild<QTabWidget*>())

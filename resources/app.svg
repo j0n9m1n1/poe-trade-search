@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- POE 거래소 검색 아이콘 (이 프로젝트 자체 제작, GPL-3.0) -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b3142"/>
+      <stop offset="1" stop-color="#0f1219"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8dc8c"/>
+      <stop offset="0.55" stop-color="#d9a441"/>
+      <stop offset="1" stop-color="#8f5d15"/>
+    </linearGradient>
+    <radialGradient id="orb" cx="0.36" cy="0.32" r="0.8">
+      <stop offset="0" stop-color="#fff4c8"/>
+      <stop offset="0.3" stop-color="#ffbf47"/>
+      <stop offset="0.75" stop-color="#d1660f"/>
+      <stop offset="1" stop-color="#7a2a06"/>
+    </radialGradient>
+    <radialGradient id="lens" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#1a2030"/>
+      <stop offset="1" stop-color="#07090d"/>
+    </radialGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="52" ry="52" fill="url(#bg)" stroke="#c9963a" stroke-width="8"/>
+  <!-- 손잡이 -->
+  <line x1="152" y1="152" x2="210" y2="210" stroke="#5b3a0c" stroke-width="40" stroke-linecap="round"/>
+  <line x1="152" y1="152" x2="210" y2="210" stroke="url(#gold)" stroke-width="28" stroke-linecap="round"/>
+  <!-- 렌즈 -->
+  <circle cx="110" cy="110" r="72" fill="url(#lens)" stroke="url(#gold)" stroke-width="20"/>
+  <!-- 오브 -->
+  <circle cx="110" cy="110" r="42" fill="url(#orb)"/>
+  <ellipse cx="96" cy="92" rx="17" ry="11" fill="#ffffff" fill-opacity="0.6"/>
+  <!-- 시세 화살표 -->
+  <path d="M 74 150 L 98 128 L 116 140 L 146 108" fill="none" stroke="#7ee08a" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 132 106 L 148 104 L 146 120 Z" fill="#7ee08a"/>
+</svg>

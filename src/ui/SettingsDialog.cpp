@@ -104,9 +104,15 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_collapse->setChecked(cfg.collapseListings);
     f->addRow(m_collapse);
 
-    m_autoPrice = new QCheckBox(QStringLiteral("창이 뜨면 바로 시세 조회 (레이트 리밋 주의)"), basic);
+    m_autoPrice = new QCheckBox(QStringLiteral("창이 뜨면 바로 시세 조회"), basic);
     m_autoPrice->setChecked(cfg.autoPriceCheck);
     f->addRow(m_autoPrice);
+    m_nearCursor = new QCheckBox(QStringLiteral("창을 마우스 커서 근처에 띄우기 (끄면 마지막 위치)"), basic);
+    m_nearCursor->setChecked(cfg.popupNearCursor);
+    f->addRow(m_nearCursor);
+    m_outsideClose = new QCheckBox(QStringLiteral("창 바깥을 누르면 닫기 ({Last} 단축키/트레이로 다시 열기)"), basic);
+    m_outsideClose->setChecked(cfg.closeOnOutsideClick);
+    f->addRow(m_outsideClose);
     m_unique = new QCheckBox(QStringLiteral("고유 아이템은 옵션 전부 체크"), basic);
     m_unique->setChecked(cfg.autoCheckUnique);
     f->addRow(m_unique);
@@ -165,7 +171,7 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     auto* keys = new QWidget(tabs);
     auto* kl = new QVBoxLayout(keys);
     auto* help = new QLabel(QStringLiteral("PoE 창이 활성일 때만 동작. 값 예시:\n"
-                                           "  {Run} 아이템 검색 (키 지정하면 Ctrl+C 클립보드 감시는 꺼짐)\n"
+                                           "  {Run} 아이템 검색 (키 지정하면 Ctrl+C 클립보드 감시는 꺼짐)   {Last} 마지막 창 다시 열기\n"
                                            "  {Enter}/hideout{Enter} 은신처   {Enter}/exit{Enter} 로그아웃(캐릭터 선택)\n"
                                            "  ^{Enter}고마워{Enter} 마지막 귓말에 답장 (키 한 번에 명령 하나)\n"
                                            "  {Pause} 일시정지   {Restart} 재시작   {Link}URL{Link} 링크 열기"),
@@ -274,6 +280,8 @@ Config SettingsDialog::result() const
     c.searchStatRange = m_statRange->value();
     c.collapseListings = m_collapse->isChecked();
     c.autoPriceCheck = m_autoPrice->isChecked();
+    c.popupNearCursor = m_nearCursor->isChecked();
+    c.closeOnOutsideClick = m_outsideClose->isChecked();
     c.searchAutoDelay = c.autoPriceCheck ? qMax(c.searchAutoDelay, 1) : 0;
     c.autoCheckUnique = m_unique->isChecked();
     c.autoSelectPseudo = m_pseudo->isChecked();

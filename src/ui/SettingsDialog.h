@@ -54,6 +54,8 @@ private:
     QSpinBox* m_timeout;
     QSpinBox* m_dataAge;
     QCheckBox* m_autoPrice;
+    QCheckBox* m_nearCursor;
+    QCheckBox* m_outsideClose;
     QCheckBox* m_unique;
     QCheckBox* m_pseudo;
     QCheckBox* m_totalres;

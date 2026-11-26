@@ -16,6 +16,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
+#include <QCursor>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
@@ -46,6 +47,11 @@ Application::Application(const QString& dataDir, QObject* parent) : QObject(pare
 QWidget* Application::popupWidget() const
 {
     return m_popup;
+}
+
+void Application::devSwap()
+{
+    m_popup->swapWithPrevious();
 }
 
 Application::~Application()
@@ -109,15 +115,26 @@ bool Application::start(QString* error)
     connect(m_popup, &MainPopup::rememberToggled, this, &Application::onRemember);
     connect(m_popup, &MainPopup::popupHidden, this, [this]() {
         m_popupPos = m_popup->pos();
+        m_clickTimer.stop();
         m_client->cancel(m_priceToken);
         if (m_hotkeys->has(kEscId))
             m_hotkeys->remove(kEscId);
     });
+    connect(m_popup, &MainPopup::itemSwapped, this, [this]() { m_client->cancel(m_priceToken); });
+    m_clickTimer.setInterval(30);
+    connect(&m_clickTimer, &QTimer::timeout, this, &Application::checkOutsideClick);
 
     // ---- 트레이
-    m_tray = new QSystemTrayIcon(QIcon(QStringLiteral(":/icons/app.ico")), this);
+    const QIcon appIcon(QStringLiteral(":/icons/app.png"));
+    QApplication::setWindowIcon(appIcon);
+    m_tray = new QSystemTrayIcon(appIcon, this);
     m_tray->setToolTip(QStringLiteral("POE 거래소 검색 %1").arg(QStringLiteral(PTS_VERSION)));
+    connect(m_tray, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason r) {
+        if (r == QSystemTrayIcon::Trigger)
+            reopenLast();
+    });
     m_menu = new QMenu;
+    m_menu->addAction(QStringLiteral("마지막 창 다시 열기"), this, &Application::reopenLast);
     m_menu->addAction(QStringLiteral("설정"), this, &Application::openSettings);
     m_menu->addAction(QStringLiteral("PoE1 데이터 업데이트"), this, [this]() { updateGame(Game::Poe1); });
     m_menu->addAction(QStringLiteral("PoE2 데이터 업데이트"), this, [this]() { updateGame(Game::Poe2); });
@@ -321,6 +338,10 @@ void Application::onHotkey(int id)
         restart();
         return;
     }
+    if (lower.startsWith(QStringLiteral("{last}"))) {
+        reopenLast();
+        return;
+    }
     if (m_paused)
         return;
     if (lower.startsWith(kRun)) {
@@ -396,20 +417,71 @@ void Application::handleItemText(const QString& text)
         return;
     }
 
+    m_client->cancel(m_priceToken); // 앞 아이템 시세 조회 중이면 끊음
     m_popup->showItem(*it, &m_dbs[gi(g)], m_cfg, serverFor(it->lang));
     showIconFor(*it);
-    if (m_popupPos.isNull()) {
-        const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
-        m_popupPos = avail.topLeft() + QPoint(30, 30);
-    }
-    if (!m_popup->isVisible())
-        m_popup->move(m_popupPos);
-    platform::setNoActivate(m_popup, true);
-    m_popup->show();
-    m_popup->raise();
+    showPopup();
 
     if (m_cfg.autoPriceCheck)
         priceCheck();
+}
+
+void Application::showPopup()
+{
+    m_popup->adjustSize();
+    if (m_cfg.popupNearCursor) {
+        // 커서 오른쪽 (모자라면 왼쪽), 세로는 커서가 위쪽 1/3 쯤 오게. 화면 밖으로 안 나가게
+        const QPoint c = QCursor::pos();
+        QScreen* scr = QGuiApplication::screenAt(c);
+        if (!scr)
+            scr = QGuiApplication::primaryScreen();
+        const QRect a = scr->availableGeometry();
+        const QSize sz = m_popup->size() + QSize(16, 40); // 창 테두리/제목줄 여유
+        int x = c.x() + 24;
+        if (x + sz.width() > a.right())
+            x = c.x() - 24 - sz.width();
+        int y = c.y() - sz.height() / 3;
+        x = qBound(a.left(), x, qMax(a.left(), a.right() - sz.width()));
+        y = qBound(a.top(), y, qMax(a.top(), a.bottom() - sz.height()));
+        m_popup->move(x, y);
+    } else if (!m_popup->isVisible()) {
+        if (m_popupPos.isNull())
+            m_popupPos = QGuiApplication::primaryScreen()->availableGeometry().topLeft() + QPoint(30, 30);
+        m_popup->move(m_popupPos);
+    }
+    platform::setNoActivate(m_popup, true);
+    m_popup->show();
+    m_popup->raise();
+    m_shownAt.restart();
+    m_mouseWasDown = platform::mouseButtonDown();
+    m_clickTimer.start();
+}
+
+void Application::reopenLast()
+{
+    if (!m_popup->hasItem()) {
+        notify(QStringLiteral("다시 열 창이 없음"));
+        return;
+    }
+    showPopup();
+}
+
+void Application::checkOutsideClick()
+{
+    if (!m_popup->isVisible()) {
+        m_clickTimer.stop();
+        return;
+    }
+    const bool down = platform::mouseButtonDown();
+    const bool pressed = down && !m_mouseWasDown; // 누르는 순간만
+    m_mouseWasDown = down;
+    if (!pressed || !m_cfg.closeOnOutsideClick || m_shownAt.elapsed() < 250)
+        return;
+    // 콤보 펼침/메시지 상자/설정 창이 떠 있으면 건드리지 않음
+    if (QApplication::activePopupWidget() || QApplication::activeModalWidget())
+        return;
+    if (!m_popup->frameGeometry().contains(QCursor::pos()))
+        m_popup->hide();
 }
 
 void Application::showPopupMessage(const QString& title, const QString& msg)

@@ -10,6 +10,7 @@
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QComboBox>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -147,6 +148,20 @@ void MainPopup::buildUi()
     head->addWidget(m_icon, 0, Qt::AlignTop);
     head->addLayout(names, 1);
     root->addLayout(head);
+
+    // 직전 아이템 (비교 + 실수로 넘어갔을 때 되돌아가기)
+    m_prevBar = new QFrame(this);
+    static_cast<QFrame*>(m_prevBar)->setFrameShape(QFrame::StyledPanel);
+    auto* pb = new QHBoxLayout(m_prevBar);
+    pb->setContentsMargins(6, 2, 2, 2);
+    m_prevLabel = new QLabel(m_prevBar);
+    m_prevLabel->setTextFormat(Qt::PlainText);
+    m_prevBtn = new QPushButton(QStringLiteral("직전 보기"), m_prevBar);
+    m_prevBtn->setToolTip(QStringLiteral("직전 아이템으로 바꿔 보기 (다시 누르면 돌아옴)"));
+    pb->addWidget(m_prevLabel, 1);
+    pb->addWidget(m_prevBtn);
+    m_prevBar->setVisible(false);
+    root->addWidget(m_prevBar);
 
     auto* hdr = new QHBoxLayout;
     m_info = new QLabel(QStringLiteral("옵션"), this);
@@ -364,6 +379,7 @@ void MainPopup::buildUi()
     connect(m_close, &QPushButton::clicked, this, &QWidget::hide);
     connect(m_settings, &QPushButton::clicked, this, &MainPopup::settingsRequested);
     connect(m_price, &QPushButton::clicked, this, &MainPopup::priceCheckRequested);
+    connect(m_prevBtn, &QPushButton::clicked, this, &MainPopup::swapWithPrevious);
     connect(m_all, &QCheckBox::toggled, this, [this](bool on) {
         for (FilterRow* r : m_rows) {
             if (r->isPlain() && r->isCheckable())
@@ -451,10 +467,84 @@ int MainPopup::rangePct() const
 
 void MainPopup::showItem(const ParsedItem& parsed, const GameDb* gdb, const Config& cfg, Lang server)
 {
+    if (m_hasItem)
+        m_prev = snapshot();
+    m_cfg = cfg;
+    showItemImpl(parsed, gdb, server);
+    updatePrevBar();
+}
+
+MainPopup::Snapshot MainPopup::snapshot() const
+{
+    Snapshot s;
+    s.valid = m_hasItem;
+    s.parsed = m_parsed;
+    s.gdb = m_gdb;
+    s.server = server();
+    s.icon = m_curIcon;
+    s.headers = m_curHeaders;
+    s.hidden = m_curHidden;
+    s.rows = m_curRows;
+    s.summary = m_curSummary;
+    s.count = m_curCount;
+    s.tip = m_curTip;
+    s.priced = m_curPriced;
+    return s;
+}
+
+void MainPopup::restore(const Snapshot& s)
+{
+    showItemImpl(s.parsed, s.gdb, s.server);
+    if (!s.icon.isEmpty())
+        setIcon(s.icon);
+    if (s.priced) {
+        priceColumns(s.headers, s.hidden);
+        for (const PriceRow& r : s.rows)
+            priceAddRow(r.cells, r.dim, r.online, r.tip);
+        priceDone(s.summary, s.count, s.tip);
+    }
+}
+
+void MainPopup::swapWithPrevious()
+{
+    if (!m_prev.valid)
+        return;
+    const Snapshot cur = snapshot();
+    const Snapshot prev = m_prev;
+    restore(prev);
+    m_prev = cur;
+    updatePrevBar();
+    emit itemSwapped();
+}
+
+void MainPopup::updatePrevBar()
+{
+    m_prevBar->setVisible(m_prev.valid);
+    if (!m_prev.valid)
+        return;
+    const ParsedItem& p = m_prev.parsed;
+    QString name = p.rarityId == QStringLiteral("unique") && !p.name.isEmpty() ? p.name : (p.transfigured ? p.rawType : p.type);
+    const QString price = m_prev.priced ? m_prev.summary : QStringLiteral("시세 안 봄");
+    const QString text = QStringLiteral("직전: %1 · %2").arg(name, price);
+    m_prevLabel->setText(QFontMetrics(m_prevLabel->font()).elidedText(text, Qt::ElideRight, 480));
+    m_prevLabel->setToolTip(text);
+}
+
+void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang server)
+{
+    const Config& cfg = m_cfg;
     m_parsed = parsed;
     m_gdb = gdb;
     m_hasItem = true;
     m_cfgRange = cfg.searchStatRange;
+    m_curIcon.clear();
+    m_curHeaders.clear();
+    m_curHidden.clear();
+    m_curRows.clear();
+    m_curSummary.clear();
+    m_curCount.clear();
+    m_curTip.clear();
+    m_curPriced = false;
     const ParsedItem& it = m_parsed;
     const TradeDb* db = gdb ? &(*gdb)[it.lang] : nullptr;
     const bool poe1 = it.game == Game::Poe1;
@@ -755,12 +845,15 @@ void MainPopup::setIcon(const QString& imagePath)
     QPixmap px(imagePath);
     if (px.isNull())
         return;
+    m_curIcon = imagePath;
     m_icon->setPixmap(px.scaled(m_icon->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     m_icon->setVisible(true);
 }
 
 void MainPopup::priceBusy(const QString& msg)
 {
+    m_curRows.clear();
+    m_curPriced = false;
     m_prices->setRowCount(0);
     m_priceCount->clear();
     m_price->setToolTip(QStringLiteral("좌클릭: 시세 조회 / 우클릭: 시세 목록 탭"));
@@ -775,6 +868,9 @@ void MainPopup::priceStatus(const QString& msg)
 
 void MainPopup::priceColumns(const QStringList& headers, const QVector<int>& hidden)
 {
+    m_curHeaders = headers;
+    m_curHidden = hidden;
+    m_curRows.clear();
     m_prices->setRowCount(0);
     m_prices->setColumnCount(headers.size());
     m_prices->setHorizontalHeaderLabels(headers);
@@ -784,6 +880,7 @@ void MainPopup::priceColumns(const QStringList& headers, const QVector<int>& hid
 
 void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, const QString& tooltip)
 {
+    m_curRows.push_back({cells, dim, online, tooltip});
     const int r = m_prices->rowCount();
     m_prices->insertRow(r);
     const QColor dimC = dimColor(palette());
@@ -813,6 +910,10 @@ void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, cons
 
 void MainPopup::priceDone(const QString& summary, const QString& count, const QString& tooltip)
 {
+    m_curSummary = summary;
+    m_curCount = count;
+    m_curTip = tooltip;
+    m_curPriced = true;
     m_price->setStyleSheet(QStringLiteral("text-align:right; padding:2px;"));
     m_price->setText(summary);
     if (!tooltip.isEmpty())

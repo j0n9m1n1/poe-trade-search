@@ -3,6 +3,7 @@
 #include "platform/KeyNames.h"
 #include "platform/Platform.h"
 
+#include <QGuiApplication>
 #include <QWidget>
 
 namespace pts::platform {
@@ -40,6 +41,12 @@ void activateWindow(QWidget* w)
 bool isAdministrator()
 {
     return false;
+}
+
+bool mouseButtonDown()
+{
+    // 전역 마우스 상태를 못 읽음 -> 우리 창 위 클릭만 앎
+    return QGuiApplication::mouseButtons() != Qt::NoButton;
 }
 
 int qtKeyToVk(int qtKey)
