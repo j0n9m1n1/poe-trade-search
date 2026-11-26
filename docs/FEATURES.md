@@ -11,7 +11,7 @@
 
 | 영역 | 상태 |
 |---|---|
-| A 앱 기반 | A1 A2 A3 A4 A6 A7 A8 구현. A5(원작자 자동 업데이트) 삭제 |
+| A 앱 기반 | A1 A2 A3 A4 A6 A7 A8 구현. A5(원작자 자동 업데이트)는 이 저장소 GitHub Release 기반 업데이터로 대체 (알림/자동 설치 선택) |
 | B 아이템 감지 | B1 B2 B3 구현 (`{Run}` 은 Ctrl+Alt+C 로 복사해서 등급까지 읽음) |
 | C 파서 | 삭제 항목(C12 C18 C19 C20) 빼고 전부. PoE2 룬/훼손/룬 홈, 변형 젬, 삿된(Foulborn), 역병에 유린당한 지도 추가 |
 | D 쿼리 | 전부. 영향은 pseudo stat, 지도 영향 삭제, 변형 젬 discriminator, PoE2 필터 그룹(type_filters/equipment_filters) 대응 |
