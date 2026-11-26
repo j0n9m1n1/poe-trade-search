@@ -59,16 +59,12 @@ public:
 
     void setLeagueTitle(const QString& league);
 
-    bool hasPrevious() const { return m_prev.valid; }
-    void swapWithPrevious(); // 직전 아이템과 바꿔 보기
-
 signals:
     void openTradeRequested();
     void priceCheckRequested();
     void settingsRequested();
     void rememberToggled(const QString& statKey, const QString& top, bool on);
     void popupHidden();
-    void itemSwapped(); // 직전 아이템으로 바뀜 (진행 중 시세 조회 취소용)
 
 protected:
     void keyPressEvent(QKeyEvent* e) override;
@@ -77,29 +73,7 @@ protected:
     bool eventFilter(QObject* o, QEvent* e) override;
 
 private:
-    struct PriceRow {
-        QStringList cells;
-        bool dim = false;
-        int online = -1;
-        QString tip;
-    };
-    // 직전 아이템 보관용 (파서 결과 + 시세 결과 그대로)
-    struct Snapshot {
-        bool valid = false;
-        ParsedItem parsed;
-        const GameDb* gdb = nullptr;
-        Lang server = Lang::En;
-        QString icon;
-        QStringList headers;
-        QVector<int> hidden;
-        QVector<PriceRow> rows;
-        QString summary, count, tip;
-        bool priced = false;
-    };
-    Snapshot snapshot() const;
-    void restore(const Snapshot& s);
     void showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang server);
-    void updatePrevBar();
 
     void buildUi();
     void clearRows();
@@ -120,18 +94,6 @@ private:
     int m_cfgRange = 10;
     Config m_cfg;
 
-    // 현재 시세 결과 (스냅샷용 사본)
-    QString m_curIcon;
-    QStringList m_curHeaders;
-    QVector<int> m_curHidden;
-    QVector<PriceRow> m_curRows;
-    QString m_curSummary, m_curCount, m_curTip;
-    bool m_curPriced = false;
-    Snapshot m_prev;
-
-    QWidget* m_prevBar;
-    QLabel* m_prevLabel;
-    QPushButton* m_prevBtn;
 
     QComboBox* m_rarity;
     QComboBox* m_preset;

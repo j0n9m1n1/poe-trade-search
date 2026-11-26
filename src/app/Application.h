@@ -38,7 +38,6 @@ public:
 
     // 개발용: 아이템 텍스트를 클립보드 거치지 않고 바로 띄움
     void devShowItem(const QString& text) { handleItemText(text); }
-    void devSwap();
     QWidget* popupWidget() const;
 
 private:

@@ -50,11 +50,6 @@ QWidget* Application::popupWidget() const
     return m_popup;
 }
 
-void Application::devSwap()
-{
-    m_popup->swapWithPrevious();
-}
-
 Application::~Application()
 {
     if (m_hotkeys)
@@ -122,7 +117,6 @@ bool Application::start(QString* error)
         if (m_hotkeys->has(kEscId))
             m_hotkeys->remove(kEscId);
     });
-    connect(m_popup, &MainPopup::itemSwapped, this, [this]() { m_client->cancel(m_priceToken); });
     m_clickTimer.setInterval(30);
     connect(&m_clickTimer, &QTimer::timeout, this, &Application::checkOutsideClick);
 
