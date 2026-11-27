@@ -66,12 +66,14 @@ GameClickTarget gameClickTarget(POINT point, HWND hitWindow)
         return GameClickTarget::Game;
 
     const HWND foreground = GetForegroundWindow();
-    const HWND game = isPoeWindow(foreground) ? foreground : FindWindowW(kPoeClass, nullptr);
+    const bool poeForeground = isPoeWindow(foreground);
+    const HWND game = poeForeground ? foreground : FindWindowW(kPoeClass, nullptr);
     RECT bounds = {};
     if (!game || !GetWindowRect(game, &bounds) || !PtInRect(&bounds, point))
         return GameClickTarget::OutsideGame;
-    if (hitWindow && (GetWindowLongPtrW(hitWindow, GWL_EXSTYLE) & WS_EX_TOPMOST))
-        return GameClickTarget::Game; // 게임 영역 위의 항상 위 오버레이
+    // 게임이 전면에 있을 때만 게임 영역 위의 항상 위 오버레이를 게임 클릭으로 판정
+    if (poeForeground && hitWindow && (GetWindowLongPtrW(hitWindow, GWL_EXSTYLE) & WS_EX_TOPMOST))
+        return GameClickTarget::Game;
     return GameClickTarget::GameArea;
 }
 
@@ -171,6 +173,9 @@ void sendChat(const QString& text, bool replyToLastWhisper)
     if (replyToLastWhisper)
         pushKey(v, VK_CONTROL, true);
     SendInput(static_cast<UINT>(v.size()), v.data(), sizeof(INPUT));
+    // 빈 본문이면 채팅창(귓말 답장 등)만 열고 전송 Enter 는 생략
+    if (text.isEmpty())
+        return;
     Sleep(40);
 
     v.clear();
@@ -257,12 +262,13 @@ bool gameRunsElevated()
         return false;
     const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (!process)
-        return false;
+        return !isAdministrator() && GetLastError() == ERROR_ACCESS_DENIED;
     HANDLE token = nullptr;
     const BOOL opened = OpenProcessToken(process, TOKEN_QUERY, &token);
+    const DWORD tokenErr = opened ? ERROR_SUCCESS : GetLastError();
     CloseHandle(process);
     if (!opened)
-        return false;
+        return !isAdministrator() && tokenErr == ERROR_ACCESS_DENIED;
     TOKEN_ELEVATION elevation = {};
     DWORD size = 0;
     const BOOL read = GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &size);
