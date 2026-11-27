@@ -30,6 +30,10 @@ ItemFilterState defaultFilterState(const ParsedItem& it)
             s.levelMin = it.mapTier;
             s.levelMax = it.mapTier;
         }
+    } else if (it.ilvlFloor > 0) {
+        s.levelMin = it.ilvlFloor; // 클러스터 주얼: 같은 노트 목록 구간
+        if (it.ilvlCeil > 0)
+            s.levelMax = it.ilvlCeil;
     } else if (it.itemLevel > 0) {
         s.levelMin = it.itemLevel;
     }
@@ -55,7 +59,7 @@ ItemFilterState defaultFilterState(const ParsedItem& it)
     s.ultimatumReward = it.ultimatumReward;
     s.ultimatumOutput = it.ultimatumOutput;
     for (const ItemProp& p : it.props)
-        s.props.push_back({p.key, false, std::floor(p.value), std::nullopt});
+        s.props.push_back({p.key, p.use, std::floor(p.value), std::nullopt});
     return s;
 }
 
@@ -101,8 +105,10 @@ ParsedItem applyPreset(const ParsedItem& parsed, Preset p, int rangePct, ItemFil
                 m.checked = explicitLike || m.optionStat;
         }
         applyStatRanges(it, 0);
-        if (st)
+        if (st) {
             *st = defaultFilterState(it);
+            st->exact = true;
+        }
         break;
     }
     case Preset::Base:
@@ -185,6 +191,17 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
     r.corrupted = st.corrupted;
     r.twiceCorrupted = st.corrupted == 2 ? 0 : st.twiceCorrupted;
     r.mutated = st.mutated;
+    // 기본 제외 필터 (APT/EE2): 고유 아닌 장비는 복제된/분할된 매물 제외, 정확 프리셋은 분열 아닌 템이면 분열 매물 제외
+    {
+        const bool gear = it.isGear || it.isJewel || it.isFlask;
+        const bool nonUnique = it.rarityId != QStringLiteral("unique");
+        const bool permanent = ctx.league.contains(QStringLiteral("Standard"), Qt::CaseInsensitive) ||
+                               ctx.league.compare(QStringLiteral("Hardcore"), Qt::CaseInsensitive) == 0 ||
+                               ctx.league.compare(QStringLiteral("Ruthless"), Qt::CaseInsensitive) == 0;
+        r.notMirrored = gear && nonUnique && !it.mirrored;
+        r.notSplit = gear && nonUnique && it.game == Game::Poe1 && !it.split && (!permanent || st.exact);
+        r.notFractured = gear && st.exact && !it.fractured;
+    }
     r.synthesised = st.synthesised;
     r.blighted = st.blighted;
     r.blightRavaged = st.blightRavaged;

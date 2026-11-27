@@ -7,6 +7,7 @@
 #include "core/Keywords.h"
 #include "core/PriceEstimate.h"
 #include "core/TradeDb.h"
+#include "net/TradeClient.h"
 #include "net/Updater.h"
 
 #include <QElapsedTimer>
@@ -105,6 +106,12 @@ private:
     QTimer m_updateTimer;
     Updater::Release m_newRelease; // 찾은 새 버전
     bool m_updateNoticeShown = false; // 마지막 트레이 알림이 새 버전 알림
+    // 같은 조건 재조회 캐시 (1분). 키 = 게임/서버/리그/개수/쿼리
+    struct CachedPrice {
+        qint64 at = 0;
+        TradeClient::PriceProgress result;
+    };
+    QHash<QString, CachedPrice> m_priceCache;
     QString m_newTag, m_newPage;
     QString m_downloadedZip;
     std::unique_ptr<ItemParser> m_parser;

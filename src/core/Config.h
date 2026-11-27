@@ -25,7 +25,7 @@ struct Config {
     int searchAutoDelay = 0;
     int searchListCount = 20;
     int searchPriceMinimum = 0;
-    int searchBeforeDay = 7;
+    int searchBeforeDay = -1; // 등록일 제한(일). -1 = 자동: 즉시 구입만이면 언제든, 직접 거래 포함이면 3일
     bool autoCheckUnique = true;
     bool autoCheckTotalres = true;
     bool autoSelectPseudo = true;
@@ -52,7 +52,7 @@ struct Config {
 
     QVector<Shortcut> shortcuts;
 
-    static constexpr int kConfigVersion = 4;
+    static constexpr int kConfigVersion = 5;
     int configVersion = kConfigVersion;
     bool migrated = false; // load 때 마이그레이션 했으면 true -> 저장 필요
 

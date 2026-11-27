@@ -397,6 +397,154 @@ private slots:
         QVERIFY(suf >= 1);
     }
 
+    void listedDefaultAndExclusions()
+    {
+        // 등록일 자동: 즉시 구입만 -> 언제든, 직접 거래 포함 -> 3일, 직접 지정은 그대로
+        QCOMPARE(QueryBuilder::indexedDefault(-1, QStringLiteral("securable")), QString());
+        QCOMPARE(QueryBuilder::indexedDefault(-1, QStringLiteral("available")), QStringLiteral("3days"));
+        QCOMPARE(QueryBuilder::indexedDefault(7, QStringLiteral("securable")), QStringLiteral("1week"));
+        QCOMPARE(Config::defaults().searchBeforeDay, -1);
+
+        // 기본 제외 필터
+        SearchRequest r;
+        r.type = QStringLiteral("Two-Stone Ring");
+        r.notMirrored = r.notSplit = r.notFractured = true;
+        const QJsonObject mf = QueryBuilder::build(r, nullptr).value(QStringLiteral("query")).toObject()
+                                   .value(QStringLiteral("filters")).toObject()
+                                   .value(QStringLiteral("misc_filters")).toObject()
+                                   .value(QStringLiteral("filters")).toObject();
+        for (const char* k : {"mirrored", "split", "fractured_item"})
+            QCOMPARE(mf.value(QLatin1String(k)).toObject().value(QStringLiteral("option")).toString(), QStringLiteral("false"));
+        r.game = Game::Poe2; // PoE2 엔 분할 없음
+        QVERIFY(!QueryBuilder::build(r, nullptr).value(QStringLiteral("query")).toObject()
+                     .value(QStringLiteral("filters")).toObject().value(QStringLiteral("misc_filters")).toObject()
+                     .value(QStringLiteral("filters")).toObject().contains(QStringLiteral("split")));
+
+        // 설정 v5 마이그레이션: 예전 기본값 7일 -> 자동, 직접 고른 3일은 그대로
+        const QString path = QDir::temp().filePath(QStringLiteral("pts_cfg_v5.txt"));
+        for (int days : {7, 3}) {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(QStringLiteral("{\"config_version\":4,\"options\":{\"search_before_day\":%1}}").arg(days).toUtf8());
+            f.close();
+            Config c;
+            QVERIFY(c.load(path));
+            QCOMPARE(c.searchBeforeDay, days == 7 ? -1 : 3);
+        }
+        QFile::remove(path);
+    }
+
+    void aptRules()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        auto propUse = [](const ParsedItem& it, const char* k) {
+            for (const ItemProp& p : it.props) {
+                if (p.key == QLatin1String(k))
+                    return p.use ? 1 : 0;
+            }
+            return -1;
+        };
+        // 분열 옵션: 수정 가능한 템이면 일반(explicit) id 로, 정확 프리셋은 분열 id 로
+        const QString gl = fixture(QStringLiteral("poe1_ko_rare_gloves_synthetic.txt"));
+        auto g = parseText(gl, Game::Poe1);
+        QVERIFY(g);
+        const ParsedMod* fr = nullptr;
+        for (const ParsedMod& m : g->mods) {
+            if (m.modType == QStringLiteral("fractured"))
+                fr = &m;
+        }
+        QVERIFY(fr && fr->current());
+        QVERIFY2(fr->current()->id.startsWith(QStringLiteral("explicit.")), qPrintable(fr->current()->id));
+        ItemFilterState st;
+        const ParsedItem ex = applyPreset(*g, Preset::Exact, 0, &st);
+        for (const ParsedMod& m : ex.mods) {
+            if (m.modType == QStringLiteral("fractured"))
+                QVERIFY2(m.current()->id.startsWith(QStringLiteral("fractured.")), qPrintable(m.current()->id));
+        }
+        QVERIFY(st.exact);
+        RequestContext ctx;
+        ctx.server = Lang::Ko;
+        ctx.league = QStringLiteral("Covens");
+        SearchRequest req = makeRequest(ex, st, kw, &dbs[0], ctx);
+        QVERIFY(req.notMirrored && req.notSplit);
+        QVERIFY(g->fractured);
+        QVERIFY(!req.notFractured); // 분열된 아이템이면 분열 제외 필터 안 넣음
+        ctx.league = QStringLiteral("Standard");
+        req = makeRequest(*g, defaultFilterState(*g), kw, &dbs[0], ctx);
+        QVERIFY(req.notMirrored && !req.notSplit); // 영구 리그는 분할 매물 허용
+
+        // 방어 종류가 둘(회피+에보)이면 속성 자동 체크 안 함
+        QCOMPARE(propUse(*g, "ev"), 0);
+        QCOMPARE(propUse(*g, "es"), 0);
+        // 하나뿐이면 켜고, 그 속성에 들어간 로컬 옵션은 체크 해제
+        QString evOnly = gl;
+        evOnly.remove(QStringLiteral("에너지 보호막: 25 (augmented)\n"));
+        evOnly.replace(QStringLiteral("생명력 최대치 +119(100-119)"), QStringLiteral("회피 +40(30-50)"));
+        auto e = parseText(evOnly, Game::Poe1);
+        QVERIFY(e);
+        QCOMPARE(propUse(*e, "ev"), 1);
+        for (const ParsedMod& m : e->mods) {
+            if (m.statKey == QStringLiteral("stat_53045048"))
+                QVERIFY(!m.checked);
+        }
+
+        // 클러스터 주얼: 패시브 8개 -> 최대 8 (적을수록 노트 비중이 큼), 주얼 홈 수 해제, ilvl 84 구간
+        auto cj = parse(QStringLiteral("poe1_en_cluster.txt"), Game::Poe1);
+        QVERIFY(cj);
+        const ParsedMod* passives = findMod(*cj, QStringLiteral("stat_3086156145"));
+        QVERIFY(passives);
+        QVERIFY(passives->checked && passives->rangeLocked);
+        QVERIFY(!passives->min);
+        QCOMPARE(*passives->max, 8.0);
+        const ParsedMod* sockets = findMod(*cj, QStringLiteral("stat_4079888060"));
+        QVERIFY(sockets && !sockets->checked);
+        const ItemFilterState cs = defaultFilterState(*cj);
+        QVERIFY(cs.useLevel);
+        QCOMPARE(*cs.levelMin, 84.0);
+        QVERIFY(!cs.levelMax);
+        // 범위 완화(-10%)가 덮어쓰지 않음
+        const ParsedItem cj10 = applyPreset(*cj, Preset::Default, 10, nullptr);
+        QCOMPARE(*findMod(cj10, QStringLiteral("stat_3086156145"))->max, 8.0);
+
+        // 젬: 변형 젬은 품질 20 이상일 때만 품질 체크
+        auto gem = parse(QStringLiteral("poe1_en_gem_transfigured.txt"), Game::Poe1);
+        QVERIFY(gem);
+        QVERIFY(gem->checkQuality); // 20%
+
+        // 고유: 범위 없는 고정 롤은 체크 안 함 (갈매기 "1레벨 하위 성소 창조")
+        auto gull = parse(QStringLiteral("poe1_ko_unique_gull.txt"), Game::Poe1);
+        QVERIFY(gull);
+        const ParsedMod* shrine = findMod(*gull, QStringLiteral("stat_1010340836"));
+        QVERIFY(shrine && !shrine->checked);
+        QVERIFY(findMod(*gull, QStringLiteral("stat_1999113824"))->checked); // 범위 있는 건 체크
+    }
+
+    void estimatePerSellerCap()
+    {
+        // 한 판매자가 8카오스로 7개 도배 + 다른 판매자들 10카오스 6개.
+        // 상한 없으면 싼 쪽 10개 중 7개가 도배라 추정가 8, 상한(판매자당 2개) 있으면 10
+        Rates rates;
+        rates.base = QStringLiteral("chaos");
+        rates.toBase.insert(QStringLiteral("divine"), 200);
+        QVector<Listing> ls;
+        auto add = [&](double amount, const QString& account) {
+            Listing l;
+            l.amount = amount;
+            l.currency = QStringLiteral("chaos");
+            l.account = account;
+            ls.push_back(l);
+        };
+        for (int i = 0; i < 7; ++i)
+            add(8, QStringLiteral("spammer"));
+        for (int i = 0; i < 6; ++i)
+            add(10, QStringLiteral("seller%1").arg(i));
+        const Estimate e = estimatePrice(ls, rates);
+        QVERIFY(e.ok);
+        QCOMPARE(e.used, 8); // spammer 2개 + 6개
+        QVERIFY2(e.value >= 9.9, qPrintable(QString::number(e.value)));
+    }
+
     void queryPriceCurrency()
     {
         auto priceOf = [](const SearchRequest& r) {

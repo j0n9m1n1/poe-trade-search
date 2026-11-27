@@ -55,6 +55,9 @@ struct SearchRequest {
     int corrupted = 0; // 0 any / 1 yes / 2 no
     int twiceCorrupted = 0; // 두 번 타락 0 any / 1 yes / 2 no
     int mutated = 0;        // 삿된 / 함양된 바알 고유 0 any / 1 yes / 2 no
+    bool notMirrored = false;  // 복제된 매물 제외
+    bool notSplit = false;     // 분할된 매물 제외 (PoE1)
+    bool notFractured = false; // 분열 매물 제외
     QVector<QString> influencePseudo; // "pseudo.pseudo_has_shaper_influence" ...
     bool synthesised = false;
     bool blighted = false;
@@ -93,6 +96,9 @@ public:
     static QJsonObject buildExchange(const QString& have, const QString& want, const QString& status = QStringLiteral("online"));
     // search_before_day -> indexed 옵션
     static QString indexedFromDays(int days);
+    // 설정값 -> 등록일 옵션. days < 0 (자동) 이면 즉시 구입만은 언제든, 직접 거래 포함은 3일
+    // (APT/EE2 기본은 언제든 + 즉시 구입. 즉시 구입 매물은 판매자가 오프라인이어도 살 수 있어서 오래돼도 유효)
+    static QString indexedDefault(int days, const QString& status);
 };
 
 } // namespace pts

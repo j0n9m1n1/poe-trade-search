@@ -530,6 +530,7 @@ void Application::openTrade()
 
     RequestContext ctx;
     ctx.server = server;
+    ctx.league = m_cfg.leagueFor(g);
     ctx.status = m_popup->tradeStatus();
     ctx.indexed = m_popup->indexed();
     ctx.priceOption = m_popup->priceCurrency();
@@ -788,6 +789,7 @@ void Application::priceCheck()
         // ---- 일반 시세
         RequestContext ctx;
         ctx.server = server;
+        ctx.league = league;
         ctx.status = m_popup->tradeStatus();
         ctx.indexed = m_popup->indexed();
         ctx.priceMin = m_popup->priceMin();
@@ -810,9 +812,7 @@ void Application::priceCheck()
                                QStringLiteral("DPS"), QStringLiteral("등록"), QStringLiteral("판매자")},
                               hidden);
         m_popup->priceStatus(QStringLiteral("시세 확인중..."));
-        m_client->priceCheck(
-            g, lang, league, q, m_popup->listCount(),
-            [this, token, g, lang, rates](const TradeClient::PriceProgress& p) {
+        auto onProgress = [this, token, g, lang, rates](const TradeClient::PriceProgress& p) {
                 if (token != m_priceToken)
                     return;
                 const QDateTime now = QDateTime::currentDateTimeUtc();
@@ -834,8 +834,8 @@ void Application::priceCheck()
                                          stale, l.online, currencyName(g, lang, l.currency));
                 }
                 m_popup->priceStatus(QStringLiteral("시세 확인중... %1/%2").arg(p.fetched).arg(p.requested));
-            },
-            [this, token, g, lang, it, rates](const TradeClient::PriceProgress& all, const QString& error) {
+            };
+        auto onDone = [this, token, g, lang, it, rates](const TradeClient::PriceProgress& all, const QString& error) {
                 if (token != m_priceToken)
                     return;
                 learnIcon(it, all.listings);
@@ -854,6 +854,29 @@ void Application::priceCheck()
                 }
                 m_popup->priceDone(summary, QStringLiteral("%1/%2 검색").arg(all.listings.size()).arg(all.total),
                                    dist.isEmpty() ? QString() : QStringLiteral("분포: ") + dist);
+            };
+
+        // 같은 조건을 1분 안에 다시 조회하면 요청 안 보내고 저장한 결과 (요청 제한 절약, APT 캐시와 같은 취지)
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        const QString key = QStringLiteral("%1|%2|%3|%4|").arg(gi(g)).arg(static_cast<int>(lang)).arg(league).arg(m_popup->listCount()) +
+                            QString::fromUtf8(QJsonDocument(q).toJson(QJsonDocument::Compact));
+        for (auto c = m_priceCache.begin(); c != m_priceCache.end();) {
+            if (now - c->at > 60000)
+                c = m_priceCache.erase(c);
+            else
+                ++c;
+        }
+        if (auto c = m_priceCache.constFind(key); c != m_priceCache.constEnd()) {
+            onProgress(c->result);
+            onDone(c->result, QString());
+            return;
+        }
+        m_client->priceCheck(
+            g, lang, league, q, m_popup->listCount(), onProgress,
+            [this, key, onDone](const TradeClient::PriceProgress& all, const QString& error) {
+                if (error.isEmpty())
+                    m_priceCache.insert(key, {QDateTime::currentMSecsSinceEpoch(), all});
+                onDone(all, error);
             },
             token);
     });

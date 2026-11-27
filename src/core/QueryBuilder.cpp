@@ -25,6 +25,9 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("corrupted"), QStringLiteral("misc_filters")},
         {QStringLiteral("twice_corrupted"), QStringLiteral("misc_filters")},
         {QStringLiteral("mutated"), QStringLiteral("misc_filters")},
+        {QStringLiteral("mirrored"), QStringLiteral("misc_filters")},
+        {QStringLiteral("split"), QStringLiteral("misc_filters")},
+        {QStringLiteral("fractured_item"), QStringLiteral("misc_filters")},
         {QStringLiteral("synthesised_item"), QStringLiteral("misc_filters")},
         {QStringLiteral("map_tier"), QStringLiteral("map_filters")},
         {QStringLiteral("map_blighted"), QStringLiteral("map_filters")},
@@ -65,6 +68,8 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("corrupted"), QStringLiteral("misc_filters")},
         {QStringLiteral("twice_corrupted"), QStringLiteral("misc_filters")},
         {QStringLiteral("mutated"), QStringLiteral("misc_filters")},
+        {QStringLiteral("mirrored"), QStringLiteral("misc_filters")},
+        {QStringLiteral("fractured_item"), QStringLiteral("misc_filters")},
         {QStringLiteral("map_tier"), QStringLiteral("map_filters")},
         {QStringLiteral("indexed"), QStringLiteral("trade_filters")},
         {QStringLiteral("sale_type"), QStringLiteral("trade_filters")},
@@ -165,6 +170,13 @@ QString QueryBuilder::indexedFromDays(int days)
     return QStringLiteral("2months");
 }
 
+QString QueryBuilder::indexedDefault(int days, const QString& status)
+{
+    if (days >= 0)
+        return indexedFromDays(days);
+    return status == QStringLiteral("securable") ? QString() : QStringLiteral("3days");
+}
+
 QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
 {
     QJsonObject query;
@@ -224,6 +236,12 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
     yesNo(QStringLiteral("corrupted"), r.corrupted);
     yesNo(QStringLiteral("twice_corrupted"), r.twiceCorrupted);
     yesNo(QStringLiteral("mutated"), r.mutated);
+    if (r.notMirrored)
+        fs.add(QStringLiteral("mirrored"), option(QStringLiteral("false")));
+    if (r.notSplit && r.game == Game::Poe1)
+        fs.add(QStringLiteral("split"), option(QStringLiteral("false")));
+    if (r.notFractured)
+        fs.add(QStringLiteral("fractured_item"), option(QStringLiteral("false")));
     if (r.synthesised && r.game == Game::Poe1)
         fs.add(QStringLiteral("synthesised_item"), option(QStringLiteral("true")));
     if (r.blighted)

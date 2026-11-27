@@ -68,6 +68,11 @@ void Config::migrate()
         if (tradeStatus == QStringLiteral("available"))
             tradeStatus = QStringLiteral("securable");
     }
+    if (configVersion < 5) {
+        // v5: 등록일 제한 기본값을 자동으로 (예전 기본값 7일을 그대로 쓰던 경우만)
+        if (searchBeforeDay == 7)
+            searchBeforeDay = -1;
+    }
     configVersion = kConfigVersion;
     migrated = true;
 }

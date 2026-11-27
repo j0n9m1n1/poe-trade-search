@@ -162,6 +162,8 @@ private:
 
     QLabel* m_price; // 추정가 줄 (누르면 시세 조회)
     int m_lastPriceCol = -1;
+    QString m_lastRowKey; // 같은 판매자·같은 가격 묶기
+    int m_lastRowCount = 0;
     QString m_priceText, m_priceColor;
     QHash<QString, QString> m_unitIcons; // 화폐 이름 -> 아이콘 파일
     QTableWidget* m_prices;
@@ -170,6 +172,7 @@ private:
     QComboBox* m_status;
     QComboBox* m_currency;
     QComboBox* m_indexed;
+    bool m_indexedAuto = true; // 등록일이 판매 방식을 따라가는 중
     QCheckBox* m_collapse;
     QLabel* m_priceCount;
 

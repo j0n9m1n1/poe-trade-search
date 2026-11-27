@@ -39,6 +39,7 @@ struct ItemFilterState {
     QString ultimatumReward;
     QString ultimatumOutput;
     QVector<PropFilterState> props;
+    bool exact = false; // 정확 프리셋 (분열 아님 필터 등)
 };
 
 ItemFilterState defaultFilterState(const ParsedItem& it);
@@ -56,6 +57,7 @@ struct RequestContext {
     QString indexed;
     OptDouble priceMin;
     QString priceOption;    // 가격 화폐 필터 ("" = 등가물)
+    QString league;         // 영구 리그(스탠다드 등)면 분할 아님 필터를 안 넣음
     bool collapse = false;  // 계정별 묶기
     bool forBrowser = true; // false 면 꺼진 옵션은 아예 안 보냄 (시세 조회용)
 };

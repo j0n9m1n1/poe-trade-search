@@ -87,7 +87,8 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     f->addRow(QStringLiteral("가격 화폐 (PoE2):"), m_currency2);
 
     m_beforeDay = new QComboBox(basic);
-    for (auto p : {qMakePair(0, QStringLiteral("모두")), qMakePair(1, QStringLiteral("1일 이내")),
+    for (auto p : {qMakePair(-1, QStringLiteral("자동 (즉시 구입만: 언제든 / 직접 거래 포함: 3일)")),
+                   qMakePair(0, QStringLiteral("모두")), qMakePair(1, QStringLiteral("1일 이내")),
                    qMakePair(3, QStringLiteral("3일 이내")), qMakePair(7, QStringLiteral("1주 이내")),
                    qMakePair(14, QStringLiteral("2주 이내")),
                    qMakePair(30, QStringLiteral("1달 이내")), qMakePair(60, QStringLiteral("2달 이내"))})

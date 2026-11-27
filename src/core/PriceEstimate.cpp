@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/PriceEstimate.h"
 
+#include <QHash>
 #include <QtMath>
 #include <algorithm>
 
@@ -37,10 +38,15 @@ Estimate estimatePrice(const QVector<Listing>& listings, const Rates& rates)
 {
     Estimate e;
     QVector<double> vals;
+    // 판매자 한 명당 2개까지만 (한 사람이 같은 가격으로 도배하면 추정가가 끌려감, PoE Overlay/APT 와 같은 취지)
+    QHash<QString, int> perSeller;
     for (const Listing& l : listings) {
         double v = 0;
-        if (rates.convert(l.amount, l.currency, &v) && v > 0)
-            vals.push_back(v);
+        if (!rates.convert(l.amount, l.currency, &v) || v <= 0)
+            continue;
+        if (!l.account.isEmpty() && ++perSeller[l.account] > 2)
+            continue;
+        vals.push_back(v);
     }
     std::sort(vals.begin(), vals.end());
     e.used = vals.size();

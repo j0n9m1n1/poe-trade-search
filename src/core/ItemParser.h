@@ -40,6 +40,7 @@ struct ParsedMod {
     bool resistance = false; // 저항 합산 가능
     bool totalRes = false;   // 저항 합산 체크
     bool lockedOff = false;  // 검색 불가 옵션
+    bool rangeLocked = false; // min/max 를 규칙으로 정함 (값 완화로 덮어쓰지 않음, 클러스터 패시브 개수 등)
     bool checked = false;
     bool autoChecked = false; // Checked.txt 로 자동 체크됨
     bool unmatched = false;   // 거래소 stat 을 못 찾은 줄 (표시만, 검색 불가)
@@ -54,6 +55,7 @@ struct ParsedMod {
 struct ItemProp {
     QString key;
     double value = 0; // 거래소 기준값 (방어/물리 DPS 는 퀄리티 20 기준)
+    bool use = false; // 기본으로 검색에 넣을지 (APT 규칙)
 };
 
 struct ParsedItem {
@@ -75,6 +77,8 @@ struct ParsedItem {
     bool corrupted = false;
     bool twiceCorrupted = false; // "두 번 타락" (corrupted 도 true)
     bool mirrored = false;
+    bool split = false;
+    bool advanced = false; // Ctrl+Alt+C 고급 설명 (롤 범위가 있음)
     bool fractured = false;
     bool synthesised = false;
     bool searing = false;
@@ -118,6 +122,7 @@ struct ParsedItem {
     bool checkLevel = false, checkQuality = false, checkSockets = false, byCategory = false;
     bool highlightQuality = false, highlightLevel = false;
     int corruptDefault = 0; // 0 any / 1 yes / 2 no
+    int ilvlFloor = -1, ilvlCeil = -1; // 아이템 레벨 필터 기본 범위 (클러스터 주얼 구간)
     int twiceCorruptDefault = 0; // 두 번 타락 필터 0 any / 1 yes / 2 no
     int mutatedDefault = 0;      // 삿된(PoE1) 필터 0 any / 1 yes / 2 no
     QString rarityFilter;   // "" / "unique" / "nonunique" ...

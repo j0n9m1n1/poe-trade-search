@@ -503,6 +503,15 @@ void MainPopup::buildUi()
         connect(c, &QCheckBox::toggled, this, stale);
     for (ToggleLabel* t : {m_useName, m_useType})
         connect(t, &ToggleLabel::toggled, this, stale);
+    // 등록일 자동: 판매 방식을 바꾸면 따라감 (등록일을 직접 고르면 그때부터 고정)
+    connect(m_status, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() {
+        if (!m_indexedAuto)
+            return;
+        QSignalBlocker b(m_indexed);
+        const int i = m_indexed->findData(QueryBuilder::indexedDefault(-1, tradeStatus()));
+        m_indexed->setCurrentIndex(i < 0 ? 0 : i);
+    });
+    connect(m_indexed, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() { m_indexedAuto = false; });
     for (const PropWidgets& pw : m_props) {
         connect(pw.use, &QCheckBox::toggled, this, stale);
         connect(pw.min, &QLineEdit::textEdited, this, stale);
@@ -727,11 +736,13 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     // 시세 영역
     m_prices->clear();
     m_prices->setRowCount(0);
+    m_lastRowKey.clear();
     m_prices->setColumnCount(0);
     m_priceCount->clear();
     {
         QSignalBlocker b1(m_listCount), b2(m_status), b3(m_collapse), b4(m_currency), b5(m_indexed);
-        const int ii = m_indexed->findData(QueryBuilder::indexedFromDays(cfg.searchBeforeDay));
+        m_indexedAuto = cfg.searchBeforeDay < 0;
+        const int ii = m_indexed->findData(QueryBuilder::indexedDefault(cfg.searchBeforeDay, cfg.tradeStatus));
         m_indexed->setCurrentIndex(ii < 0 ? 0 : ii);
         const int lc = m_listCount->findData(cfg.searchListCount);
         m_listCount->setCurrentIndex(lc < 0 ? 1 : lc);
@@ -938,6 +949,7 @@ ItemFilterState MainPopup::collectState() const
     s.mutated = m_mutated->isHidden() ? 0 : m_mutated->currentIndex();
     s.rarity = m_rarity->currentData().toString();
     s.byCategory = false;
+    s.exact = static_cast<Preset>(m_preset->currentData().toInt()) == Preset::Exact;
     for (PropFilterState& p : s.props) {
         for (const PropWidgets& pw : m_props) {
             if (pw.key == p.key && !pw.box->isHidden()) {
@@ -1028,6 +1040,7 @@ void MainPopup::setIcon(const QString& imagePath)
 void MainPopup::priceBusy(const QString& msg)
 {
     m_prices->setRowCount(0);
+    m_lastRowKey.clear();
     m_priceCount->clear();
     m_price->setToolTip(QStringLiteral("누르면 시세를 다시 조회합니다"));
     priceStatus(msg);
@@ -1041,6 +1054,7 @@ void MainPopup::priceStatus(const QString& msg)
 void MainPopup::priceColumns(const QStringList& headers, const QVector<int>& hidden)
 {
     m_prices->setRowCount(0);
+    m_lastRowKey.clear();
     m_prices->setColumnCount(headers.size());
     m_prices->setHorizontalHeaderLabels(headers);
     int lastVisible = -1;
@@ -1058,6 +1072,22 @@ void MainPopup::priceColumns(const QStringList& headers, const QVector<int>& hid
 
 void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, const QString& tooltip)
 {
+    // 같은 판매자가 같은 가격으로 연달아 올린 건 한 줄로 묶고 "×N" (APT)
+    const QString key = cells.isEmpty() ? QString() : cells.first() + QLatin1Char('\x1f') + cells.last();
+    if (!cells.isEmpty() && !cells.last().isEmpty() && key == m_lastRowKey && m_prices->rowCount() > 0) {
+        ++m_lastRowCount;
+        if (QTableWidgetItem* s = m_prices->item(m_prices->rowCount() - 1, m_prices->columnCount() - 1)) {
+            QString t = s->text();
+            const int x = t.lastIndexOf(QStringLiteral("  ×"));
+            if (x >= 0)
+                t = t.left(x);
+            s->setText(t + QStringLiteral("  ×%1").arg(m_lastRowCount));
+            s->setToolTip(QStringLiteral("같은 판매자가 같은 가격으로 %1개 올림").arg(m_lastRowCount));
+        }
+        return;
+    }
+    m_lastRowKey = key;
+    m_lastRowCount = 1;
     const int r = m_prices->rowCount();
     m_prices->insertRow(r);
     const QColor dimC = dimColor(palette());

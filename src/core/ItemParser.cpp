@@ -311,7 +311,11 @@ ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const Ma
         int sel = -1;
         if (!localChosen && opt.autoSelectPseudo && hasPseudo)
             sel = findGroup(QStringLiteral("pseudo"));
-        if (sel < 0 && !mod.modType.isEmpty())
+        // 분열/훼손 옵션은 수정 가능한 아이템이면 일반(explicit) id 로 검색 (APT/EE2).
+        // 전용 id 로 찾으면 같은 옵션이 일반으로 붙은 매물을 다 놓침. 정확 프리셋은 원래 그룹으로 되돌림
+        const bool asExplicit = !it.corrupted && !it.mirrored &&
+                                (mod.modType == QStringLiteral("fractured") || mod.modType == QStringLiteral("desecrated"));
+        if (sel < 0 && !mod.modType.isEmpty() && !asExplicit)
             sel = findGroup(mod.modType);
         if (sel < 0)
             sel = findGroup(QStringLiteral("explicit"));
@@ -512,6 +516,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     it.corrupted = it.twiceCorrupted || flags.contains(QStringLiteral("corrupted"));
     it.unidentified = flags.contains(QStringLiteral("unidentified"));
     it.mirrored = flags.contains(QStringLiteral("mirrored"));
+    it.split = flags.contains(QStringLiteral("split"));
     it.fractured = flags.contains(QStringLiteral("fractured_item"));
     it.synthesised = flags.contains(QStringLiteral("synthesised_item"));
     it.searing = flags.contains(QStringLiteral("searing_item"));
@@ -652,6 +657,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                     continue;
                 const auto hm = headerRe.match(l);
                 if (hm.hasMatch()) {
+                    it.advanced = true;
                     const QString h = hm.captured(1);
                     hdrTier = 0;
                     const auto tm = tierRe.match(h);
@@ -851,8 +857,9 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
 
     // ---- 기본 체크값
     if (it.isGem) {
-        it.checkLevel = it.levelMax;
-        it.checkQuality = it.quality >= 20;
+        // APT/EE2: 레벨은 최대 레벨일 때만(PoE2 는 19 이상), 품질은 16 이상 (변형 젬은 20)
+        it.checkLevel = it.levelMax || (it.game == Game::Poe2 && it.level >= 19);
+        it.checkQuality = it.quality >= (it.transfigured ? 20 : 16);
     } else if (it.isMap && !it.isWaystone) {
         it.checkLevel = true;
     }
@@ -895,7 +902,9 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         it.checkAllUnique = opt.autoCheckUnique;
         if (it.checkAllUnique) {
             for (auto& m : it.mods) {
-                if (!m.lockedOff && m.color.isEmpty())
+                // 고급 설명에서 범위가 없는 수치 = 고정 롤 -> 모든 매물이 같으니 검색에서 뺌 (APT)
+                const bool fixedRoll = it.advanced && m.value && !m.rollLo && !m.optionStat;
+                if (!m.lockedOff && m.color.isEmpty() && !fixedRoll)
                     m.checked = true;
             }
         }
@@ -982,6 +991,93 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         }
     }
 
+    // ---- 속성 자동 체크 (APT item-property.ts): 고유 아닌 장비만
+    if (!it.props.isEmpty() && it.rarityId != QStringLiteral("unique")) {
+        auto prop = [&](const char* k) -> ItemProp* {
+            for (ItemProp& p : it.props) {
+                if (p.key == QLatin1String(k))
+                    return &p;
+            }
+            return nullptr;
+        };
+        // 방어: 방어 종류가 하나뿐인 베이스면 그 속성을 켬
+        QVector<ItemProp*> defs;
+        for (const char* k : {"ar", "ev", "es"}) {
+            if (ItemProp* p = prop(k))
+                defs << p;
+        }
+        if (defs.size() == 1)
+            defs[0]->use = true;
+        // 무기: 물리 위주(67% 이상)면 물리 DPS, 원소 위주면 원소 DPS, 섞였으면 전체 DPS. 마법 무기(완드/셉터)는 안 켬
+        const bool caster = it.category.contains(QStringLiteral("wand")) || it.category.contains(QStringLiteral("sceptre"));
+        ItemProp* dps = prop("dps");
+        if (dps && dps->value > 0 && !caster) {
+            ItemProp* pd = prop("pdps");
+            ItemProp* ed = prop("edps");
+            if (pd && pd->value / dps->value >= 0.67)
+                pd->use = true;
+            else if (ed && ed->value / dps->value >= 0.67)
+                ed->use = true;
+            else
+                dps->use = true;
+        }
+        // 켠 속성에 이미 들어간 로컬 옵션은 체크 해제 (같은 걸 두 번 거는 것 방지)
+        static const QSet<QString> defLocal = {
+            QStringLiteral("stat_4052037485"), QStringLiteral("stat_124859000"),  QStringLiteral("stat_53045048"),
+            QStringLiteral("stat_1062208444"), QStringLiteral("stat_3484657501"), QStringLiteral("stat_4015621042"),
+            QStringLiteral("stat_1999113824"), QStringLiteral("stat_3321629045"), QStringLiteral("stat_2451402625"),
+            QStringLiteral("stat_3523867985")};
+        static const QSet<QString> physLocal = {QStringLiteral("stat_1940865751")}; // 물리 피해 추가 (특정)
+        static const QSet<QString> eleLocal = {QStringLiteral("stat_709508406"), QStringLiteral("stat_1037193709"),
+                                               QStringLiteral("stat_3336890334")}; // 화염/냉기/번개 피해 추가 (특정)
+        bool defOn = false;
+        for (ItemProp* p : defs)
+            defOn = defOn || p->use;
+        const bool pdOn = prop("pdps") && prop("pdps")->use, edOn = prop("edps") && prop("edps")->use,
+                   dOn = dps && dps->use;
+        for (ParsedMod& m : it.mods) {
+            const QString& k = m.statKey;
+            const bool speed = k == m_kw.localAttackSpeed(), physInc = k == m_kw.physicalDamageIncrease();
+            if ((defOn && defLocal.contains(k)) || ((pdOn || dOn) && (physLocal.contains(k) || physInc || speed)) ||
+                ((edOn || dOn) && (eleLocal.contains(k) || speed)))
+                m.checked = false;
+        }
+    }
+
+    // ---- 클러스터 주얼 (APT applyClusterJewelRules)
+    if (it.category == QStringLiteral("jewel.cluster")) {
+        for (ParsedMod& m : it.mods) {
+            if (m.statKey == QStringLiteral("stat_3086156145") && m.value) { // 패시브 # 개 추가
+                const int v = static_cast<int>(std::lround(*m.value));
+                m.checked = true;
+                m.rangeLocked = true;
+                m.min.reset();
+                m.max.reset();
+                if (v == 4) {
+                    m.min = 4;
+                    m.max = 5;
+                } else if (v == 2 || v == 8 || v == 9 || (v == 5 && it.rarityId == QStringLiteral("rare"))) {
+                    m.max = v; // 적을수록 좋은 구간 (노트 비중이 큼)
+                } else {
+                    m.min = v;
+                }
+            } else if (m.statKey == QStringLiteral("stat_4079888060")) { // 추가 패시브 중 주얼 홈 수
+                m.checked = false;
+            }
+        }
+        // 아이템 레벨 구간 (노트 목록이 바뀌는 경계): 1 / 50 / 68 / 75 / 84
+        if (it.itemLevel > 0) {
+            static const int bp[] = {1, 50, 68, 75, 84};
+            for (int i = 0; i < 5; ++i) {
+                if (it.itemLevel >= bp[i]) {
+                    it.ilvlFloor = bp[i];
+                    it.ilvlCeil = i + 1 < 5 ? bp[i + 1] - 1 : -1;
+                }
+            }
+            it.checkLevel = true;
+        }
+    }
+
     applyStatRanges(it, opt.statRangePct);
     return it;
 }
@@ -994,7 +1090,7 @@ bool exactValuesOnly(const ParsedItem& it)
 
 void applyStatRange(ParsedMod& m, int pct, bool unique)
 {
-    if (!m.value || m.optionStat || m.unmatched)
+    if (!m.value || m.optionStat || m.unmatched || m.rangeLocked)
         return;
     const double v = *m.value;
     double delta = 0;
