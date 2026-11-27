@@ -124,8 +124,7 @@ private:
     void fitPriceColumns();
     void refreshCurrencyCombo(); // 화폐 콤보를 아이콘으로 (폭 줄이기)
     void fitRowsArea(); // 속성 줄 + 옵션 줄 높이에 맞춰 영역 크기
-    void updateLeagueLabel();
-    void showLeagueMenu();
+    void fillLeagueCombo();
     int rangePct() const;
 
     const Keywords& m_kw;
@@ -143,11 +142,9 @@ private:
     QComboBox* m_range;
     QPushButton* m_historyPrevious;
     QPushButton* m_historyNext;
-    QLabel* m_league = nullptr;
+    QComboBox* m_league = nullptr; // 검색할 리그
     QString m_leagueText;
     bool m_dragging = false;
-    bool m_leaguePressed = false;
-    QPoint m_leaguePressPos;
     QPoint m_dragOffset;
     QComboBox* m_server;
     QPushButton* m_settings;

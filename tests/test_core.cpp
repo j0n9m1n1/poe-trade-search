@@ -1034,6 +1034,19 @@ private slots:
         QVERIFY(fa && !defaultFilterState(*fa).notFractured);
     }
 
+    void leaguesPcOnlyNoDuplicates()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        // 거래소 리그 목록은 PC/Xbox/PlayStation 용 같은 이름을 3번 줌 -> PC 만, 중복 없이
+        QStringList ids;
+        for (const auto& l : dbs[0][Lang::En].leagues())
+            ids << l.id;
+        QVERIFY(!ids.isEmpty());
+        QCOMPARE(ids.removeDuplicates(), qsizetype(0));
+        QVERIFY(ids.contains(QStringLiteral("Standard")));
+    }
+
     void mapCitadelOriginator()
     {
         if (!haveData)

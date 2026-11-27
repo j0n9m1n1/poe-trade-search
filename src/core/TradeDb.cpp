@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/TradeDb.h"
 
+#include <algorithm>
+
 #include "core/JsonUtil.h"
 #include "core/Keywords.h"
 
@@ -160,7 +162,14 @@ bool TradeDb::load(const QString& dir, QString* error)
     // ---- leagues
     for (const auto& lv : resultOf(d.filePath(QStringLiteral("leagues.json")), nullptr)) {
         const QJsonObject l = lv.toObject();
-        m_leagues.push_back({l.value(QStringLiteral("id")).toString(), l.value(QStringLiteral("text")).toString()});
+        // 거래소가 같은 리그를 PC/Xbox/PlayStation 용으로 따로 줌 -> PC 만, 같은 이름은 한 번만
+        const QString realm = l.value(QStringLiteral("realm")).toString();
+        if (!realm.isEmpty() && realm != QStringLiteral("pc"))
+            continue;
+        const QString id = l.value(QStringLiteral("id")).toString();
+        if (id.isEmpty() || std::any_of(m_leagues.cbegin(), m_leagues.cend(), [&](const auto& x) { return x.id == id; }))
+            continue;
+        m_leagues.push_back({id, l.value(QStringLiteral("text")).toString()});
     }
 
     m_loaded = !m_stats.isEmpty();

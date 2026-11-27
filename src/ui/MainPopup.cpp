@@ -189,8 +189,8 @@ void MainPopup::buildUi()
     auto* top = new QHBoxLayout;
     m_historyPrevious = new QPushButton(QStringLiteral("◀"), this);
     m_historyNext = new QPushButton(QStringLiteral("▶"), this);
-    m_historyPrevious->setToolTip(QStringLiteral("이전에 검색한 아이템을 표시합니다."));
-    m_historyNext->setToolTip(QStringLiteral("다음에 검색한 아이템을 표시합니다."));
+    m_historyPrevious->setToolTip(QStringLiteral("최근 검색한 아이템 중 이전 아이템으로 돌아갑니다 (최대 10개)."));
+    m_historyNext->setToolTip(QStringLiteral("최근 검색한 아이템 중 다음 아이템으로 넘어갑니다."));
     for (auto* button : {m_historyPrevious, m_historyNext}) {
         button->setFixedWidth(30);
         top->addWidget(button);
@@ -220,20 +220,14 @@ void MainPopup::buildUi()
     m_range = new QComboBox(this);
     m_range->setToolTip(QStringLiteral("옵션 값 완화: 최소값을 N% 낮춰서 검색 (고유는 롤 범위 폭 기준)"));
 
-    m_league = new QLabel(this);
-    m_league->setObjectName(QStringLiteral("leagueLabel"));
-    m_league->setAlignment(Qt::AlignCenter);
-    m_league->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-    m_league->setMinimumWidth(0);
-    {
-        QFont lf = m_league->font();
-        lf.setBold(true);
-        m_league->setFont(lf);
-    }
-    m_league->setStyleSheet(QStringLiteral("QLabel{color:#d0c4a8; background:transparent; padding:0 6px;}"));
-    m_league->setCursor(Qt::PointingHandCursor);
-    m_league->setToolTip(QStringLiteral("상단을 드래그하면 창을 옮깁니다."));
-    m_league->installEventFilter(this);
+    m_league = new QComboBox(this);
+    m_league->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    m_league->setToolTip(QStringLiteral("검색할 리그. 바꾸면 설정에도 저장합니다."));
+    connect(m_league, &QComboBox::activated, this, [this](int) {
+        const QString next = m_league->currentText().trimmed();
+        if (m_hasItem && !next.isEmpty() && next != m_leagueText)
+            emit leagueRequested(m_parsed.game, next);
+    });
 
     m_server = new QComboBox(this);
     m_server->addItem(QStringLiteral("한국 서버"), li(Lang::Ko));
@@ -242,7 +236,9 @@ void MainPopup::buildUi()
     m_settings->setFixedWidth(52);
     top->addWidget(m_preset);
     top->addWidget(m_range);
-    top->addWidget(m_league, 1);
+    top->addStretch(1); // 빈 곳을 끌어서 창 이동
+    top->addWidget(m_league);
+    top->addStretch(1);
     top->addWidget(m_server);
     top->addWidget(m_settings);
     root->addLayout(top);
@@ -656,8 +652,6 @@ bool MainPopup::eventFilter(QObject* o, QEvent* e)
         if ((wheel->angleDelta().y() < 0 || wheel->pixelDelta().y() < 0) && bar->value() == bar->maximum())
             emit moreListingsRequested();
     }
-    if (e->type() == QEvent::Resize && o == m_league)
-        updateLeagueLabel();
     if (e->type() == QEvent::Resize && o == m_scroll->viewport()) {
         const int right = m_scroll->width() - m_scroll->viewport()->geometry().right() - 1;
         m_filterHeader->setContentsMargins(0, 0, m_rowsLayout->contentsMargins().right() + right, 0);
@@ -706,47 +700,24 @@ void MainPopup::setLeagueTitle(const QString& league)
     m_leagueText = league.trimmed();
     setWindowTitle(m_leagueText.isEmpty() ? QStringLiteral("Poe Trade Search")
                                           : QStringLiteral("Poe Trade Search - %1").arg(m_leagueText));
-    if (m_league) {
-        updateLeagueLabel();
-        m_league->setToolTip(m_leagueText.isEmpty()
-                                 ? QStringLiteral("상단을 드래그하면 창을 옮깁니다.")
-                                 : QStringLiteral("현재 리그: %1\n리그 이름을 누르면 검색할 리그를 바꿀 수 있습니다.\n"
-                                                  "상단을 드래그하면 창을 옮깁니다.").arg(m_leagueText));
-    }
+    fillLeagueCombo();
 }
 
-void MainPopup::updateLeagueLabel()
+void MainPopup::fillLeagueCombo()
 {
     if (!m_league)
         return;
-    const int avail = m_league->contentsRect().width();
-    m_league->setText(avail > 0 ? m_league->fontMetrics().elidedText(m_leagueText, Qt::ElideRight, avail)
-                                : m_leagueText);
-}
-
-void MainPopup::showLeagueMenu()
-{
-    if (!m_hasItem || !m_gdb)
-        return;
-    const Game game = m_parsed.game;
-    const auto& english = (*m_gdb)[Lang::En].leagues();
-    const auto& leagues = english.isEmpty() ? (*m_gdb)[Lang::Ko].leagues() : english;
-    auto* menu = new QMenu(this);
-    for (const auto& league : leagues) {
-        QAction* action = menu->addAction(league.id);
-        action->setCheckable(true);
-        action->setChecked(league.id == m_leagueText);
-        action->setData(league.id);
+    QSignalBlocker b(m_league);
+    m_league->clear();
+    if (m_gdb) {
+        const auto& english = (*m_gdb)[Lang::En].leagues();
+        for (const auto& l : english.isEmpty() ? (*m_gdb)[Lang::Ko].leagues() : english)
+            m_league->addItem(l.id);
     }
-    if (leagues.isEmpty())
-        menu->addAction(QStringLiteral("리그 목록을 불러오지 못했습니다."))->setEnabled(false);
-    connect(menu, &QMenu::aboutToHide, menu, &QObject::deleteLater);
-    connect(menu, &QMenu::triggered, this, [this, game](QAction* selected) {
-        emit leagueRequested(game, selected->data().toString());
-    });
-    if (!isActiveWindow())
-        platform::activateWindow(this);
-    menu->popup(m_league->mapToGlobal(QPoint(0, m_league->height())));
+    if (!m_leagueText.isEmpty() && m_league->findText(m_leagueText) < 0)
+        m_league->addItem(m_leagueText);
+    m_league->setCurrentIndex(qMax(0, m_league->findText(m_leagueText)));
+    m_league->setVisible(m_league->count() > 0);
 }
 
 int MainPopup::rangePct() const
@@ -1780,6 +1751,9 @@ void MainPopup::setHistoryAvailability(bool previous, bool next)
 {
     m_historyPrevious->setEnabled(previous);
     m_historyNext->setEnabled(next);
+    // 최근 아이템이 하나뿐이면 숨김 (뭔지 모를 버튼이 안 보이게)
+    m_historyPrevious->setVisible(previous || next);
+    m_historyNext->setVisible(previous || next);
 }
 
 void MainPopup::keyPressEvent(QKeyEvent* e)
@@ -1808,8 +1782,6 @@ void MainPopup::mousePressEvent(QMouseEvent* e)
             m_dragging = true;
             const QPoint global = e->globalPosition().toPoint();
             m_dragOffset = global - frameGeometry().topLeft();
-            m_leaguePressed = m_league->rect().contains(m_league->mapFrom(this, pos));
-            m_leaguePressPos = global;
             e->accept();
             return;
         }
@@ -1821,10 +1793,7 @@ void MainPopup::mouseMoveEvent(QMouseEvent* e)
 {
     if (m_dragging && (e->buttons() & Qt::LeftButton)) {
         const QPoint global = e->globalPosition().toPoint();
-        if (!m_leaguePressed || (global - m_leaguePressPos).manhattanLength() >= QApplication::startDragDistance()) {
-            m_leaguePressed = false;
-            move(global - m_dragOffset);
-        }
+        move(global - m_dragOffset);
         e->accept();
         return;
     }
@@ -1835,13 +1804,7 @@ void MainPopup::mouseReleaseEvent(QMouseEvent* e)
 {
     if (m_dragging && e->button() == Qt::LeftButton) {
         m_dragging = false;
-        const QPoint global = e->globalPosition().toPoint();
-        const bool leagueClick = m_leaguePressed && m_league->rect().contains(m_league->mapFromGlobal(global)) &&
-                                 (global - m_leaguePressPos).manhattanLength() < QApplication::startDragDistance();
-        m_leaguePressed = false;
         e->accept();
-        if (leagueClick)
-            showLeagueMenu();
         return;
     }
     QWidget::mouseReleaseEvent(e);
@@ -1864,7 +1827,6 @@ void MainPopup::closeEvent(QCloseEvent* e)
 void MainPopup::hideEvent(QHideEvent* e)
 {
     m_dragging = false;
-    m_leaguePressed = false;
     if (m_copyFeedbackTimer.isActive())
         setPriceText(m_priceText, m_priceColor);
     QWidget::hideEvent(e);
