@@ -88,6 +88,7 @@ signals:
     void priceFiltersChanged();
     void settingsRequested();
     void historyRequested(int offset);
+    void leagueRequested(Game game, const QString& league);
     void rememberToggled(const QString& statKey, const QString& top, bool on);
     void copyPriceNoteRequested(const QString& note);
     void popupHidden();
@@ -122,6 +123,7 @@ private:
     void refreshCurrencyCombo(); // 화폐 콤보를 아이콘으로 (폭 줄이기)
     void fitRowsArea(); // 속성 줄 + 옵션 줄 높이에 맞춰 영역 크기
     void updateLeagueLabel();
+    void showLeagueMenu();
     int rangePct() const;
 
     const Keywords& m_kw;
@@ -142,6 +144,8 @@ private:
     QLabel* m_league = nullptr;
     QString m_leagueText;
     bool m_dragging = false;
+    bool m_leaguePressed = false;
+    QPoint m_leaguePressPos;
     QPoint m_dragOffset;
     QComboBox* m_server;
     QPushButton* m_settings;

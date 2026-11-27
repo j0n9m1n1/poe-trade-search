@@ -133,6 +133,13 @@ bool Application::start(QString* error)
     });
     connect(m_popup, &MainPopup::settingsRequested, this, &Application::openSettings);
     connect(m_popup, &MainPopup::historyRequested, this, &Application::navigateHistory);
+    connect(m_popup, &MainPopup::leagueRequested, this, [this](Game game, const QString& league) {
+        if (m_cfg.leagueFor(game) == league)
+            return;
+        m_cfg.setLeague(game, league);
+        saveConfig();
+        syncPopupLeague();
+    });
     connect(m_popup, &MainPopup::rememberToggled, this, &Application::onRemember);
     connect(m_popup, &MainPopup::copyPriceNoteRequested, this, &Application::copyPriceNote);
     connect(m_popup, &MainPopup::popupHidden, this, [this]() {
