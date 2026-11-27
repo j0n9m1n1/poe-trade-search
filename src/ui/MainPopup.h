@@ -6,6 +6,7 @@
 #include "core/SearchDefaults.h"
 
 #include <QHash>
+#include <QPoint>
 #include <QWidget>
 
 class QCheckBox;
@@ -63,9 +64,11 @@ public:
     void priceDone(const QString& summary, const QString& count, const QString& tooltip = QString());
     void pricePageStatus(bool hasMore, int loaded, int total, const QString& status = {});
     void priceIdle(const QString& msg);
+    void clearPrices() { priceBusy(m_idleText); }
     void setSearchBusy(bool busy);
 
     void setLeagueTitle(const QString& league);
+    QString leagueTitle() const { return m_leagueText; }
     // 화폐 이름(카오스/디바인/전체 이름) 아이콘. 가격 칸과 추정가에 이름 대신 아이콘
     void setUnitIcon(const QString& unitName, const QString& path);
     // 영향/엘드리치/분열 배지 아이콘: (게임 이름판 문양 이름, 못 받았을 때 쓸 거래소 정적 데이터 id)
@@ -85,6 +88,9 @@ signals:
 protected:
     void keyPressEvent(QKeyEvent* e) override;
     void mousePressEvent(QMouseEvent* e) override;
+    void mouseMoveEvent(QMouseEvent* e) override;
+    void mouseReleaseEvent(QMouseEvent* e) override;
+    void paintEvent(QPaintEvent* e) override;
     void closeEvent(QCloseEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     bool eventFilter(QObject* o, QEvent* e) override;
@@ -106,6 +112,7 @@ private:
     void fitPriceColumns();
     void refreshCurrencyCombo(); // 화폐 콤보를 아이콘으로 (폭 줄이기)
     void fitRowsArea(); // 속성 줄 + 옵션 줄 높이에 맞춰 영역 크기
+    void updateLeagueLabel();
     int rangePct() const;
 
     const Keywords& m_kw;
@@ -121,6 +128,10 @@ private:
     QComboBox* m_rarity;
     QComboBox* m_preset;
     QComboBox* m_range;
+    QLabel* m_league = nullptr;
+    QString m_leagueText;
+    bool m_dragging = false;
+    QPoint m_dragOffset;
     QComboBox* m_server;
     QPushButton* m_settings;
     QLabel* m_icon;

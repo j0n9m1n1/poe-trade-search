@@ -98,6 +98,12 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
 
+### v0.0.29
+
+- 거래 검색 팝업에서 Windows 제목 표시줄을 제거하고, 팝업 상단에 검색에 사용하는 리그를 표시한다. 리그명을 드래그해 창을 옮길 수 있고, 리그가 바뀌면 이전 매물과 추가 조회를 초기화한다. [팝업](../src/ui/MainPopup.cpp) · [리그 변경 처리](../src/app/Application.cpp)
+- PoE1 마법 분열 장비는 아이템 레벨을 기본 최소 조건으로 포함한다. 제보된 바알 도끼는 아이템 레벨 85 이상과 분열 옵션 두 개를 함께 검색한다. 같은 분열 옵션과 물리 DPS 조건으로 Covens 거래소를 조회했을 때, 레벨 조건을 켜니 결과가 62건에서 45건으로 줄었다. [파서](../src/core/ItemParser.cpp) · [회귀 테스트](../tests/test_core.cpp)
+- Windows 빌드와 실데이터 코어 테스트 42개가 통과했다. 팝업 테스트에서 상단 리그 표시, 드래그, Esc와 하단 닫기, 설정에서 리그 변경 시 이전 매물 초기화를 확인했다.
+
 ### v0.0.28
 
 - Windows에서 관리자 권한 게임과 일반 권한 PoeTradeSearch의 조합이 감지되면 트레이에 한 번 안내하고, 메뉴에 `관리자 권한으로 다시 실행`을 표시한다. Windows에서 승인하면 기존 데이터 폴더를 넘겨 다시 실행한다. 취소하면 기존 인스턴스를 유지한다. [트레이 동작](../src/app/Application.cpp) · [Windows 권한 확인](../src/platform/win/WinPlatform.cpp)

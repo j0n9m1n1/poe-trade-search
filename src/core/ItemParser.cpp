@@ -948,6 +948,9 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
             it.highlightLevel = true;
         }
     }
+    // PoE1 마법 분열 장비 = 제작 베이스: 아이템 레벨(최소)로 상위 옵션 등급이 갈려서 기본으로 켬
+    if (it.game == Game::Poe1 && it.isGear && it.fractured && it.rarityId == QStringLiteral("magic") && it.itemLevel > 0)
+        it.checkLevel = true;
     for (const QString& b : opt.autoSelectByType) {
         const QString t = b.trimmed().toLower();
         if (!t.isEmpty() && (t == it.category || t == it.top))

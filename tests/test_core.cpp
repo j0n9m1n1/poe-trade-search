@@ -1024,6 +1024,59 @@ private slots:
         }
     }
 
+    void poe1MagicFracturedItemLevel()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        auto query = [&](const ParsedItem& it) {
+            RequestContext ctx;
+            ctx.server = Lang::En;
+            return QueryBuilder::build(makeRequest(it, defaultFilterState(it), kw, &dbs[0], ctx), &dbs[0][Lang::En])
+                .value(QStringLiteral("query")).toObject();
+        };
+        auto ilvl = [](const QJsonObject& q) {
+            return q.value(QStringLiteral("filters")).toObject().value(QStringLiteral("misc_filters")).toObject()
+                .value(QStringLiteral("filters")).toObject().value(QStringLiteral("ilvl")).toObject();
+        };
+        // 마법 분열 바알 도끼 (ilvl 85, 분열 물리% + 명중): 아이템 레벨 최소 85 기본, 최대 없음, 분열 두 옵션 유지
+        const QString txt = fixture(QStringLiteral("poe1_en_magic_axe_fractured.txt"));
+        auto ax = parseText(txt, Game::Poe1);
+        QVERIFY(ax && ax->fractured && ax->advanced && ax->rarityId == QStringLiteral("magic") && ax->isGear);
+        QCOMPARE(ax->type, QStringLiteral("Vaal Axe"));
+        QCOMPARE(ax->itemLevel, 85);
+        QVERIFY(ax->checkLevel);
+        const ItemFilterState st = defaultFilterState(*ax);
+        QVERIFY(st.useLevel);
+        QVERIFY(st.levelMin.has_value());
+        QCOMPARE(*st.levelMin, 85.0);
+        QVERIFY(!st.levelMax);
+        const QJsonObject q = query(*ax);
+        QCOMPARE(ilvl(q).value(QStringLiteral("min")).toDouble(), 85.0);
+        QVERIFY(!ilvl(q).contains(QStringLiteral("max")));
+        QStringList ids;
+        for (const auto& f : q.value(QStringLiteral("stats")).toArray().first().toObject().value(QStringLiteral("filters")).toArray()) {
+            if (!f.toObject().value(QStringLiteral("disabled")).toBool())
+                ids << f.toObject().value(QStringLiteral("id")).toString();
+        }
+        QVERIFY2(ids.contains(QStringLiteral("fractured.stat_1509134228")), qPrintable(ids.join(QLatin1Char(','))));
+        QVERIFY2(ids.contains(QStringLiteral("fractured.stat_691932474")), qPrintable(ids.join(QLatin1Char(','))));
+
+        // 분열 없는 같은 마법 도끼 / 희귀 분열 도끼는 예전처럼 아이템 레벨 끔
+        QString plain = txt;
+        plain.replace(QStringLiteral("{ Fractured Prefix Modifier"), QStringLiteral("{ Prefix Modifier"));
+        plain.remove(QStringLiteral("\n--------\nFractured Item"));
+        QVERIFY(!plain.contains(QStringLiteral("Fractured")));
+        auto p = parseText(plain, Game::Poe1);
+        QVERIFY(p && !p->fractured && !p->checkLevel);
+        for (const ParsedMod& m : p->mods)
+            QVERIFY2(m.modType != QStringLiteral("fractured"), qPrintable(m.raw));
+        QVERIFY(ilvl(query(*p)).isEmpty());
+        QString rare = txt;
+        rare.replace(QStringLiteral("Rarity: Magic\nChampion's Vaal Axe"), QStringLiteral("Rarity: Rare\nDoom Edge\nVaal Axe"));
+        auto r = parseText(rare, Game::Poe1);
+        QVERIFY(r && r->fractured && r->rarityId == QStringLiteral("rare") && !r->checkLevel);
+    }
+
     void poe1TransfiguredGemImbued()
     {
         if (!haveData)

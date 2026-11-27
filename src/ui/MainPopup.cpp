@@ -28,6 +28,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMouseEvent>
+#include <QPaintEvent>
 #include <QPixmap>
 #include <QPushButton>
 #include <QRegularExpressionValidator>
@@ -144,8 +145,7 @@ void MainPopup::applyRarityColor(const ParsedItem& it)
 
 MainPopup::MainPopup(const Keywords& kw, QWidget* parent) : QWidget(parent), m_kw(kw)
 {
-    setWindowFlags(Qt::Tool | Qt::WindowStaysOnTopHint | Qt::CustomizeWindowHint | Qt::WindowTitleHint |
-                   Qt::WindowCloseButtonHint);
+    setWindowFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
     setAttribute(Qt::WA_ShowWithoutActivating, true);
     setWindowTitle(QStringLiteral("Poe Trade Search"));
     buildUi();
@@ -180,6 +180,20 @@ void MainPopup::buildUi()
     m_range = new QComboBox(this);
     m_range->setToolTip(QStringLiteral("옵션 값 완화: 최소값을 N% 낮춰서 검색 (고유는 롤 범위 폭 기준)"));
 
+    m_league = new QLabel(this);
+    m_league->setObjectName(QStringLiteral("leagueLabel"));
+    m_league->setAlignment(Qt::AlignCenter);
+    m_league->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_league->setMinimumWidth(0);
+    {
+        QFont lf = m_league->font();
+        lf.setBold(true);
+        m_league->setFont(lf);
+    }
+    m_league->setStyleSheet(QStringLiteral("QLabel{color:#d0c4a8; background:transparent; padding:0 6px;}"));
+    m_league->setToolTip(QStringLiteral("상단을 드래그해 창 이동"));
+    m_league->installEventFilter(this);
+
     m_server = new QComboBox(this);
     m_server->addItem(QStringLiteral("한국 서버"), li(Lang::Ko));
     m_server->addItem(QStringLiteral("글로벌 서버"), li(Lang::En));
@@ -187,7 +201,7 @@ void MainPopup::buildUi()
     m_settings->setFixedWidth(52);
     top->addWidget(m_preset);
     top->addWidget(m_range);
-    top->addStretch(1);
+    top->addWidget(m_league, 1);
     top->addWidget(m_server);
     top->addWidget(m_settings);
     root->addLayout(top);
@@ -570,6 +584,8 @@ bool MainPopup::eventFilter(QObject* o, QEvent* e)
         if ((wheel->angleDelta().y() < 0 || wheel->pixelDelta().y() < 0) && bar->value() == bar->maximum())
             emit moreListingsRequested();
     }
+    if (e->type() == QEvent::Resize && o == m_league)
+        updateLeagueLabel();
     if (e->type() == QEvent::Resize && o == m_scroll->viewport()) {
         const int right = m_scroll->width() - m_scroll->viewport()->geometry().right() - 1;
         m_filterHeader->setContentsMargins(0, 0, m_rowsLayout->contentsMargins().right() + right, 0);
@@ -608,7 +624,24 @@ void MainPopup::markStale()
 
 void MainPopup::setLeagueTitle(const QString& league)
 {
-    setWindowTitle(QStringLiteral("Poe Trade Search - %1").arg(league));
+    m_leagueText = league.trimmed();
+    setWindowTitle(m_leagueText.isEmpty() ? QStringLiteral("Poe Trade Search")
+                                          : QStringLiteral("Poe Trade Search - %1").arg(m_leagueText));
+    if (m_league) {
+        updateLeagueLabel();
+        m_league->setToolTip(m_leagueText.isEmpty()
+                                 ? QStringLiteral("상단을 드래그해 창 이동")
+                                 : QStringLiteral("현재 리그: %1\n상단을 드래그해 창 이동").arg(m_leagueText));
+    }
+}
+
+void MainPopup::updateLeagueLabel()
+{
+    if (!m_league)
+        return;
+    const int avail = m_league->contentsRect().width();
+    m_league->setText(avail > 0 ? m_league->fontMetrics().elidedText(m_leagueText, Qt::ElideRight, avail)
+                                : m_leagueText);
 }
 
 int MainPopup::rangePct() const
@@ -1497,7 +1530,46 @@ void MainPopup::mousePressEvent(QMouseEvent* e)
     // 게임이 이미 포그라운드가 아닌 상태에서 팝업을 눌렀으면 활성화해 ESC 닫기가 동작하게 함
     if (!isActiveWindow() && !platform::foregroundGame().foreground)
         platform::activateWindow(this);
+    if (e->button() == Qt::LeftButton) {
+        const QPoint pos = e->position().toPoint();
+        const bool inScroll = QRect(m_scroll->mapTo(this, QPoint(0, 0)), m_scroll->size()).contains(pos);
+        const bool inPrices = QRect(m_prices->mapTo(this, QPoint(0, 0)), m_prices->size()).contains(pos);
+        if (!inScroll && !inPrices) {
+            m_dragging = true;
+            m_dragOffset = e->globalPosition().toPoint() - frameGeometry().topLeft();
+            e->accept();
+            return;
+        }
+    }
     QWidget::mousePressEvent(e);
+}
+
+void MainPopup::mouseMoveEvent(QMouseEvent* e)
+{
+    if (m_dragging && (e->buttons() & Qt::LeftButton)) {
+        move(e->globalPosition().toPoint() - m_dragOffset);
+        e->accept();
+        return;
+    }
+    QWidget::mouseMoveEvent(e);
+}
+
+void MainPopup::mouseReleaseEvent(QMouseEvent* e)
+{
+    if (m_dragging && e->button() == Qt::LeftButton) {
+        m_dragging = false;
+        e->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(e);
+}
+
+void MainPopup::paintEvent(QPaintEvent* e)
+{
+    QWidget::paintEvent(e);
+    QPainter p(this);
+    p.setPen(QColor(0x4a, 0x4a, 0x4a));
+    p.drawRect(rect().adjusted(0, 0, -1, -1));
 }
 
 void MainPopup::closeEvent(QCloseEvent* e)
@@ -1508,6 +1580,7 @@ void MainPopup::closeEvent(QCloseEvent* e)
 
 void MainPopup::hideEvent(QHideEvent* e)
 {
+    m_dragging = false;
     QWidget::hideEvent(e);
     setSearchBusy(false);
     platform::setNoActivate(this, true);

@@ -95,6 +95,7 @@ private:
     void registerHotkeys();
     void unregisterHotkeys();
     void updateEscHotkey(bool gameForeground);
+    void syncPopupLeague();
     void applyConfig();
     void saveConfig();
     void restart();

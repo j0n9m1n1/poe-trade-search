@@ -1,0 +1,29 @@
+Item Class: Two Hand Axes
+Rarity: Magic
+Champion's Vaal Axe
+--------
+Two Hand Axe
+Quality: +18% (augmented)
+Physical Damage: 187-312 (augmented)
+Critical Strike Chance: 5.00%
+Attacks per Second: 1.15
+Weapon Range: 1.3 metres
+--------
+Requirements:
+Level: 64
+Str: 158 (unmet)
+Dex: 76
+--------
+Sockets: W-G-W-W
+--------
+Item Level: 85
+--------
+{ Implicit Modifier — Attack }
+25% chance to Maim on Hit
+(Maimed enemies have 30% reduced Movement Speed)
+--------
+{ Fractured Prefix Modifier "Champion's" (Tier: 4) — Damage, Physical, Attack }
+52(45-54)% increased Physical Damage
++122(98-123) to Accuracy Rating
+--------
+Fractured Item

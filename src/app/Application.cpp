@@ -282,8 +282,10 @@ void Application::fixLeagues()
                 notify(QStringLiteral("설정된 리그 '%1'을(를) 찾을 수 없어 '%2'(으)로 변경했습니다.").arg(cur, d.leagues().first().id));
         }
     }
-    if (changed)
+    if (changed) {
         saveConfig();
+        syncPopupLeague();
+    }
 }
 
 // ------------------------------------------------------------ 트리거
@@ -543,9 +545,8 @@ void Application::showPopup()
     if (!screen)
         screen = QGuiApplication::primaryScreen();
     const QRect area = screen->availableGeometry();
-    const QSize framePadding(16, 40); // 창 테두리와 제목줄
-    m_popup->fitToAvailableHeight(qMax(1, area.height() - framePadding.height()));
-    const QSize size = m_popup->size() + framePadding;
+    m_popup->fitToAvailableHeight(qMax(1, area.height()));
+    const QSize size = m_popup->size();
     if (centered) {
         position = area.center() - QPoint(size.width() / 2, size.height() / 2);
     } else if (nearCursor) {
@@ -1202,6 +1203,26 @@ void Application::openSettings()
     }
 }
 
+void Application::syncPopupLeague()
+{
+    if (!m_popup || !m_popup->hasItem())
+        return;
+    const QString next = m_cfg.leagueFor(m_popup->parsedItem().game).trimmed();
+    if (m_popup->leagueTitle() == next)
+        return;
+    m_popup->setLeagueTitle(next);
+    m_client->cancel(m_priceToken);
+    m_priceToken = 0;
+    m_client->cancel(m_openTradeToken);
+    m_openTradeToken = 0;
+    m_popup->setSearchBusy(false);
+    ++m_priceFilterRevision;
+    m_listingPages.reset();
+    m_popup->clearPrices();
+    if (m_popup->isVisible() && m_cfg.autoPriceCheck)
+        priceCheck();
+}
+
 void Application::applyConfig()
 {
     m_client->setTimeoutSec(m_cfg.serverTimeout);
@@ -1210,7 +1231,8 @@ void Application::applyConfig()
         unregisterHotkeys();
         registerHotkeys();
     }
-    if (m_popup->isVisible())
+    syncPopupLeague();
+    if (m_popup && m_popup->isVisible())
         watchPopupClicks();
 }
 
