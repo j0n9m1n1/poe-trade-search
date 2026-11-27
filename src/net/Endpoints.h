@@ -23,6 +23,8 @@ QUrl exchange(Game g, Lang server, const QString& league);
 QUrl webSearch(Game g, Lang server, const QString& league, const QString& id);
 QUrl webExchange(Game g, Lang server, const QString& league, const QString& id);
 QUrl redirectSearch(Game g, Lang server, const QString& league, const QByteArray& queryJson);
+// 게임 아이템 이름판 문양 (fractured / shaper / searing ...). 공식 사이트 CSS 의 서명된 주소, 모르면 빈 문자열
+QString itemSymbol(const QString& name);
 
 } // namespace endpoints
 } // namespace pts

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "net/Endpoints.h"
 
+#include <QHash>
 #include <QUrlQuery>
 
 namespace pts::endpoints {
@@ -73,6 +74,24 @@ QUrl redirectSearch(Game g, Lang server, const QString& league, const QByteArray
     q.addQueryItem(QStringLiteral("q"), QString::fromUtf8(queryJson));
     u.setQuery(q);
     return u;
+}
+
+QString itemSymbol(const QString& name)
+{
+    // pathofexile.com CSS(.itemHeader .symbol.*) 에서 가져온 주소. key 가 바뀌면 받기가 실패하고 오브 아이콘으로 넘어감
+    static const QHash<QString, QString> urls = {
+        {QStringLiteral("fractured"), QStringLiteral("fractured-symbol.png?v=1709582916256&key=fM_bl3SW2hozdEIw5vh4GA")},
+        {QStringLiteral("shaper"), QStringLiteral("shaper-symbol.png?v=1709582916256&key=PQH0ATL4n268OngTnsQ0MQ")},
+        {QStringLiteral("elder"), QStringLiteral("elder-symbol.png?v=1709582916256&key=YS6Fsnxyuc8gpqfPz_mykw")},
+        {QStringLiteral("crusader"), QStringLiteral("crusader-symbol.png?v=1709582916256&key=dcLGV7cDJf-dulB8P_Q-yQ")},
+        {QStringLiteral("redeemer"), QStringLiteral("redeemer-symbol.png?v=1709582916256&key=nEc-TPctqwszY696cmlaZQ")},
+        {QStringLiteral("hunter"), QStringLiteral("hunter-symbol.png?v=1709582916256&key=x7-F-t4jlxzMd1eJOUSafA")},
+        {QStringLiteral("warlord"), QStringLiteral("warlord-symbol.png?v=1709582916256&key=76scs3jk3FrVGOLHdM5AuA")},
+        {QStringLiteral("searing"), QStringLiteral("searing-symbol.png?v=1709582916256&key=iiOWJvWHj8-0bH0e28X7Xw")},
+        {QStringLiteral("tangled"), QStringLiteral("tangled-symbol.png?v=1709582916256&key=b-SVlhPy2jy-UJSTBaV2Cw")},
+    };
+    const QString u = urls.value(name);
+    return u.isEmpty() ? QString() : QStringLiteral("https://web.poecdn.com/protected/image/item/popup/") + u;
 }
 
 } // namespace pts::endpoints

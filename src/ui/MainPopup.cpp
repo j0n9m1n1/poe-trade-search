@@ -600,31 +600,36 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     // 영향/엘드리치/분열 배지: 첫째 왼쪽, 나머지 오른쪽 (게임 헤더 양쪽 아이콘 자리). 아이콘은 Application 이 받아서 붙임
     {
         struct InflIcon {
+            const char* symbol;
             const char* id;
             const char* color;
         };
         static const QHash<QString, InflIcon> inflIcon = {
-            {QStringLiteral("shaper_item"), {"shapers-exalted-orb", "#7fa8f0"}},
-            {QStringLiteral("elder_item"), {"elders-exalted-orb", "#b98be6"}},
-            {QStringLiteral("crusader_item"), {"crusaders-exalted-orb", "#e8d27a"}},
-            {QStringLiteral("redeemer_item"), {"redeemers-exalted-orb", "#7fd3e6"}},
-            {QStringLiteral("hunter_item"), {"hunters-exalted-orb", "#8fd36b"}},
-            {QStringLiteral("warlord_item"), {"warlords-exalted-orb", "#ec7a62"}},
+            {QStringLiteral("shaper_item"), {"shaper", "shapers-exalted-orb", "#7fa8f0"}},
+            {QStringLiteral("elder_item"), {"elder", "elders-exalted-orb", "#b98be6"}},
+            {QStringLiteral("crusader_item"), {"crusader", "crusaders-exalted-orb", "#e8d27a"}},
+            {QStringLiteral("redeemer_item"), {"redeemer", "redeemers-exalted-orb", "#7fd3e6"}},
+            {QStringLiteral("hunter_item"), {"hunter", "hunters-exalted-orb", "#8fd36b"}},
+            {QStringLiteral("warlord_item"), {"warlord", "warlords-exalted-orb", "#ec7a62"}},
         };
         m_badges.clear();
         for (int i : it.influences) {
             if (i >= 0 && i < m_kw.influences().size()) {
                 const auto& inf = m_kw.influences()[i];
-                const auto ic = inflIcon.value(inf.flag, {"", "#cccccc"});
-                m_badges.push_back({QString::fromLatin1(ic.id), inf.name.first(Lang::Ko), QString::fromLatin1(ic.color)});
+                const auto ic = inflIcon.value(inf.flag, {"", "", "#cccccc"});
+                m_badges.push_back({QString::fromLatin1(ic.symbol), QString::fromLatin1(ic.id), inf.name.first(Lang::Ko),
+                                    QString::fromLatin1(ic.color)});
             }
         }
         if (it.searing)
-            m_badges.push_back({QStringLiteral("exceptional-eldritch-ember"), QStringLiteral("총주교"), QStringLiteral("#ff8a3d")});
+            m_badges.push_back({QStringLiteral("searing"), QStringLiteral("exceptional-eldritch-ember"), QStringLiteral("총주교"),
+                                QStringLiteral("#ff8a3d")});
         if (it.tangled)
-            m_badges.push_back({QStringLiteral("exceptional-eldritch-ichor"), QStringLiteral("포식자"), QStringLiteral("#5fd0b8")});
-        if (it.fractured) // 분열된 아이템: 분열의 오브 (PoE1/PoE2 둘 다 있음)
-            m_badges.push_back({QStringLiteral("fracturing-orb"), QStringLiteral("분열"), QStringLiteral("#a29162")});
+            m_badges.push_back({QStringLiteral("tangled"), QStringLiteral("exceptional-eldritch-ichor"), QStringLiteral("포식자"),
+                                QStringLiteral("#5fd0b8")});
+        if (it.fractured) // 분열된 아이템 (PoE1/PoE2 둘 다)
+            m_badges.push_back({QStringLiteral("fractured"), QStringLiteral("fracturing-orb"), QStringLiteral("분열"),
+                                QStringLiteral("#a29162")});
         renderBadges();
     }
     m_icon->clear();
@@ -1255,14 +1260,18 @@ void MainPopup::refreshCurrencyCombo()
                                .arg(m_currency->currentData(Qt::ToolTipRole).toString()));
 }
 
-QStringList MainPopup::badgeIconIds() const
+QVector<QPair<QString, QString>> MainPopup::badgeIconSources() const
 {
-    QStringList ids;
-    for (const Badge& b : m_badges) {
-        if (!b.iconId.isEmpty())
-            ids << b.iconId;
-    }
-    return ids;
+    QVector<QPair<QString, QString>> out;
+    for (const Badge& b : m_badges)
+        out.push_back({b.symbol, b.iconId});
+    return out;
+}
+
+void MainPopup::setBadgeSymbol(const QString& symbol, const QString& path)
+{
+    if (!symbol.isEmpty())
+        setBadgeIcon(QStringLiteral("symbol:") + symbol, path);
 }
 
 void MainPopup::setBadgeIcon(const QString& staticId, const QString& path)
@@ -1275,12 +1284,15 @@ void MainPopup::setBadgeIcon(const QString& staticId, const QString& path)
 
 void MainPopup::renderBadges()
 {
-    // 왼쪽 = 첫째, 오른쪽 = 나머지. 아이콘이 다 있으면 아이콘만, 하나라도 없으면 글자 배지
-    const QVector<Badge> left = m_badges.mid(0, 1), right = m_badges.mid(1);
-    constexpr int kIcon = 30, kGap = 2;
+    // 게임 이름판처럼: 하나면 양쪽에 같은 문양, 둘 이상이면 첫째 왼쪽 / 나머지 오른쪽
+    // 문양(게임 이름판) > 오브 아이콘(거래소 정적 데이터) > 글자 배지 순
+    const QVector<Badge> left = m_badges.mid(0, 1), right = m_badges.size() == 1 ? m_badges : m_badges.mid(1);
+    constexpr int kIcon = 27, kGap = 2; // 문양 원본 27x27
     auto iconsFor = [this](const QVector<Badge>& bs, QVector<QPixmap>* out) {
         for (const Badge& b : bs) {
-            const QPixmap pm(m_badgeIcons.value(b.iconId));
+            QPixmap pm(m_badgeIcons.value(QStringLiteral("symbol:") + b.symbol));
+            if (pm.isNull())
+                pm = QPixmap(m_badgeIcons.value(b.iconId));
             if (pm.isNull())
                 return false;
             out->push_back(pm);

@@ -442,12 +442,28 @@ void Application::handleItemText(const QString& text)
     loadCurrencyIcons(g, it->lang, {QStringLiteral("chaos"), QStringLiteral("divine"), QStringLiteral("exalted")});
     m_popup->showItem(*it, &m_dbs[gi(g)], m_cfg, serverFor(it->lang));
     showIconFor(*it);
-    // 영향/엘드리치/분열 배지 아이콘 (영향 엑잘티드 오브, 섬뜩한 불씨/영액, 분열의 오브)
-    for (const QString& id : m_popup->badgeIconIds()) {
+    // 영향/엘드리치/분열 배지: 게임 이름판 문양 먼저, 못 받으면 오브 아이콘 (영향 엑잘티드 오브, 섬뜩한 불씨/영액, 분열의 오브)
+    for (const auto& src : m_popup->badgeIconSources()) {
+        const QString symbol = src.first, id = src.second;
         const StaticEntry* s = m_dbs[gi(g)][it->lang].staticById(id);
-        if (!s || s->image.isEmpty())
+        const QString orb = s ? s->image : QString();
+        auto fallback = [this, id, orb]() {
+            if (!orb.isEmpty())
+                m_icons->get(orb, [this, id](const QString& path) { m_popup->setBadgeIcon(id, path); });
+        };
+        const QString url = endpoints::itemSymbol(symbol);
+        if (url.isEmpty()) {
+            fallback();
             continue;
-        m_icons->get(s->image, [this, id](const QString& path) { m_popup->setBadgeIcon(id, path); });
+        }
+        m_icons->get(url, [this, symbol, fallback](const QString& path) {
+            if (path.isEmpty()) {
+                qWarning() << "item symbol download failed" << symbol;
+                fallback();
+                return;
+            }
+            m_popup->setBadgeSymbol(symbol, path);
+        });
     }
     showPopup();
 

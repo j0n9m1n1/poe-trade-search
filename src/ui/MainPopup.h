@@ -64,8 +64,9 @@ public:
     void setLeagueTitle(const QString& league);
     // 화폐 이름(카오스/디바인/전체 이름) 아이콘. 가격 칸과 추정가에 이름 대신 아이콘
     void setUnitIcon(const QString& unitName, const QString& path);
-    // 영향/엘드리치 배지 아이콘 (거래소 정적 데이터 id: shapers-exalted-orb, exceptional-eldritch-ember ...)
-    QStringList badgeIconIds() const;
+    // 영향/엘드리치/분열 배지 아이콘: (게임 이름판 문양 이름, 못 받았을 때 쓸 거래소 정적 데이터 id)
+    QVector<QPair<QString, QString>> badgeIconSources() const;
+    void setBadgeSymbol(const QString& symbol, const QString& path);
     void setBadgeIcon(const QString& staticId, const QString& path);
 
 signals:
@@ -122,7 +123,8 @@ private:
     QLabel* m_inflL;        // 영향 표시 (왼쪽/오른쪽)
     QLabel* m_inflR;
     struct Badge {
-        QString iconId; // 거래소 정적 데이터 id
+        QString symbol; // 게임 이름판 문양 (fractured / shaper / searing ...)
+        QString iconId; // 문양을 못 받았을 때 쓸 거래소 정적 데이터 id
         QString name;
         QString color; // 아이콘 못 받았을 때 글자 배지 색
     };
