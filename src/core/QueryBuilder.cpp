@@ -244,8 +244,7 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
     yesNo(QStringLiteral("corrupted"), r.corrupted);
     yesNo(QStringLiteral("twice_corrupted"), r.twiceCorrupted);
     yesNo(QStringLiteral("mutated"), r.mutated);
-    if (r.notMirrored)
-        fs.add(QStringLiteral("mirrored"), option(QStringLiteral("false")));
+    yesNo(QStringLiteral("mirrored"), r.mirrored);
     if (r.notSplit && r.game == Game::Poe1)
         fs.add(QStringLiteral("split"), option(QStringLiteral("false")));
     if (r.notFractured)

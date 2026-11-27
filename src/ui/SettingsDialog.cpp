@@ -118,7 +118,7 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_statRange->setRange(0, 50);
     m_statRange->setSuffix(QStringLiteral("%"));
     m_statRange->setValue(cfg.searchStatRange);
-    m_statRange->setToolTip(QStringLiteral("옵션 최소값을 값의 N%만큼 낮춰서 채웁니다 (0 = 정확값). 고유는 롤 범위 폭을 기준으로 합니다"));
+    m_statRange->setToolTip(QStringLiteral("옵션 최소값을 값의 N%만큼 낮춰서 채웁니다 (0 = 일치). 고유는 롤 범위 폭을 기준으로 합니다"));
     f->addRow(QStringLiteral("옵션 값 완화:"), m_statRange);
     m_collapse = new QCheckBox(QStringLiteral("시세 조회 시 계정별로 묶기 (한 판매자의 매물이 목록을 채우지 않도록)"), basic);
     m_collapse->setChecked(cfg.collapseListings);

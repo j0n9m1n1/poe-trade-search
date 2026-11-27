@@ -409,7 +409,8 @@ private slots:
         // 기본 제외 필터
         SearchRequest r;
         r.type = QStringLiteral("Two-Stone Ring");
-        r.notMirrored = r.notSplit = r.notFractured = true;
+        r.mirrored = 2;
+        r.notSplit = r.notFractured = true;
         const QJsonObject mf = QueryBuilder::build(r, nullptr).value(QStringLiteral("query")).toObject()
                                    .value(QStringLiteral("filters")).toObject()
                                    .value(QStringLiteral("misc_filters")).toObject()
@@ -468,12 +469,12 @@ private slots:
         ctx.server = Lang::Ko;
         ctx.league = QStringLiteral("Covens");
         SearchRequest req = makeRequest(ex, st, kw, &dbs[0], ctx);
-        QVERIFY(req.notMirrored && req.notSplit);
+        QVERIFY(req.mirrored == 2 && req.notSplit);
         QVERIFY(g->fractured);
         QVERIFY(!req.notFractured); // 분열된 아이템이면 분열 제외 필터 안 넣음
         ctx.league = QStringLiteral("Standard");
         req = makeRequest(*g, defaultFilterState(*g), kw, &dbs[0], ctx);
-        QVERIFY(req.notMirrored && !req.notSplit); // 영구 리그는 분할 매물 허용
+        QVERIFY(req.mirrored == 2 && !req.notSplit); // 영구 리그는 분할 매물 허용
 
         // 방어 종류가 둘(회피+에보)이면 속성 자동 체크 안 함
         QCOMPARE(propUse(*g, "ev"), 0);
@@ -597,6 +598,42 @@ private slots:
         // 변형 젬 구분자는 그대로, 일반 젬엔 구분자 안 붙음
         auto gem = parse(QStringLiteral("poe1_en_gem_transfigured.txt"), Game::Poe1);
         QVERIFY(gem && gem->transfigured && !gem->disc.isEmpty());
+    }
+
+    void mirroredAndExactDefault()
+    {
+        // 설정 v7: 예전 기본 10% -> 일치(0), 직접 고른 값은 그대로
+        QCOMPARE(Config::defaults().searchStatRange, 0);
+        const QString path = QDir::temp().filePath(QStringLiteral("pts_cfg_v7.txt"));
+        for (int pct : {10, 20}) {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(QStringLiteral("{\"config_version\":6,\"options\":{\"search_stat_range\":%1}}").arg(pct).toUtf8());
+            f.close();
+            Config c;
+            QVERIFY(c.load(path));
+            QCOMPARE(c.searchStatRange, pct == 10 ? 0 : 20);
+        }
+        QFile::remove(path);
+
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        // 한국어 "복제" 한 줄 -> 복제된 아이템, 기본은 복제된 매물만
+        auto m = parse(QStringLiteral("poe1_ko_rare_ring_mirrored.txt"), Game::Poe1);
+        QVERIFY(m);
+        QVERIFY(m->mirrored);
+        ItemFilterState st = defaultFilterState(*m);
+        QCOMPARE(st.mirrored, 1);
+        RequestContext ctx;
+        ctx.server = Lang::Ko;
+        auto misc = [&](const ItemFilterState& s) {
+            return QueryBuilder::build(makeRequest(*m, s, kw, &dbs[0], ctx), nullptr)
+                .value(QStringLiteral("query")).toObject().value(QStringLiteral("filters")).toObject()
+                .value(QStringLiteral("misc_filters")).toObject().value(QStringLiteral("filters")).toObject();
+        };
+        QCOMPARE(misc(st).value(QStringLiteral("mirrored")).toObject().value(QStringLiteral("option")).toString(), QStringLiteral("true"));
+        st.mirrored = 0; // 복제 줄 끔 -> 조건 없음
+        QVERIFY(!misc(st).contains(QStringLiteral("mirrored")));
     }
 
     void runHotkeyMigration()

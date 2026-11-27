@@ -68,6 +68,11 @@ void Config::migrate()
         if (tradeStatus == QStringLiteral("available"))
             tradeStatus = QStringLiteral("securable");
     }
+    if (configVersion < 7) {
+        // v7: 옵션 값 기본을 "일치"(0%)로 (예전 기본값 10% 를 그대로 쓰던 경우만)
+        if (searchStatRange == 10)
+            searchStatRange = 0;
+    }
     if (configVersion < 6) {
         // v6: {Run} 기본 단축키 Alt+D. Ctrl+C 감시는 별도 설정으로 분리
         //  - {Run} 에 키가 없던 설정 -> Alt+D (다른 단축키가 Alt+D 를 쓰면 그대로), Ctrl+C 감시 켬

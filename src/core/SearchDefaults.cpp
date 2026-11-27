@@ -48,6 +48,7 @@ ItemFilterState defaultFilterState(const ParsedItem& it)
     s.corrupted = it.corruptDefault;
     s.twiceCorrupted = it.twiceCorruptDefault;
     s.mutated = it.mutatedDefault;
+    s.mirrored = it.mirrored ? 1 : 0;
     s.rarity = it.rarityFilter;
     s.useName = !it.byCategory; // auto_select_bytype 대상이면 처음부터 유형 검색
     s.useType = !it.byCategory;
@@ -198,7 +199,8 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
         const bool permanent = ctx.league.contains(QStringLiteral("Standard"), Qt::CaseInsensitive) ||
                                ctx.league.compare(QStringLiteral("Hardcore"), Qt::CaseInsensitive) == 0 ||
                                ctx.league.compare(QStringLiteral("Ruthless"), Qt::CaseInsensitive) == 0;
-        r.notMirrored = gear && nonUnique && !it.mirrored;
+        // 복제: 복제된 아이템이면 사용자가 고른 대로(기본 복제만), 아니면 고유 아닌 장비는 복제 제외
+        r.mirrored = st.mirrored == 1 ? 1 : (st.mirrored == 2 || (gear && nonUnique && !it.mirrored) ? 2 : 0);
         r.notSplit = gear && nonUnique && it.game == Game::Poe1 && !it.split && (!permanent || st.exact);
         r.notFractured = gear && st.exact && !it.fractured;
     }

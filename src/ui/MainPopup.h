@@ -136,6 +136,7 @@ private:
     PropRow* m_qRow;
     PropRow* m_sockRow;
     PropRow* m_linkRow;
+    PropRow* m_mirrorRow; // 복제된 아이템
     QWidget* m_rowsBox;
     QVBoxLayout* m_rowsLayout;
     QVector<FilterRow*> m_rows;

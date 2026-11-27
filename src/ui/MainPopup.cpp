@@ -159,7 +159,7 @@ void MainPopup::buildUi()
     m_preset->addItem(QStringLiteral("정확"), static_cast<int>(Preset::Exact));
     m_preset->addItem(QStringLiteral("베이스"), static_cast<int>(Preset::Base));
     m_preset->setToolTip(QStringLiteral("기본: pseudo 우선 / 자동 체크\n"
-                                        "정확: 원래 옵션, T1~T2 만 체크 (등급 모르면 일반 옵션 전부), 정확값\n"
+                                        "정확: 원래 옵션, T1~T2 만 체크 (등급 모르면 일반 옵션 전부), 값 일치\n"
                                         "베이스: 옵션을 모두 끄고 아이템 레벨·영향 위주로 검색"));
     m_range = new QComboBox(this);
     m_range->setToolTip(QStringLiteral("옵션 값 완화: 최소값을 N% 낮춰서 검색 (고유는 롤 범위 폭 기준)"));
@@ -287,8 +287,7 @@ void MainPopup::buildUi()
             prl->addWidget(r);
             return r;
         };
-        m_rarityRow = addRow();
-        m_rarityRow->setCheckable(false);
+        m_rarityRow = addRow(); // 켜면 콤보의 레어도로, 끄면 레어도 조건 없이
         m_rarityRow->setExtra(m_rarity);
         m_lvRow = addRow();
         m_qRow = addRow();
@@ -318,6 +317,8 @@ void MainPopup::buildUi()
             pw.row = addRow();
             m_props.push_back(pw);
         }
+        m_mirrorRow = addRow(); // 복제된 아이템일 때만: 켜면 복제된 매물만, 끄면 무관
+        m_mirrorRow->setEditsVisible(false);
     }
     m_rowsLayout->insertWidget(0, m_propRows);
     m_propSep = hline(m_rowsBox);
@@ -471,8 +472,11 @@ void MainPopup::buildUi()
         connect(c, qOverload<int>(&QComboBox::currentIndexChanged), this, stale);
     for (QCheckBox* c : {m_special1, m_special2, m_collapse})
         connect(c, &QCheckBox::toggled, this, stale);
-    for (PropRow* r : {m_lvRow, m_qRow, m_sockRow, m_linkRow})
+    for (PropRow* r : {m_rarityRow, m_lvRow, m_qRow, m_sockRow, m_linkRow, m_mirrorRow})
         connect(r, &PropRow::changed, this, stale);
+    // 레어도 콤보를 고르면 레어도 줄도 켬 ("모두"면 끔)
+    connect(m_rarity, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this]() { m_rarityRow->setChecked(!m_rarity->currentData().toString().isEmpty()); });
     for (ToggleLabel* t : {m_useName, m_useType})
         connect(t, &ToggleLabel::toggled, this, stale);
     // 등록일 자동: 판매 방식을 바꾸면 따라감 (등록일을 직접 고르면 그때부터 고정)
@@ -642,7 +646,7 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
         m_preset->setCurrentIndex(0);
         m_range->clear();
         const int base = m_cfgRange > 0 ? m_cfgRange : 10;
-        m_range->addItem(QStringLiteral("정확값"), 0);
+        m_range->addItem(QStringLiteral("일치"), 0);
         m_range->addItem(QStringLiteral("-%1%").arg(base), base);
         m_range->addItem(QStringLiteral("-%1% (넓게)").arg(base * 2), base * 2);
         m_range->setCurrentIndex(m_cfgRange > 0 ? 1 : 0);
@@ -799,9 +803,14 @@ void MainPopup::renderMisc(const ItemFilterState& st)
         b10(m_useName), b10b(m_useType), b11(m_rarity);
     const QColor propGray(0xc8, 0xc8, 0xc8), warn(0xe0, 0x66, 0x66);
 
-    // 레어도 줄
+    // 레어도 줄: 켜면 콤보 값으로 검색, 끄면 레어도 조건 없음
     m_rarityRow->setText(QStringLiteral("아이템 희귀도: %1").arg(it.rarityText));
     m_rarityRow->setVisible(!it.rarityText.isEmpty() && !it.isCurrency && !it.isCard);
+    m_rarityRow->setChecked(!st.rarity.isEmpty());
+    // 복제된 아이템 줄
+    m_mirrorRow->setText(QStringLiteral("복제된 아이템"));
+    m_mirrorRow->setVisible(it.mirrored);
+    m_mirrorRow->setChecked(st.mirrored == 1);
     // 레벨 줄: 아이템 레벨 / 젬 레벨 / 지도 등급
     {
         const auto kind = levelKindFor(it);
@@ -913,7 +922,8 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     }
     m_useName->setChecked(st.useName && !st.byCategory);
     m_useType->setChecked(st.useType && !st.byCategory);
-    const int ri = m_rarity->findData(st.rarity);
+    // 콤보는 꺼져 있어도 아이템 기본 레어도(고유 / 고유 제외)를 보여 줌
+    const int ri = m_rarity->findData(st.rarity.isEmpty() ? it.rarityFilter : st.rarity);
     if (ri >= 0)
         m_rarity->setCurrentIndex(ri);
     m_miscBox->setVisible(!it.isCurrency && !it.isCard);
@@ -950,7 +960,9 @@ ItemFilterState MainPopup::collectState() const
         s.twiceCorrupted = v / 10;
     }
     s.mutated = m_mutated->isHidden() ? 0 : m_mutated->currentIndex();
-    s.rarity = m_rarity->currentData().toString();
+    s.rarity = !m_rarityRow->isHidden() && m_rarityRow->isChecked() ? m_rarity->currentData().toString() : QString();
+    if (!m_mirrorRow->isHidden())
+        s.mirrored = m_mirrorRow->isChecked() ? 1 : 0;
     s.byCategory = false;
     s.exact = static_cast<Preset>(m_preset->currentData().toInt()) == Preset::Exact;
     for (PropFilterState& p : s.props) {
