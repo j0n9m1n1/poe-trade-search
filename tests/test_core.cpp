@@ -1034,6 +1034,41 @@ private slots:
         QVERIFY(fa && !defaultFilterState(*fa).notFractured);
     }
 
+    void mapCitadelOriginator()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        // "지도에 바란의 시타델(...) 등장": (...) 를 빼고 선택지 옵션(1=바란)으로, 태초자의 기억과 함께 기본 켬
+        auto m = parse(QStringLiteral("poe1_ko_rare_map_citadel_originator.txt"), Game::Poe1);
+        QVERIFY(m && m->isMap);
+        const ParsedMod* cit = nullptr;
+        const ParsedMod* org = nullptr;
+        for (const ParsedMod& x : m->mods) {
+            if (x.unmatched || !x.current())
+                continue;
+            if (x.current()->id.startsWith(QStringLiteral("implicit.stat_2563183002")))
+                cit = &x;
+            if (x.current()->id == QStringLiteral("implicit.stat_2696470877"))
+                org = &x;
+        }
+        QVERIFY(cit && cit->checked && cit->optionStat);
+        QVERIFY(org && org->checked);
+        RequestContext ctx;
+        ctx.server = Lang::Ko;
+        const QJsonArray stats = QueryBuilder::build(makeRequest(*m, defaultFilterState(*m), kw, &dbs[0], ctx), &dbs[0][Lang::Ko])
+                                     .value(QStringLiteral("query")).toObject().value(QStringLiteral("stats")).toArray()
+                                     .at(0).toObject().value(QStringLiteral("filters")).toArray();
+        bool citOk = false, orgOk = false;
+        for (const auto& v : stats) {
+            const QJsonObject f = v.toObject();
+            if (f.value(QStringLiteral("id")).toString() == QStringLiteral("implicit.stat_2563183002"))
+                citOk = f.value(QStringLiteral("value")).toObject().value(QStringLiteral("option")).toInt() == 1;
+            if (f.value(QStringLiteral("id")).toString() == QStringLiteral("implicit.stat_2696470877"))
+                orgOk = true;
+        }
+        QVERIFY(citOk && orgOk);
+    }
+
     void foilUnique()
     {
         if (!haveData)

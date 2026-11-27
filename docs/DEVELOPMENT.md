@@ -74,8 +74,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.34
-git push origin v0.0.34
+git tag v0.0.35
+git push origin v0.0.35
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -97,6 +97,13 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.34
+
+- 정복자 시타델 지도를 찾지 못하던 문제를 고쳤습니다 (리더 직접). 고급 복사 줄 `지도에 바란의 시타델(...) 등장`의 `(...)` 때문에 거래소 옵션(`implicit.stat_2563183002`, 선택지 1=바란/2=베리타니아/3=알-헤즈민/4=드록스)과 글자가 맞지 않았습니다. 옵션 줄에서 `(...)`를 지우고 매칭합니다. [파서](../src/core/ItemParser.cpp)
+- 지도의 고정 옵션(정복자 시타델, 태초자의 기억 등)을 기본으로 켭니다. 지도 가치를 정하는 옵션인데 꺼져 있어서 T16 희귀 지도 전체(10,000건)가 검색됐습니다.
+
+**검증.** 사용자가 보낸 `금단의 노고` 지도로 카카오 Covens 조회: 바란 시타델 + 태초자 조건 333건 (예전 조건 없음 10,000건). 코어 테스트 74개, UI 테스트 6개가 통과했습니다.
 
 ### v0.0.33
 

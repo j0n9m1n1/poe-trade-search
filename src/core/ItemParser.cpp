@@ -794,6 +794,9 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                     x.modType = hdrType;
                 x.tier = hdrTier;
                 x.affix = hdrAffix;
+                // 고급 복사에서 이름 일부가 "(...)" 로 줄어 나오는 경우 ("지도에 바란의 시타델(...) 등장")
+                if (t.contains(QStringLiteral("(...)")))
+                    t = t.remove(QStringLiteral("(...)")).simplified();
                 const QString withRanges = text::stripDashSuffix(t).trimmed();
                 t = text::stripAdvancedRanges(withRanges).trimmed();
                 x.display = t;
@@ -1106,6 +1109,14 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     if (it.fractured) {
         for (ParsedMod& m : it.mods) {
             if (m.modType == QStringLiteral("fractured") && !m.lockedOff && !m.unmatched)
+                m.checked = true;
+        }
+    }
+
+    // ---- 지도 고정 옵션(정복자 시타델, 태초자의 기억, 영향 등)은 지도 가치를 정하므로 기본으로 켬
+    if (it.isMap) {
+        for (ParsedMod& m : it.mods) {
+            if (m.modType == QStringLiteral("implicit") && !m.lockedOff && !m.unmatched)
                 m.checked = true;
         }
     }
