@@ -487,6 +487,25 @@ private slots:
         QVERIFY(fam && fam->checked);
         QCOMPARE(fam->current()->id, QStringLiteral("fractured.stat_2451402625"));
 
+        // 유사(pseudo) 후보가 있는 분열 옵션도 분열 그룹으로 (심연 주얼 "에너지 보호막 최대치 +31")
+        auto aj = parse(QStringLiteral("poe1_ko_abyss_jewel_fractured.txt"), Game::Poe1);
+        QVERIFY(aj && aj->fractured);
+        const ParsedMod* ajm = findMod(*aj, QStringLiteral("stat_3489782002"));
+        if (!ajm) {
+            for (const ParsedMod& m : aj->mods) {
+                if (m.modType == QStringLiteral("fractured"))
+                    ajm = &m;
+            }
+        }
+        QVERIFY(ajm && ajm->current());
+        QVERIFY2(ajm->current()->id.startsWith(QStringLiteral("fractured.")), qPrintable(ajm->current()->id));
+        QVERIFY(ajm->checked);
+        const ParsedItem ajEx = applyPreset(*aj, Preset::Default, 0, nullptr); // 프리셋 다시 적용해도 그대로
+        for (const ParsedMod& m : ajEx.mods) {
+            if (m.modType == QStringLiteral("fractured"))
+                QVERIFY2(m.current()->id.startsWith(QStringLiteral("fractured.")), qPrintable(m.current()->id));
+        }
+
         // 하나뿐이면 켜고, 그 속성에 들어간 로컬 옵션은 체크 해제
         QString evOnly = gl;
         evOnly.remove(QStringLiteral("에너지 보호막: 25 (augmented)\n"));

@@ -309,7 +309,10 @@ ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const Ma
     } else {
         const bool hasPseudo = findGroup(QStringLiteral("pseudo")) >= 0;
         int sel = -1;
-        if (!localChosen && opt.autoSelectPseudo && hasPseudo)
+        // 분열 옵션은 분열 그룹이 먼저 (유사로 바꾸면 분열 조건이 빠져서 분열 안 된 매물까지 섞임)
+        if (mod.modType == QStringLiteral("fractured"))
+            sel = findGroup(QStringLiteral("fractured"));
+        if (sel < 0 && !localChosen && opt.autoSelectPseudo && hasPseudo)
             sel = findGroup(QStringLiteral("pseudo"));
         // PoE2 훼손 옵션은 수정 가능한 아이템이면 일반(explicit) id 로 검색 (EE2).
         // 분열 옵션은 분열 id 그대로: 분열 자체가 가치라서 일반 id 로 찾으면 분열 안 된 매물까지 섞임
