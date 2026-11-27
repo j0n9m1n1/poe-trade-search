@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-#include "app/ItemHistory.h"
 #include "core/CheckedStore.h"
 #include "core/Config.h"
 #include "core/ItemParser.h"
@@ -57,9 +56,8 @@ private:
     // 동작
     void handleItemText(const QString& text);
     std::optional<ParsedItem> parseItem(const QString& text, Game game);
-    void showParsedItem(const ParsedItem& item, bool fromHistory);
-    void navigateHistory(int offset);
-    void showPopup(bool keepPosition = false);
+    void showParsedItem(const ParsedItem& item);
+    void showPopup();
     void reopenLast(); // 실수로 닫았을 때
     void watchPopupClicks();
     void checkOutsideClick();
@@ -150,7 +148,6 @@ private:
     std::optional<ListingPages> m_listingPages;
     quint64 m_priceFilterRevision = 0;
     QTimer m_priceRefreshTimer;
-    ItemHistory m_history;
     QString m_newTag, m_newPage;
     QString m_downloadedZip;
     std::unique_ptr<ItemParser> m_parser;

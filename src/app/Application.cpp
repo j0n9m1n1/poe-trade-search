@@ -138,7 +138,6 @@ bool Application::start(QString* error)
         m_listingPages.reset();
     });
     connect(m_popup, &MainPopup::settingsRequested, this, &Application::openSettings);
-    connect(m_popup, &MainPopup::historyRequested, this, &Application::navigateHistory);
     connect(m_popup, &MainPopup::leagueRequested, this, [this](Game game, const QString& league) {
         if (m_cfg.leagueFor(game) == league)
             return;
@@ -511,8 +510,7 @@ void Application::handleItemText(const QString& text)
     const Game g = decideGame(text);
     m_lastGame = g;
     if (auto item = parseItem(text, g)) {
-        m_history.record(g, text.trimmed());
-        showParsedItem(*item, false);
+        showParsedItem(*item);
     }
 }
 
@@ -535,20 +533,7 @@ std::optional<ParsedItem> Application::parseItem(const QString& text, Game g)
     return it;
 }
 
-void Application::navigateHistory(int offset)
-{
-    const auto* entry = m_history.step(offset);
-    if (!entry)
-        return;
-    if (auto item = parseItem(entry->text, entry->game)) {
-        m_lastGame = item->game;
-        showParsedItem(*item, true);
-    } else {
-        m_history.step(-offset);
-    }
-}
-
-void Application::showParsedItem(const ParsedItem& it, bool fromHistory)
+void Application::showParsedItem(const ParsedItem& it)
 {
     const Game g = it.game;
     m_priceRefreshTimer.stop();
@@ -584,23 +569,22 @@ void Application::showParsedItem(const ParsedItem& it, bool fromHistory)
             m_popup->setBadgeSymbol(symbol, path);
         });
     }
-    m_popup->setHistoryAvailability(m_history.canStep(-1), m_history.canStep(1));
-    showPopup(fromHistory);
+    showPopup();
 
-    if (fromHistory || m_cfg.autoPriceCheck)
+    if (m_cfg.autoPriceCheck)
         priceCheck();
 }
 
-void Application::showPopup(bool keepPosition)
+void Application::showPopup()
 {
-    const bool centered = !keepPosition && m_cfg.popupPosition == QStringLiteral("center");
-    const bool nearCursor = !keepPosition && m_cfg.popupPosition == QStringLiteral("cursor");
+    const bool centered = m_cfg.popupPosition == QStringLiteral("center");
+    const bool nearCursor = m_cfg.popupPosition == QStringLiteral("cursor");
     const QPoint cursor = QCursor::pos();
     QPoint position = m_popup->isVisible() ? m_popup->pos() : m_popupPos;
     QScreen* screen = nullptr;
     if (centered || nearCursor)
         screen = QGuiApplication::screenAt(cursor);
-    else if (keepPosition || !position.isNull())
+    else if (!position.isNull())
         screen = QGuiApplication::screenAt(position);
     if (!screen)
         screen = QGuiApplication::primaryScreen();
@@ -615,7 +599,7 @@ void Application::showPopup(bool keepPosition)
         if (x + size.width() > area.right() + 1)
             x = cursor.x() - 24 - size.width();
         position = QPoint(x, cursor.y() - size.height() / 3);
-    } else if ((!keepPosition && position.isNull()) || !area.contains(position)) {
+    } else if (position.isNull() || !area.contains(position)) {
         position = area.topLeft() + QPoint(30, 30);
     }
     const int x = qBound(area.left(), position.x(), qMax(area.left(), area.right() + 1 - size.width()));

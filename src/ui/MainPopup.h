@@ -78,7 +78,6 @@ public:
     void showCopyFeedback(const QString& note);
     void clearPrices() { priceBusy(m_idleText); }
     void setSearchBusy(bool busy);
-    void setHistoryAvailability(bool previous, bool next);
 
     void setLeagueTitle(const QString& league);
     QString leagueTitle() const { return m_leagueText; }
@@ -95,7 +94,6 @@ signals:
     void moreListingsRequested();
     void priceFiltersChanged();
     void settingsRequested();
-    void historyRequested(int offset);
     void leagueRequested(Game game, const QString& league);
     void rememberToggled(const QString& statKey, const QString& top, bool on);
     void copyPriceNoteRequested(const QString& note);
@@ -146,8 +144,6 @@ private:
     QComboBox* m_rarity;
     QComboBox* m_preset;
     QComboBox* m_range;
-    QPushButton* m_historyPrevious;
-    QPushButton* m_historyNext;
     QComboBox* m_league = nullptr; // 검색할 리그
     QString m_leagueText;
     bool m_dragging = false;

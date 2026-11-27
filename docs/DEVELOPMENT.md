@@ -74,8 +74,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.37
-git push origin v0.0.37
+git tag v0.0.38
+git push origin v0.0.38
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -97,6 +97,12 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.37
+
+- 최근 아이템 ◀/▶ 기능(v0.0.33)을 사용자 결정으로 뺐습니다. 버튼, 아이템 기억(`ItemHistory`), 관련 테스트를 지웠고 팝업 위치 유지 인자도 정리했습니다. [앱](../src/app/Application.cpp) · [팝업](../src/ui/MainPopup.cpp)
+
+**검증.** 코어 테스트 74개(히스토리 테스트 1개 삭제), UI 테스트 7개가 통과했습니다. 오프스크린에서 지도 → 갈매기 순서로 띄워 버튼이 없어진 상단과 펼쳐진 옵션 영역을 확인했습니다.
 
 ### v0.0.36
 

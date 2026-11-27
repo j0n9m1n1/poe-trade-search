@@ -189,17 +189,6 @@ void MainPopup::buildUi()
 
     // ---- 상단: 희귀도 / 프리셋 / 범위 / 서버 / 설정
     auto* top = new QHBoxLayout;
-    m_historyPrevious = new QPushButton(QStringLiteral("◀"), this);
-    m_historyNext = new QPushButton(QStringLiteral("▶"), this);
-    m_historyPrevious->setToolTip(QStringLiteral("최근 검색한 아이템 중 이전 아이템으로 돌아갑니다 (최대 10개)."));
-    m_historyNext->setToolTip(QStringLiteral("최근 검색한 아이템 중 다음 아이템으로 넘어갑니다."));
-    for (auto* button : {m_historyPrevious, m_historyNext}) {
-        button->setFixedWidth(30);
-        top->addWidget(button);
-    }
-    setHistoryAvailability(false, false);
-    connect(m_historyPrevious, &QPushButton::clicked, this, [this]() { emit historyRequested(-1); });
-    connect(m_historyNext, &QPushButton::clicked, this, [this]() { emit historyRequested(1); });
     m_rarity = new QComboBox(this);
     const QList<QPair<QString, QString>> rar = {{QStringLiteral("모두"), QString()},
                                                 {QStringLiteral("일반"), QStringLiteral("normal")},
@@ -1781,15 +1770,6 @@ void MainPopup::setSearchBusy(bool busy)
 {
     m_search->setEnabled(!busy);
     m_search->setText(busy ? QStringLiteral("거래소 여는 중...") : QStringLiteral("거래소에서 찾기"));
-}
-
-void MainPopup::setHistoryAvailability(bool previous, bool next)
-{
-    m_historyPrevious->setEnabled(previous);
-    m_historyNext->setEnabled(next);
-    // 최근 아이템이 하나뿐이면 숨김 (뭔지 모를 버튼이 안 보이게)
-    m_historyPrevious->setVisible(previous || next);
-    m_historyNext->setVisible(previous || next);
 }
 
 void MainPopup::keyPressEvent(QKeyEvent* e)
