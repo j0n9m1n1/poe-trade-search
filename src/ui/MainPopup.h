@@ -70,6 +70,7 @@ public:
     void showCopyFeedback(const QString& note);
     void clearPrices() { priceBusy(m_idleText); }
     void setSearchBusy(bool busy);
+    void setHistoryAvailability(bool previous, bool next);
 
     void setLeagueTitle(const QString& league);
     QString leagueTitle() const { return m_leagueText; }
@@ -86,6 +87,7 @@ signals:
     void moreListingsRequested();
     void priceFiltersChanged();
     void settingsRequested();
+    void historyRequested(int offset);
     void rememberToggled(const QString& statKey, const QString& top, bool on);
     void copyPriceNoteRequested(const QString& note);
     void popupHidden();
@@ -135,6 +137,8 @@ private:
     QComboBox* m_rarity;
     QComboBox* m_preset;
     QComboBox* m_range;
+    QPushButton* m_historyPrevious;
+    QPushButton* m_historyNext;
     QLabel* m_league = nullptr;
     QString m_leagueText;
     bool m_dragging = false;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "app/ItemHistory.h"
 #include "core/CheckedStore.h"
 #include "core/Config.h"
 #include "core/ItemParser.h"
@@ -17,6 +18,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <variant>
 
 class QAction;
 class QMenu;
@@ -53,7 +55,10 @@ private:
 
     // 동작
     void handleItemText(const QString& text);
-    void showPopup();  // 커서 근처(설정)에 띄우고 바깥 클릭 감시 시작
+    std::optional<ParsedItem> parseItem(const QString& text, Game game);
+    void showParsedItem(const ParsedItem& item, bool fromHistory);
+    void navigateHistory(int offset);
+    void showPopup(bool keepPosition = false);
     void reopenLast(); // 실수로 닫았을 때
     void watchPopupClicks();
     void checkOutsideClick();
@@ -123,9 +128,12 @@ private:
     // 같은 조건 재조회 캐시 (1분). 키 = 게임/서버/리그/개수/쿼리
     struct CachedPrice {
         qint64 at = 0;
-        TradeClient::PriceProgress result;
+        std::variant<TradeClient::PriceProgress, TradeClient::ExchangeResult> result;
     };
     QHash<QString, CachedPrice> m_priceCache;
+    const CachedPrice* cachedPrice(const QString& key);
+    void checkExchangePrice(Game g, Lang server, const QString& league, const QString& pay, const QString& item,
+                            std::function<void(const TradeClient::ExchangeResult&)> done, quint64 token);
     struct ListingPages {
         Game game;
         Lang server;
@@ -138,6 +146,7 @@ private:
     std::optional<ListingPages> m_listingPages;
     quint64 m_priceFilterRevision = 0;
     QTimer m_priceRefreshTimer;
+    ItemHistory m_history;
     QString m_newTag, m_newPage;
     QString m_downloadedZip;
     std::unique_ptr<ItemParser> m_parser;
