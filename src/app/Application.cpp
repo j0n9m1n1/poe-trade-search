@@ -180,10 +180,8 @@ bool Application::start(QString* error)
     });
     m_updateTimer.start(15000);
     const QStringList args = QCoreApplication::arguments();
-    if (args.contains(QStringLiteral("--updated"))) {
-        notify(QStringLiteral("%1 버전으로 업데이트했습니다.").arg(Updater::currentVersion()));
-        return true;
-    }
+    if (args.contains(QStringLiteral("--updated")))
+        return true; // 업데이트 뒤 재실행: 알림 없이 조용히 (시작 안내도 생략)
     if (args.contains(QStringLiteral("--update-failed"))) {
         notify(QStringLiteral("업데이트에 실패해 기존 버전으로 실행했습니다. 로그: %1").arg(QDir::toNativeSeparators(m_updater->logPath())),
                QSystemTrayIcon::Warning);
@@ -428,7 +426,7 @@ void Application::handleItemText(const QString& text)
     if (!it) {
         if (err == QStringLiteral("data not loaded")) {
             if (!m_data->isUpdating(g)) {
-                notify(QStringLiteral("거래소 데이터를 받는 중입니다. 완료되면 다시 Ctrl+C를 눌러 주세요."));
+                notify(QStringLiteral("거래소 데이터를 받는 중입니다. 완료되면 다시 검색해 주세요 (Alt+D)."));
                 updateGame(g);
             } else {
                 notify(QStringLiteral("거래소 데이터를 받는 중입니다. 잠시 기다려 주세요."));
@@ -658,7 +656,6 @@ void Application::installUpdate()
         return;
     }
     const Updater::Release rel = m_newRelease;
-    notify(QStringLiteral("%1 받는 중...").arg(rel.tag));
     m_updater->download(rel, [this](const QString& zip, const QString& error) {
         if (!error.isEmpty()) {
             notify(QStringLiteral("업데이트를 받지 못했습니다: %1").arg(error), QSystemTrayIcon::Warning);
@@ -676,7 +673,7 @@ void Application::applyDownloadedUpdate()
         QTimer::singleShot(2000, this, &Application::applyDownloadedUpdate);
         return;
     }
-    notify(QStringLiteral("%1 버전으로 업데이트한 뒤 다시 실행합니다.").arg(m_newTag));
+    // 받고 나면 알림 없이 바로 설치 후 재실행 (실패할 때만 알림)
     QString err;
     if (!m_updater->install(m_downloadedZip, &err)) {
         notify(QStringLiteral("업데이트를 설치하지 못했습니다: %1").arg(err), QSystemTrayIcon::Warning);
