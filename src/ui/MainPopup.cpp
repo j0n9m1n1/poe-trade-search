@@ -25,6 +25,8 @@
 #include <QMenu>
 #include <QPainter>
 #include <QStyle>
+#include <QTimer>
+#include <QScreen>
 #include <QIcon>
 #include <QLayout>
 #include <QToolTip>
@@ -942,6 +944,28 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
 
 void MainPopup::fitToAvailableHeight(int height)
 {
+    m_availHeight = height;
+    refitHeight();
+    // Windows 에선 새로 넣은 옵션 줄이 다음 이벤트 때 보이므로 그 뒤에 한 번 더 맞춤 (안 하면 옵션 영역이 눌림)
+    scheduleRefit();
+}
+
+void MainPopup::scheduleRefit()
+{
+    if (m_refitPending || m_availHeight <= 0)
+        return;
+    m_refitPending = true;
+    QTimer::singleShot(0, this, [this]() {
+        m_refitPending = false;
+        refitHeight();
+    });
+}
+
+void MainPopup::refitHeight()
+{
+    const int height = m_availHeight;
+    if (height <= 0)
+        return;
     m_prices->setMinimumHeight(qBound(64, height / 5, 170));
     setMaximumHeight(height);
     // 옵션 영역(page1) 크기 변경이 아직 대기 중인 레이아웃 이벤트로 남아 있으면 이전 아이템(젬 등) 크기로 계산됨
@@ -953,6 +977,15 @@ void MainPopup::fitToAvailableHeight(int height)
     }
     // adjustSize()는 최상위 창을 화면의 2/3로 줄여 옵션이 잘릴 수 있음
     resize(width(), qMin(height, sizeHint().height()));
+    // 떠 있는 창이 커져서 화면 아래로 나가면 위로 올림
+    if (isVisible()) {
+        if (QScreen* scr = screen()) {
+            const QRect a = scr->availableGeometry();
+            const QRect g = frameGeometry();
+            if (g.bottom() > a.bottom())
+                move(x(), qMax(a.top(), y() - (g.bottom() - a.bottom())));
+        }
+    }
 }
 
 void MainPopup::applyPresetAndRender()
@@ -1006,6 +1039,9 @@ void MainPopup::fitRowsArea()
     const int wanted = qMin(kMaxFilterViewportHeight, h + 6);
     m_scroll->setMinimumHeight(qMin(34, wanted));
     m_scroll->setMaximumHeight(wanted);
+    // 떠 있을 때 옵션 줄이 바뀌면(프리셋/범위/히스토리 등) 창 높이도 다시 맞춤
+    if (isVisible())
+        scheduleRefit();
 }
 
 void MainPopup::renderRows()

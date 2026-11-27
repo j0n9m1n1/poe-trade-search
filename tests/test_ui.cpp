@@ -131,6 +131,50 @@ private slots:
         QVERIFY(poe1Btn->isEnabled());
     }
 
+    // 떠 있는 팝업에 옵션 많은 아이템을 띄우면 창이 커져서 옵션 영역이 최소 높이로 눌리지 않아야 함
+    void popupGrowsForManyRows()
+    {
+        MainPopup popup(m_kw);
+        GameDb gdb;
+        Config cfg = Config::defaults();
+        ParsedItem small;
+        small.game = Game::Poe1;
+        small.lang = Lang::Ko;
+        small.rarityId = QStringLiteral("rare");
+        small.rarityText = QStringLiteral("희귀");
+        small.name = QStringLiteral("작은 아이템");
+        small.type = QStringLiteral("반지");
+        small.rawType = small.type;
+        popup.showItem(small, &gdb, cfg, Lang::Ko);
+        popup.fitToAvailableHeight(1000);
+        popup.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&popup));
+        QCoreApplication::processEvents();
+        const int before = popup.height();
+
+        ParsedItem big = small;
+        big.name = QStringLiteral("옵션 많은 아이템");
+        for (int i = 0; i < 10; ++i) {
+            ParsedMod m;
+            m.raw = m.text = m.shown = QStringLiteral("검색할 수 없는 옵션 %1").arg(i);
+            m.unmatched = true;
+            m.lockedOff = true;
+            big.mods.push_back(m);
+        }
+        // Application 처럼 다시 띄우되, 창 크기는 예약된 다시 맞춤에 맡김
+        popup.showItem(big, &gdb, cfg, Lang::Ko);
+        QTest::qWait(50);
+        QScrollArea* scroll = nullptr;
+        for (QScrollArea* a : popup.findChildren<QScrollArea*>()) {
+            if (a->maximumHeight() < QWIDGETSIZE_MAX)
+                scroll = a;
+        }
+        QVERIFY(scroll);
+        QVERIFY2(popup.height() > before, qPrintable(QStringLiteral("height %1 -> %2").arg(before).arg(popup.height())));
+        QVERIFY2(scroll->height() >= scroll->maximumHeight() - 2,
+                 qPrintable(QStringLiteral("scroll %1 / max %2").arg(scroll->height()).arg(scroll->maximumHeight())));
+    }
+
     // #3, #9, #13, #15: MainPopup onlineleague 유지, syncConfig, 반짝이 콤보 폭, stale 클릭 재조회
     void mainPopupFixes()
     {

@@ -74,8 +74,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.36
-git push origin v0.0.36
+git tag v0.0.37
+git push origin v0.0.37
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -97,6 +97,14 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.36
+
+- 옵션 영역이 다시 2줄 높이로 눌리던 문제를 근본적으로 고쳤습니다 (리더 직접). v0.0.32 는 팝업을 띄우는 순간 한 번만 창 높이를 맞췄습니다. Windows 에서 새 옵션 줄이 그 뒤에 보이거나, 떠 있는 상태에서 옵션 줄을 다시 그리면(프리셋/범위/히스토리 등) 창은 그대로이고 옵션 영역만 최소 높이(34px)로 눌렸습니다. 이제 띄운 직후 대기 중인 이벤트가 처리된 뒤 한 번 더 맞추고, 떠 있는 동안 옵션 줄이 바뀔 때마다 다시 맞춥니다. 커진 창이 화면 아래로 나가면 위로 올립니다. [팝업 크기](../src/ui/MainPopup.cpp)
+
+**검증.** UI 테스트 `popupGrowsForManyRows` 추가: 떠 있는 팝업에 옵션 10줄 아이템을 띄우면 창이 커지고 옵션 영역이 최대 높이까지 펼쳐지는지 확인합니다. 다시 맞춤을 빼면 창이 479px 에 머물러 실패하는 것으로 재현을 확인했습니다. 코어 테스트 75개, UI 테스트 7개가 통과했습니다.
+
+**남은 확인.** Windows 실기에서 같은 상황(옵션 많은 아이템)으로 확인.
 
 ### v0.0.35
 

@@ -40,6 +40,12 @@ public:
     // 설정 변경(서버/판매방식/가격화폐)을 열려 있는 팝업에 반영. 바뀐 값이 있으면 true
     bool syncConfig(const Config& cfg, Lang server);
     void fitToAvailableHeight(int height);
+private:
+    void refitHeight();      // 저장한 화면 높이 기준으로 창 높이를 내용에 다시 맞춤
+    void scheduleRefit();    // 대기 중인 이벤트(새 옵션 줄 표시 등) 처리 뒤 한 번 더 맞춤
+    int m_availHeight = 0;
+    bool m_refitPending = false;
+public:
     bool hasItem() const { return m_hasItem; }
     const ParsedItem& parsedItem() const { return m_parsed; }
 
