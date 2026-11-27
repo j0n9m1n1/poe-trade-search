@@ -110,8 +110,8 @@ if(PTS_BUILD_TESTS)
     add_test(NAME test_core COMMAND test_core)
 
     if(PTS_BUILD_APP)
-        add_executable(test_app_fixes
-            tests/test_app_fixes.cpp
+        add_executable(test_ui
+            tests/test_ui.cpp
             src/ui/MainPopup.h src/ui/MainPopup.cpp
             src/ui/FilterRow.h src/ui/FilterRow.cpp
             src/ui/ToggleLabel.h src/ui/ToggleLabel.cpp
@@ -120,10 +120,13 @@ if(PTS_BUILD_TESTS)
             $<$<BOOL:${WIN32}>:src/platform/win/WinPlatform.cpp>
             $<$<NOT:$<BOOL:${WIN32}>>:src/platform/stub/StubPlatform.cpp>
         )
-        target_link_libraries(test_app_fixes PRIVATE pts_core Qt6::Widgets Qt6::Test)
+        target_link_libraries(test_ui PRIVATE pts_core Qt6::Widgets Qt6::Test)
         if(WIN32)
-            target_link_libraries(test_app_fixes PRIVATE user32 advapi32 shell32)
+            target_link_libraries(test_ui PRIVATE user32 advapi32 shell32)
         endif()
-        add_test(NAME test_app_fixes COMMAND test_app_fixes)
+        add_test(NAME test_ui COMMAND test_ui)
+        if(NOT WIN32)
+            set_tests_properties(test_ui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen") # 화면 없는 환경
+        endif()
     endif()
 endif()

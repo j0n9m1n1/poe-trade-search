@@ -211,4 +211,4 @@ private slots:
 };
 
 QTEST_MAIN(TestAppFixes)
-#include "test_app_fixes.moc"
+#include "test_ui.moc"
