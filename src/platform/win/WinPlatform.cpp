@@ -222,13 +222,35 @@ bool mouseButtonDown()
     return isDown(VK_LBUTTON) || isDown(VK_RBUTTON) || isDown(VK_MBUTTON);
 }
 
-bool cursorOverGame()
+bool cursorOverGame(QString* detail)
 {
     POINT p;
     if (!GetCursorPos(&p))
         return false;
+    HWND game = FindWindowW(kPoeClass, nullptr);
     HWND h = WindowFromPoint(p);
-    return h && isPoeWindow(GetAncestor(h, GA_ROOT));
+    HWND root = h ? GetAncestor(h, GA_ROOT) : nullptr;
+    wchar_t cls[96] = {};
+    if (root)
+        GetClassNameW(root, cls, 95);
+    const LONG_PTR ex = root ? GetWindowLongPtrW(root, GWL_EXSTYLE) : 0;
+    RECT r = {};
+    const bool inGame = game && GetWindowRect(game, &r) && PtInRect(&r, p);
+    bool result = false;
+    if (root && isPoeWindow(root))
+        result = true;
+    else if (inGame && root && (ex & WS_EX_TOPMOST))
+        result = true; // 게임 위 오버레이 (항상 위) -> 게임 화면을 누른 것
+    if (detail) {
+        *detail = QStringLiteral("cursor=%1,%2 game=%3 inGameRect=%4 under=%5 topmost=%6")
+                      .arg(p.x)
+                      .arg(p.y)
+                      .arg(game ? 1 : 0)
+                      .arg(inGame ? 1 : 0)
+                      .arg(QString::fromWCharArray(cls))
+                      .arg((ex & WS_EX_TOPMOST) ? 1 : 0);
+    }
+    return result;
 }
 
 int qtKeyToVk(int qtKey)

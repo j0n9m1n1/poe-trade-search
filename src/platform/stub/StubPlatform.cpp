@@ -45,8 +45,10 @@ bool isAdministrator()
 
 void createInstanceMutex() {}
 
-bool cursorOverGame()
+bool cursorOverGame(QString* detail)
 {
+    if (detail)
+        *detail = QStringLiteral("stub");
     return true; // 게임 창을 모름 -> 예전처럼 바깥 클릭이면 닫음
 }
 

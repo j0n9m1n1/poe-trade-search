@@ -505,14 +505,19 @@ void Application::checkOutsideClick()
     // 게임 화면을 눌렀을 때만 닫음. 창 모드에서 다른 프로그램/바탕화면을 누른 건 무시
     if (m_popup->frameGeometry().contains(QCursor::pos()))
         return;
-    if (platform::cursorOverGame()) {
+    QString why;
+    if (platform::cursorOverGame(&why)) {
+        qInfo().noquote() << "outside click -> close (" << why << ")";
         m_popup->hide();
         return;
     }
-    // 게임 위에 투명 오버레이 창(다른 툴)이 덮여 있으면 커서 아래 창이 PoE 가 아님 ->
-    // 잠깐 뒤 활성 창이 PoE 면 게임을 누른 것 (다른 프로그램을 눌렀으면 그 프로그램이 활성)
-    QTimer::singleShot(150, this, [this]() {
-        if (m_popup->isVisible() && platform::foregroundGame().foreground && !m_popup->underMouse())
+    // 그래도 아니면: 잠깐 뒤 활성 창이 PoE 면 게임을 누른 것 (다른 프로그램을 눌렀으면 그 프로그램이 활성)
+    // (underMouse 는 활성화 안 되는 창에서 안 풀릴 때가 있어서 커서 좌표로 확인)
+    QTimer::singleShot(150, this, [this, why]() {
+        const bool fg = platform::foregroundGame().foreground;
+        const bool outside = !m_popup->frameGeometry().contains(QCursor::pos());
+        qInfo().noquote() << "outside click (" << why << ") foregroundPoe=" << fg << " outside=" << outside;
+        if (m_popup->isVisible() && fg && outside)
             m_popup->hide();
     });
 }
