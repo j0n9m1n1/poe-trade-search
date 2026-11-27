@@ -30,6 +30,7 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("split"), QStringLiteral("misc_filters")},
         {QStringLiteral("fractured_item"), QStringLiteral("misc_filters")},
         {QStringLiteral("synthesised_item"), QStringLiteral("misc_filters")},
+        {QStringLiteral("foil_variation"), QStringLiteral("misc_filters")},
         {QStringLiteral("map_tier"), QStringLiteral("map_filters")},
         {QStringLiteral("map_blighted"), QStringLiteral("map_filters")},
         {QStringLiteral("map_uberblighted"), QStringLiteral("map_filters")},
@@ -191,7 +192,7 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
     QJsonObject query;
     query.insert(QStringLiteral("status"), option(r.status.isEmpty() ? QStringLiteral("available") : r.status));
 
-    const bool unique = r.rarity == QStringLiteral("unique");
+    const bool unique = r.rarity == QStringLiteral("unique") || r.rarity == QStringLiteral("uniquefoil");
     const bool useName = !r.byCategory && r.useName;
     // 유형을 모르면 베이스를 꺼도 베이스로 (안 그러면 전체 검색이 됨)
     const bool useType = !r.byCategory && (r.useType || r.category.isEmpty());
@@ -250,6 +251,8 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
         yesNo(QStringLiteral("gem_imbued"), r.gemImbued);
     if (r.notSplit && r.game == Game::Poe1)
         fs.add(QStringLiteral("split"), option(QStringLiteral("false")));
+    if (r.notFoil && r.game == Game::Poe1)
+        fs.add(QStringLiteral("foil_variation"), option(QStringLiteral("none")));
     if (r.notFractured)
         fs.add(QStringLiteral("fractured_item"), option(QStringLiteral("false")));
     if (r.synthesised && r.game == Game::Poe1)

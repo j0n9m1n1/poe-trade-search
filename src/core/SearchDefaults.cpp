@@ -208,6 +208,8 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
         // 복제: 복제된 아이템이면 사용자가 고른 대로(기본 복제만), 아니면 고유 아닌 장비는 복제 제외
         r.mirrored = st.mirrored == 1 ? 1 : (st.mirrored == 2 || (gear && nonUnique && !it.mirrored) ? 2 : 0);
         r.notSplit = gear && nonUnique && it.game == Game::Poe1 && !it.split && (!permanent || st.exact);
+        // 일반 고유로 검색하면 반짝이 버전(비쌈)이 섞이므로 뺌. 반짝이 버전 템을 "고유"로 바꿔 검색하면 둘 다
+        r.notFoil = it.game == Game::Poe1 && !it.foil && st.rarity == QStringLiteral("unique");
         r.notFractured = !it.fractured && (st.notFractured || (gear && st.exact));
         // 부여된 젬(보조 젬 내장)은 같은 젬이라도 시세가 따로라 부여 여부를 맞춤 (안 하면 싼 부여된 매물이 섞임)
         if (it.isGem && it.game == Game::Poe1)

@@ -57,6 +57,7 @@ struct SearchRequest {
     int mutated = 0;        // 삿된 / 함양된 바알 고유 0 any / 1 yes / 2 no
     int mirrored = 0;          // 복제된 매물 0 무관 / 1 복제만 / 2 복제 제외
     bool notSplit = false;     // 분할된 매물 제외 (PoE1)
+    bool notFoil = false;      // 반짝이 버전 고유 제외 (PoE1, 일반 고유 검색)
     bool notFractured = false; // 분열 매물 제외
     QVector<QString> influencePseudo; // "pseudo.pseudo_has_shaper_influence" ...
     bool synthesised = false;

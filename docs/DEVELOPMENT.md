@@ -74,8 +74,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.31
-git push origin v0.0.31
+git tag v0.0.32
+git push origin v0.0.32
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -97,6 +97,14 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.31
+
+- 반짝이 버전 고유(Foil Unique)를 구분합니다 (리더 직접). 클립보드의 `반짝이 버전 고유 아이템 (...)` / `Foil Unique (...)` 줄을 읽어, 반짝이 버전이면 희귀도 `고유 (반짝이 버전)`(`uniquefoil`)으로, 일반 고유는 `foil_variation=none` 을 넣어 반짝이 버전을 빼고 검색합니다. 예전에는 둘이 섞여 매물 수와 시세가 틀어졌습니다. 희귀도 콤보에 `고유 (반짝이 버전)`을 추가했습니다. [파서](../src/core/ItemParser.cpp) · [검색 조건](../src/core/SearchDefaults.cpp) · [쿼리](../src/core/QueryBuilder.cpp)
+
+**검증.** 코어 테스트 61개가 통과했습니다. 카카오 Covens 의 반짝이 니미스(같은 옵션 조건): 고유 전체 17건 = 일반 14건 + 반짝이 3건. 수정 후 반짝이 니미스는 3건, 일반 고유(갈매기)는 반짝이 제외로 10건이 나왔습니다.
+
+**남은 확인.** 영어 클라이언트의 반짝이 줄 문구(`Foil Unique (...)`)는 실제 복사 텍스트로 확인하지 못했습니다.
 
 ### v0.0.30
 

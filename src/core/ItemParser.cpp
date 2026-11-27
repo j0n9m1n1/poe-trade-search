@@ -524,6 +524,14 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     it.imbued = flags.contains(QStringLiteral("imbued"));
     it.fractured = flags.contains(QStringLiteral("fractured_item"));
     it.synthesised = flags.contains(QStringLiteral("synthesised_item"));
+    // 반짝이 버전 고유: "반짝이 버전 고유 아이템 (천공의 금빛)" / "Foil Unique (Celestial Gold)" (괄호 안 변화형은 여러 가지)
+    for (const QString& l : allLines) {
+        const QString t = l.trimmed();
+        if (t.startsWith(QStringLiteral("반짝이 버전 고유 아이템")) || t.startsWith(QStringLiteral("Foil Unique"))) {
+            it.foil = true;
+            break;
+        }
+    }
     it.searing = flags.contains(QStringLiteral("searing_item"));
     it.tangled = flags.contains(QStringLiteral("tangled_item"));
     const auto& infl = m_kw.influences();
@@ -985,7 +993,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
             it.byCategory = true;
     }
     if (it.rarityId == QStringLiteral("unique")) {
-        it.rarityFilter = QStringLiteral("unique");
+        // 반짝이 버전은 일반 고유와 시세가 따로라 반짝이 버전만 (카카오 니미스: 고유 전체 17 = 일반 14 + 반짝이 3)
+        it.rarityFilter = it.foil && it.game == Game::Poe1 ? QStringLiteral("uniquefoil") : QStringLiteral("unique");
         it.checkAllUnique = opt.autoCheckUnique;
         if (it.checkAllUnique) {
             for (auto& m : it.mods) {

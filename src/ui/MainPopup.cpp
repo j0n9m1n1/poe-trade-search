@@ -189,6 +189,7 @@ void MainPopup::buildUi()
                                                 {QStringLiteral("마법"), QStringLiteral("magic")},
                                                 {QStringLiteral("희귀"), QStringLiteral("rare")},
                                                 {QStringLiteral("고유"), QStringLiteral("unique")},
+                                                {QStringLiteral("고유 (반짝이 버전)"), QStringLiteral("uniquefoil")},
                                                 {QStringLiteral("고유 제외"), QStringLiteral("nonunique")}};
     for (const auto& r : rar)
         m_rarity->addItem(r.first, r.second);

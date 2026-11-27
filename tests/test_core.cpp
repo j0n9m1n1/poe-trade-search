@@ -932,6 +932,36 @@ private slots:
         QVERIFY(fa && !defaultFilterState(*fa).notFractured);
     }
 
+    void foilUnique()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        RequestContext ctx;
+        ctx.server = Lang::Ko;
+        auto miscOf = [&](const ParsedItem& it) {
+            const QJsonObject f = QueryBuilder::build(makeRequest(it, defaultFilterState(it), kw, &dbs[0], ctx), &dbs[0][Lang::Ko])
+                                      .value(QStringLiteral("query")).toObject().value(QStringLiteral("filters")).toObject();
+            return f;
+        };
+        // 반짝이 버전 니미스: 반짝이 버전만 검색
+        auto foil = parse(QStringLiteral("poe1_ko_unique_ring_foil.txt"), Game::Poe1);
+        QVERIFY(foil && foil->foil);
+        QCOMPARE(foil->rarityFilter, QStringLiteral("uniquefoil"));
+        QJsonObject f = miscOf(*foil);
+        QCOMPARE(f.value(QStringLiteral("type_filters")).toObject().value(QStringLiteral("filters")).toObject()
+                     .value(QStringLiteral("rarity")).toObject().value(QStringLiteral("option")).toString(),
+                 QStringLiteral("uniquefoil"));
+        QVERIFY(!f.value(QStringLiteral("misc_filters")).toObject().value(QStringLiteral("filters")).toObject()
+                     .contains(QStringLiteral("foil_variation")));
+        // 일반 고유: 반짝이 버전 제외
+        auto plain = parse(QStringLiteral("poe1_ko_unique_gull.txt"), Game::Poe1);
+        QVERIFY(plain && !plain->foil);
+        f = miscOf(*plain);
+        QCOMPARE(f.value(QStringLiteral("misc_filters")).toObject().value(QStringLiteral("filters")).toObject()
+                     .value(QStringLiteral("foil_variation")).toObject().value(QStringLiteral("option")).toString(),
+                 QStringLiteral("none"));
+    }
+
     void runHotkeyMigration()
     {
         // {Run} 키 없던 설정 -> Alt+D + Ctrl+C 감시 켬 / 직접 지정한 설정 -> 그대로 + 감시 끔(예전 동작)

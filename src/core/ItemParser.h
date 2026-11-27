@@ -81,6 +81,7 @@ struct ParsedItem {
     bool advanced = false; // Ctrl+Alt+C 고급 설명 (롤 범위가 있음)
     bool fractured = false;
     bool synthesised = false;
+    bool foil = false; // 반짝이 버전 고유 (Foil Unique)
     bool searing = false;
     bool tangled = false;
     bool foulborn = false;
