@@ -10,17 +10,17 @@ namespace pts {
 
 bool Rates::convert(double amount, const QString& currency, double* out) const
 {
-    if (!valid())
+    if (!valid() || !std::isfinite(amount))
         return false;
     if (currency == base) {
         *out = amount;
         return true;
     }
     const double r = toBase.value(currency, 0);
-    if (r <= 0)
+    if (!std::isfinite(r) || r <= 0)
         return false;
     *out = amount * r;
-    return true;
+    return std::isfinite(*out);
 }
 
 namespace {
@@ -33,39 +33,72 @@ double quantile(const QVector<double>& sorted, double q)
     const int j = qMin(i + 1, static_cast<int>(sorted.size()) - 1);
     return sorted[i] + (sorted[j] - sorted[i]) * (pos - i);
 }
+
+struct PriceSample {
+    double value;
+    QString account;
+};
+
+QVector<double> marketPrices(QVector<PriceSample>& samples, double baitRatio)
+{
+    std::stable_sort(samples.begin(), samples.end(), [](const PriceSample& a, const PriceSample& b) {
+        return a.value < b.value;
+    });
+    QHash<QString, int> perSeller;
+    samples.erase(std::remove_if(samples.begin(), samples.end(), [&](const PriceSample& sample) {
+        return !sample.account.isEmpty() && ++perSeller[sample.account] > 2;
+    }), samples.end());
+    QVector<double> values;
+    for (const PriceSample& sample : samples)
+        values.push_back(sample.value);
+    if (values.size() <= 3)
+        return values;
+
+    // 싼 가격대에 독립 판매자가 둘 이상이면 미끼로 빼지 않음.
+    const double cutoff = quantile(values, 0.5) * baitRatio;
+    qsizetype first = 0;
+    for (; first < samples.size() && samples[first].value < cutoff; ++first) {
+        const PriceSample& low = samples[first];
+        if (low.account.isEmpty())
+            continue;
+        const auto nextSeller = std::find_if(samples.cbegin() + first + 1, samples.cend(), [&](const PriceSample& sample) {
+            return !sample.account.isEmpty() && sample.account != low.account;
+        });
+        if (nextSeller != samples.cend() && nextSeller->value < cutoff && nextSeller->value <= low.value * 1.5)
+            break;
+    }
+    return values.mid(first);
+}
+
+double roundedPrice(double value, bool inDivine)
+{
+    const double rounded = inDivine || value < 10 ? std::round(value * 10.0) / 10.0 : std::round(value);
+    return rounded > 0 ? rounded : value;
+}
 } // namespace
 
 Estimate estimatePrice(const QVector<Listing>& listings, const Rates& rates)
 {
     Estimate e;
-    QVector<double> vals;
-    // 판매자 한 명당 2개까지만 (한 사람이 같은 가격으로 도배하면 추정가가 끌려감, PoE Overlay/APT 와 같은 취지)
-    QHash<QString, int> perSeller;
+    QVector<PriceSample> samples;
+    qsizetype unconverted = 0;
     for (const Listing& l : listings) {
+        if (!std::isfinite(l.amount) || l.amount <= 0 || l.currency.isEmpty())
+            continue;
         double v = 0;
-        if (!rates.convert(l.amount, l.currency, &v) || v <= 0)
-            continue;
-        if (!l.account.isEmpty() && ++perSeller[l.account] > 2)
-            continue;
-        vals.push_back(v);
+        if (rates.convert(l.amount, l.currency, &v) && v > 0)
+            samples.push_back({v, l.account});
+        else
+            ++unconverted;
     }
-    std::sort(vals.begin(), vals.end());
-    e.used = vals.size();
-    if (vals.isEmpty())
+    // 환산 못 한 매물이 20% 이상이면 원화폐별 시세 범위로 표시.
+    if (samples.isEmpty() || unconverted * 4 >= samples.size())
         return e;
-    // 전체 중앙값의 40% 미만은 덤핑/가격 낚시로 보고 제외 (다 걸러지면 원래대로)
-    const double allMid = quantile(vals, 0.5);
-    QVector<double> kept;
-    for (double v : vals) {
-        if (v >= allMid * 0.4)
-            kept.push_back(v);
-    }
-    if (!kept.isEmpty())
-        vals = kept;
-    const QVector<double> win = vals.mid(0, qMin<qsizetype>(10, vals.size()));
+    const QVector<double> win = marketPrices(samples, 0.4).mid(0, 10);
+    e.used = win.size();
     e.value = quantile(win, 0.5);
-    e.lo = quantile(win, 0.2);
-    e.hi = quantile(win, 0.8);
+    e.lo = win.size() <= 3 ? win.first() : quantile(win, 0.2);
+    e.hi = win.size() <= 3 ? win.last() : quantile(win, 0.8);
     const double spread = e.value > 0 ? (e.hi - e.lo) / e.value : 1.0;
     if (win.size() >= 8 && spread <= 0.35)
         e.confidence = QStringLiteral("높음");
@@ -96,9 +129,8 @@ PriceTag displayPrice(double v, const Rates& rates)
         return {};
     const double div = rates.divine();
     if (div > 0 && v >= div)
-        return {std::round(v / div * 10.0) / 10.0, QStringLiteral("divine")};
-    const double r = v < 10 ? std::round(v * 10.0) / 10.0 : std::round(v);
-    return {r > 0 ? r : v, rates.base};
+        return {roundedPrice(v / div, true), QStringLiteral("divine")};
+    return {roundedPrice(v, false), rates.base};
 }
 
 QString formatValue(double v, const Rates& rates)
@@ -118,7 +150,7 @@ QString formatEstimate(const Estimate& e, const Rates& rates, int total)
     const bool inDiv = div > 0 && e.value >= div;
     auto unit = [&](double v) {
         const double x = inDiv ? v / div : v;
-        return PriceSummary::formatAmount(x < 10 ? std::round(x * 10.0) / 10.0 : std::round(x));
+        return PriceSummary::formatAmount(roundedPrice(x, inDiv));
     };
     return QStringLiteral("≈ %1  (%2~%3 · 신뢰도 %4 · 매물 %5)")
         .arg(formatValue(e.value, rates), unit(e.lo), unit(e.hi), e.confidence)
@@ -142,25 +174,17 @@ QString formatConversion(double amount, const QString& currency, const Rates& ra
 
 double medianRatio(const QVector<Listing>& offers, int take)
 {
-    // 응답 순서는 믿을 수 없음 (QJsonObject 가 키 순으로 정렬함) -> 직접 정렬
-    QVector<double> r;
-    for (const Listing& l : offers) {
-        if (l.payAmount > 0 && l.getAmount > 0)
-            r.push_back(l.payAmount / l.getAmount);
-    }
-    if (r.isEmpty())
+    if (take <= 0)
         return 0;
-    std::sort(r.begin(), r.end());
-    // 전체 중앙값의 절반도 안 되는 미끼/실수 매물 제외 후, 가장 싼 take 개의 중앙값
-    const double all = quantile(r, 0.5);
-    QVector<double> ok;
-    for (double v : r) {
-        if (v >= all * 0.5)
-            ok.push_back(v);
+    QVector<PriceSample> samples;
+    for (const Listing& l : offers) {
+        if (l.payAmount <= 0 || l.getAmount <= 0)
+            continue;
+        const double ratio = l.payAmount / l.getAmount;
+        if (std::isfinite(ratio) && ratio > 0)
+            samples.push_back({ratio, l.account});
     }
-    if (ok.isEmpty())
-        ok = r;
-    return quantile(ok.mid(0, take), 0.5);
+    return quantile(marketPrices(samples, 0.5).mid(0, take), 0.5);
 }
 
 } // namespace pts

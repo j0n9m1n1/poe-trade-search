@@ -38,6 +38,8 @@ struct ItemFilterState {
     bool useType = true;     // 베이스로 검색 (끄면 아이템 유형으로)
     QVector<int> influences; // Keywords::influences() 인덱스
     bool synthesised = false;
+    bool searing = false;
+    bool tangled = false;
     bool blighted = false;
     bool blightRavaged = false;
     QString heistObjective;

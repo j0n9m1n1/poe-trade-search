@@ -43,6 +43,7 @@ struct SearchRequest {
 
     bool useSockets = false;
     OptDouble socketsMin, socketsMax, linksMin, linksMax;
+    bool gemSockets = false; // PoE2 젬 보조 홈
 
     bool useQuality = false;
     OptDouble qualityMin, qualityMax;
@@ -61,6 +62,8 @@ struct SearchRequest {
     bool notFractured = false; // 분열 매물 제외
     QVector<QString> influencePseudo; // "pseudo.pseudo_has_shaper_influence" ...
     bool synthesised = false;
+    bool searing = false;
+    bool tangled = false;
     bool blighted = false;
     bool blightRavaged = false;
     bool transfigured = false;

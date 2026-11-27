@@ -384,6 +384,9 @@ void MainPopup::buildUi()
         m_notFracRow = addRow(); // 분열 안 된 장비: 켜면 분열된 매물 제외
         m_notFracRow->setEditsVisible(false, false);
         m_notFracRow->setToolTip(QStringLiteral("켜면 분열된 매물(분열 옵션이 있는 제작 베이스)을 뺍니다"));
+        m_eldritchRow = addRow();
+        m_eldritchRow->setEditsVisible(false, false);
+        m_eldritchRow->setToolTip(QStringLiteral("켜면 표시된 엘드리치 영향이 있는 매물만 검색합니다"));
         m_emptyPrefixRow = addRow();
         m_emptySuffixRow = addRow();
         for (PropRow* r : {m_emptyPrefixRow, m_emptySuffixRow}) {
@@ -582,7 +585,7 @@ void MainPopup::buildUi()
         m_mirrorRow->setEnabled(!on);
     });
     for (PropRow* r : {m_rarityRow, m_lvRow, m_qRow, m_sockRow, m_linkRow, m_mirrorRow, m_notFracRow,
-                       m_emptyPrefixRow, m_emptySuffixRow})
+                       m_eldritchRow, m_emptyPrefixRow, m_emptySuffixRow})
         connect(r, &PropRow::changed, this, stale);
     // 레어도 콤보를 고르면 레어도 줄도 켬 ("모두"면 끔)
     connect(m_rarity, qOverload<int>(&QComboBox::currentIndexChanged), this,
@@ -996,6 +999,12 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     m_notFracRow->setLabel(QStringLiteral("분열"), QStringLiteral("분열 속성 없음"));
     m_notFracRow->setVisible((it.isGear || it.isJewel) && it.rarityId != QStringLiteral("unique") && !it.fractured);
     m_notFracRow->setChecked(st.notFractured);
+    const QString eldritch = it.searing && it.tangled ? QStringLiteral("작열의 총주교 · 세계 포식자")
+                             : it.searing            ? QStringLiteral("작열의 총주교")
+                                                     : QStringLiteral("세계 포식자");
+    m_eldritchRow->setLabel(QStringLiteral("엘드리치"), eldritch);
+    m_eldritchRow->setVisible(poe1 && (it.searing || it.tangled));
+    m_eldritchRow->setChecked(st.searing || st.tangled);
     auto renderEmptyAffix = [](PropRow* row, const QString& label, int count, const MinFilterState& filter) {
         row->setLabel(label, QString::number(count));
         row->setVisible(count > 0);
@@ -1025,7 +1034,8 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     m_qRow->setChecked(st.useQuality);
     m_qRow->setValues(st.qualityMin, st.qualityMax);
     m_qRow->setColor(it.highlightQuality ? warn : propGray);
-    m_sockRow->setLabel(poe1 ? QStringLiteral("홈") : QStringLiteral("룬 홈"), QString::number(it.sockets));
+    m_sockRow->setLabel(poe1 ? QStringLiteral("홈") : it.isGem ? QStringLiteral("보조 홈") : QStringLiteral("룬 홈"),
+                        QString::number(it.sockets));
     m_sockRow->setVisible(it.sockets > 0);
     m_sockRow->setChecked(st.useSockets);
     m_sockRow->setValues(st.socketsMin, st.socketsMax);
@@ -1162,6 +1172,9 @@ ItemFilterState MainPopup::collectState() const
     if (!m_mirrorRow->isHidden())
         s.mirrored = m_mirrorRow->isChecked() ? 1 : 0;
     s.notFractured = !m_notFracRow->isHidden() && m_notFracRow->isChecked();
+    const bool eldritchOn = !m_eldritchRow->isHidden() && m_eldritchRow->isChecked();
+    s.searing = s.searing && eldritchOn;
+    s.tangled = s.tangled && eldritchOn;
     s.emptyPrefixes = {!m_emptyPrefixRow->isHidden() && m_emptyPrefixRow->isChecked(), m_emptyPrefixRow->minValue()};
     s.emptySuffixes = {!m_emptySuffixRow->isHidden() && m_emptySuffixRow->isChecked(), m_emptySuffixRow->minValue()};
     s.modifiable = !m_modifiable->isHidden() && m_modifiable->isChecked();

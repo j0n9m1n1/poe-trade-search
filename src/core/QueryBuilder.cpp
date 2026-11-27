@@ -30,6 +30,8 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("split"), QStringLiteral("misc_filters")},
         {QStringLiteral("fractured_item"), QStringLiteral("misc_filters")},
         {QStringLiteral("synthesised_item"), QStringLiteral("misc_filters")},
+        {QStringLiteral("searing_item"), QStringLiteral("misc_filters")},
+        {QStringLiteral("tangled_item"), QStringLiteral("misc_filters")},
         {QStringLiteral("foil_variation"), QStringLiteral("misc_filters")},
         {QStringLiteral("map_tier"), QStringLiteral("map_filters")},
         {QStringLiteral("map_blighted"), QStringLiteral("map_filters")},
@@ -75,6 +77,7 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("map_packsize"), QStringLiteral("map_filters")},
         {QStringLiteral("map_bonus"), QStringLiteral("map_filters")},
         {QStringLiteral("gem_level"), QStringLiteral("misc_filters")},
+        {QStringLiteral("gem_sockets"), QStringLiteral("misc_filters")},
         {QStringLiteral("corrupted"), QStringLiteral("misc_filters")},
         {QStringLiteral("twice_corrupted"), QStringLiteral("misc_filters")},
         {QStringLiteral("mutated"), QStringLiteral("misc_filters")},
@@ -219,7 +222,8 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
             fs.add(QStringLiteral("sockets"), minMax(r.socketsMin, r.socketsMax));
             fs.add(QStringLiteral("links"), minMax(r.linksMin, r.linksMax));
         } else {
-            fs.add(QStringLiteral("rune_sockets"), minMax(r.socketsMin, r.socketsMax));
+            fs.add(r.gemSockets ? QStringLiteral("gem_sockets") : QStringLiteral("rune_sockets"),
+                   minMax(r.socketsMin, r.socketsMax));
         }
     }
     if (r.useQuality)
@@ -257,6 +261,12 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
         fs.add(QStringLiteral("fractured_item"), option(QStringLiteral("false")));
     if (r.synthesised && r.game == Game::Poe1)
         fs.add(QStringLiteral("synthesised_item"), option(QStringLiteral("true")));
+    if (r.game == Game::Poe1) {
+        if (r.searing)
+            fs.add(QStringLiteral("searing_item"), option(QStringLiteral("true")));
+        if (r.tangled)
+            fs.add(QStringLiteral("tangled_item"), option(QStringLiteral("true")));
+    }
     if (r.blighted)
         fs.add(QStringLiteral("map_blighted"), option(QStringLiteral("true")));
     if (r.blightRavaged)

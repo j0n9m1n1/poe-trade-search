@@ -44,6 +44,9 @@ QString digitsOnly(const QString& s);
 // 첫 번째 숫자 파싱 (없으면 nullopt)
 bool firstNumber(const QString& s, double* out);
 
+// "414-1,043" 같은 피해 범위의 양 끝값을 합산
+double damageRangeSum(const QString& s);
+
 // 공백/대소문자 무시 비교용 키
 QString looseKey(const QString& s);
 

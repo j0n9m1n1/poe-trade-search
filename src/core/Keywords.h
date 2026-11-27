@@ -52,7 +52,8 @@ public:
 
     const QVector<Influence>& influences() const { return m_influences; }
     QString pseudoFor(const QString& statKey) const { return m_pseudoMap.value(statKey); }
-    bool isResistance(const QString& statKey) const { return m_resistance.contains(statKey); }
+    bool isResistance(const QString& statKey) const { return resistanceWeight(statKey) > 0; }
+    int resistanceWeight(const QString& statKey) const;
     bool isReverse(const QString& statKey) const { return m_reverse.contains(statKey); }
     bool isDisabled(const QString& statKey) const { return m_disable.contains(statKey); }
     QString localAttackSpeed() const { return m_localAttackSpeed; }

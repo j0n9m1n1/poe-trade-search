@@ -12,6 +12,17 @@ const QRegularExpression& numOrHashRe()
     static const QRegularExpression re(QStringLiteral("[+\\-]?(?:\\d+(?:\\.\\d+)?|#)"));
     return re;
 }
+
+const QString& propertyNumberPattern()
+{
+    static const QString pattern = QStringLiteral("(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?");
+    return pattern;
+}
+
+double propertyNumber(QString s)
+{
+    return s.remove(QLatin1Char(',')).toDouble();
+}
 } // namespace
 
 QString normalizeStat(const QString& s)
@@ -117,13 +128,25 @@ QString digitsOnly(const QString& s)
 
 bool firstNumber(const QString& s, double* out)
 {
-    static const QRegularExpression re(QStringLiteral("-?\\d+(?:\\.\\d+)?"));
+    static const QRegularExpression re(QStringLiteral("-?") + propertyNumberPattern());
     const auto m = re.match(s);
     if (!m.hasMatch())
         return false;
     if (out)
-        *out = m.captured(0).toDouble();
+        *out = propertyNumber(m.captured(0));
     return true;
+}
+
+double damageRangeSum(const QString& s)
+{
+    static const QRegularExpression re(QStringLiteral("(%1)\\s*-\\s*(%1)").arg(propertyNumberPattern()));
+    double sum = 0;
+    auto matches = re.globalMatch(s);
+    while (matches.hasNext()) {
+        const auto m = matches.next();
+        sum += propertyNumber(m.captured(1)) + propertyNumber(m.captured(2));
+    }
+    return sum;
 }
 
 QString looseKey(const QString& s)

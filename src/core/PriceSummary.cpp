@@ -158,20 +158,46 @@ QString PriceSummary::summarize(const QVector<Listing>& listings, const NameFn& 
 {
     if (listings.isEmpty())
         return {};
-    auto label = [&](const Listing& l) {
-        const QString n = name ? name(l.currency) : l.currency;
-        return priceKey(l.amount, n.isEmpty() ? l.currency : n);
+    auto currencyName = [&](const QString& id) {
+        const QString n = name ? name(id) : id;
+        return n.isEmpty() ? id : n;
     };
 
+    QHash<QString, QPair<double, double>> ranges;
+    QStringList currencies;
+    for (const Listing& l : listings) {
+        auto it = ranges.find(l.currency);
+        if (it == ranges.end()) {
+            currencies << l.currency;
+            ranges.insert(l.currency, {l.amount, l.amount});
+        } else {
+            it->first = qMin(it->first, l.amount);
+            it->second = qMax(it->second, l.amount);
+        }
+    }
+    if (currencies.size() > 1) {
+        QStringList summary;
+        for (const QString& id : currencies) {
+            const auto bounds = ranges.value(id);
+            const QString lo = formatAmount(bounds.first);
+            const QString hi = formatAmount(bounds.second);
+            const QString span = lo == hi ? lo : lo + QStringLiteral("~") + hi;
+            summary << span + QLatin1Char(' ') + currencyName(id);
+        }
+        return summary.join(QStringLiteral(" · "));
+    }
+
+    const QString currency = currencyName(currencies.first());
     QHash<QString, int> counts;
     QStringList order;
     for (const Listing& l : listings) {
-        const QString k = label(l);
+        const QString k = priceKey(l.amount, currency);
         if (!counts.contains(k))
             order << k;
         counts[k]++;
     }
-    QString msg = label(listings.first()) + QStringLiteral(" ~ ") + label(listings.last());
+    const auto bounds = ranges.value(currencies.first());
+    QString msg = priceKey(bounds.first, currency) + QStringLiteral(" ~ ") + priceKey(bounds.second, currency);
 
     QStringList keys = order;
     std::stable_sort(keys.begin(), keys.end(), [&](const QString& a, const QString& b) { return counts[a] > counts[b]; });

@@ -162,4 +162,16 @@ QString Keywords::classToCategory(Game g, Lang l, const QString& text) const
     return {};
 }
 
+int Keywords::resistanceWeight(const QString& statKey) const
+{
+    static const QHash<QString, int> weights = {
+        {QStringLiteral("stat_2915988346"), 2}, {QStringLiteral("stat_4277795662"), 2},
+        {QStringLiteral("stat_3441501978"), 2}, {QStringLiteral("stat_378817135"), 2},
+        {QStringLiteral("stat_3465022881"), 2}, {QStringLiteral("stat_3393628375"), 2},
+        {QStringLiteral("stat_2901986750"), 3},
+        {QStringLiteral("stat_2016723660"), 4}, {QStringLiteral("stat_3128852541"), 4},
+    };
+    return weights.value(statKey, m_resistance.contains(statKey) ? 1 : 0);
+}
+
 } // namespace pts

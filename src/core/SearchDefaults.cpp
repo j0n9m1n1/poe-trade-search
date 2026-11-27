@@ -56,6 +56,8 @@ ItemFilterState defaultFilterState(const ParsedItem& it)
     s.useType = !it.byCategory;
     s.influences = it.influences;
     s.synthesised = it.synthesised;
+    s.searing = it.searing;
+    s.tangled = it.tangled;
     s.blighted = it.blighted;
     s.blightRavaged = it.blightRavaged;
     s.heistObjective = it.heistValue;
@@ -86,26 +88,32 @@ ParsedItem applyPreset(const ParsedItem& parsed, Preset p, int rangePct, ItemFil
         for (ParsedMod& m : it.mods) {
             if (m.unmatched)
                 continue;
+            m.totalRes = false;
+            m.resistance = false;
+            const bool modifiableDesecrated = m.modType == QStringLiteral("desecrated") &&
+                                             !it.corrupted && !it.mirrored && !it.sanctified &&
+                                             m.current() && m.current()->group == QStringLiteral("explicit");
+            const QString group = modifiableDesecrated || m.modType.isEmpty() ? QStringLiteral("explicit") : m.modType;
             // pseudo 말고 원래 그룹
             int sel = -1;
             for (int i = 0; i < m.cands.size(); ++i) {
                 const QString& g = m.cands[i].group;
-                if (!m.modType.isEmpty() && g == m.modType) {
+                if (g == group) {
                     sel = i;
                     break;
                 }
                 if (sel < 0 && g != QStringLiteral("pseudo"))
                     sel = i;
-                if (m.modType.isEmpty() && g == QStringLiteral("explicit")) {
-                    sel = i;
-                    break;
-                }
             }
             if (sel >= 0)
                 m.selected = sel;
-            const bool explicitLike = m.modType.isEmpty() || m.modType == QStringLiteral("fractured");
+            const bool explicitLike = m.modType.isEmpty() || m.modType == QStringLiteral("fractured") ||
+                                      m.modType == QStringLiteral("desecrated");
             if (m.lockedOff)
                 m.checked = false;
+            else if (m.checked && (m.modType == QStringLiteral("fractured") || m.rangeLocked ||
+                                   (it.category == QStringLiteral("jewel.cluster") && m.optionStat)))
+                continue;
             else if (anyTier)
                 m.checked = explicitLike && m.tier >= 1 && m.tier <= 2;
             else
@@ -184,6 +192,7 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
     r.rarity = st.rarity;
 
     r.useSockets = st.useSockets;
+    r.gemSockets = it.game == Game::Poe2 && it.isGem;
     r.socketsMin = st.socketsMin;
     r.socketsMax = st.socketsMax;
     r.linksMin = st.linksMin;
@@ -222,6 +231,8 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
         }
     }
     r.synthesised = st.synthesised;
+    r.searing = st.searing;
+    r.tangled = st.tangled;
     r.blighted = st.blighted;
     r.blightRavaged = st.blightRavaged;
     r.heistObjective = st.heistObjective;
@@ -247,8 +258,9 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
         const ModCandidate* c = m.current();
         if (!c)
             continue;
-        if (m.checked && m.totalRes && m.resistance) {
-            resSum += m.min.value_or(0) + m.max.value_or(0);
+        if (!st.exact && !m.lockedOff && m.checked && m.totalRes && m.resistance && m.min && !m.max &&
+            c->group != QStringLiteral("fractured") && c->group != QStringLiteral("desecrated")) {
+            resSum += *m.min * kw.resistanceWeight(m.statKey);
             resAny = true;
             continue;
         }

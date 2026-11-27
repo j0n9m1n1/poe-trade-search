@@ -45,6 +45,7 @@
 
     "flags": {
         "corrupted": ["타락", "Corrupted"],
+        "sanctified": [["신성화", "신성화됨", "신성화된"], "Sanctified"],
         "twice_corrupted": ["두 번 타락", "Twice Corrupted"],
         "unidentified": ["미확인", "Unidentified"],
         "mirrored": [["복제됨", "복제된", "복제"], "Mirrored"],

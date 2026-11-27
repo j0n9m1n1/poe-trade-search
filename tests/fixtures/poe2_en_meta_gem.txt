@@ -1,0 +1,13 @@
+Rarity: Gem
+Mirage Archer
+--------
+Buff, Persistent, Trigger, Duration, Meta
+Level: 14
+Reservation: 60 Spirit
+--------
+Requires: Level 58, 103 Dex
+Requires: Spear, Bow, Crossbow
+--------
+Sockets: G G G G
+--------
+While active, dodge rolling will create a Mirage that uses socketed ranged Attacks for a short duration, then vanish.

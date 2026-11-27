@@ -31,16 +31,9 @@ QString colorForType(const QString& t)
 
 double damageSum(const QStringList& values)
 {
-    // "55-103 (augmented), 10-20 (augmented)" -> (55+103)+(10+20)
-    static const QRegularExpression re(QStringLiteral("(\\d+(?:\\.\\d+)?)\\s*-\\s*(\\d+(?:\\.\\d+)?)"));
     double sum = 0;
-    for (const QString& v : values) {
-        auto it = re.globalMatch(v);
-        while (it.hasNext()) {
-            const auto m = it.next();
-            sum += m.captured(1).toDouble() + m.captured(2).toDouble();
-        }
-    }
+    for (const QString& v : values)
+        sum += text::damageRangeSum(v);
     return sum;
 }
 
@@ -51,14 +44,32 @@ ItemParser::ItemParser(const Keywords& kw, const GameDb* dbs, const CheckedStore
 {
 }
 
+bool ItemParser::isGemHeader(const QString& firstLine, Lang* lang) const
+{
+    for (Lang l : {Lang::Ko, Lang::En}) {
+        for (const QString& k : m_kw.kw(QStringLiteral("rarity")).t[li(l)]) {
+            const QString prefix = k + QStringLiteral(": ");
+            if (firstLine.startsWith(prefix) && m_kw.rarityId(l, firstLine.mid(prefix.size())) == QStringLiteral("gem")) {
+                if (lang)
+                    *lang = l;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool ItemParser::looksLikeItem(const QString& text) const
 {
     const QString first = text.trimmed().section(QLatin1Char('\n'), 0, 0).trimmed();
-    return m_kw.detectLang(first, nullptr, nullptr) && text.contains(kSep);
+    return (m_kw.detectLang(first, nullptr, nullptr) || isGemHeader(first)) && text.contains(kSep);
 }
 
 Game ItemParser::guessGame(const QString& text, Game fallback) const
 {
+    const QString first = text.trimmed().section(QLatin1Char('\n'), 0, 0).trimmed();
+    if (isGemHeader(first))
+        return Game::Poe2;
     // PoE2: "Requires: Level 33, 57 Str" 처럼 한 줄 요구사항, 룬/훼손 옵션 접미
     static const QRegularExpression poe2Req(QStringLiteral("^(Requires|요구 사항|요구사항): \\S"),
                                             QRegularExpression::MultilineOption);
@@ -75,9 +86,8 @@ Game ItemParser::guessGame(const QString& text, Game fallback) const
                                             QStringLiteral("Flails"),      QStringLiteral("Charms"),
                                             QStringLiteral("Waystones"),   QStringLiteral("Bucklers"),
                                             QStringLiteral("Talismans"),   QStringLiteral("Soul Cores")};
-    const QString first = text.trimmed().section(QLatin1Char('\n'), 0, 0);
     QString cls;
-    if (m_kw.detectLang(first.trimmed(), nullptr, &cls) && poe2Classes.contains(cls))
+    if (m_kw.detectLang(first, nullptr, &cls) && poe2Classes.contains(cls))
         return Game::Poe2;
     return fallback;
 }
@@ -312,13 +322,16 @@ ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const Ma
         // 분열 옵션은 분열 그룹이 먼저 (유사로 바꾸면 분열 조건이 빠져서 분열 안 된 매물까지 섞임)
         if (mod.modType == QStringLiteral("fractured"))
             sel = findGroup(QStringLiteral("fractured"));
+        // PoE2 훼손 옵션은 수정 가능한 아이템이면 일반(explicit) id 로 검색 (EE2).
+        if (mod.modType == QStringLiteral("desecrated")) {
+            if (!it.corrupted && !it.mirrored && !it.sanctified)
+                sel = findGroup(QStringLiteral("explicit"));
+            if (sel < 0)
+                sel = findGroup(mod.modType);
+        }
         if (sel < 0 && !localChosen && opt.autoSelectPseudo && hasPseudo)
             sel = findGroup(QStringLiteral("pseudo"));
-        // PoE2 훼손 옵션은 수정 가능한 아이템이면 일반(explicit) id 로 검색 (EE2).
-        // 분열 옵션은 분열 id 그대로: 분열 자체가 가치라서 일반 id 로 찾으면 분열 안 된 매물까지 섞임
-        // (카카오 실측: 분열 28개 vs 일반 2152개)
-        const bool asExplicit = !it.corrupted && !it.mirrored && mod.modType == QStringLiteral("desecrated");
-        if (sel < 0 && !mod.modType.isEmpty() && !asExplicit)
+        if (sel < 0 && !mod.modType.isEmpty())
             sel = findGroup(mod.modType);
         if (sel < 0)
             sel = findGroup(QStringLiteral("explicit"));
@@ -381,7 +394,8 @@ ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const Ma
             mod.color = QStringLiteral("ambiguous");
     }
 
-    mod.resistance = m_kw.isResistance(pe.key);
+    mod.resistance = m_kw.isResistance(pe.key) && mod.modType != QStringLiteral("fractured") &&
+                     mod.modType != QStringLiteral("desecrated");
     mod.totalRes = mod.resistance && opt.autoCheckTotalRes;
     mod.lockedOff = m_kw.isDisabled(pe.key);
     if (mod.lockedOff) {
@@ -418,8 +432,11 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
 
     ParsedItem it;
     it.game = game;
-    if (!m_kw.detectLang(allLines[0], &it.lang, &it.itemClass))
+    const bool hasClass = m_kw.detectLang(allLines[0], &it.lang, &it.itemClass);
+    if (!hasClass && (game != Game::Poe2 || !isGemHeader(allLines[0], &it.lang)))
         return fail(QStringLiteral("not an item"));
+    if (!hasClass)
+        it.itemClass = it.lang == Lang::Ko ? QStringLiteral("메타 젬") : QStringLiteral("Meta Gems");
     const Lang L = it.lang;
 
     const GameDb& gdb = m_dbs[gi(game)];
@@ -440,7 +457,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     // ---- 헤더
     const QStringList& head = sections[0];
     QStringList nameLines;
-    for (int i = 1; i < head.size(); ++i) {
+    for (int i = hasClass ? 1 : 0; i < head.size(); ++i) {
         const QString& l = head[i];
         bool isRarity = false;
         for (const QString& k : m_kw.kw(QStringLiteral("rarity")).t[li(L)]) {
@@ -518,6 +535,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
 
     it.twiceCorrupted = flags.contains(QStringLiteral("twice_corrupted"));
     it.corrupted = it.twiceCorrupted || flags.contains(QStringLiteral("corrupted"));
+    it.sanctified = game == Game::Poe2 && flags.contains(QStringLiteral("sanctified"));
     it.unidentified = flags.contains(QStringLiteral("unidentified"));
     it.mirrored = flags.contains(QStringLiteral("mirrored"));
     it.split = flags.contains(QStringLiteral("split"));
@@ -659,6 +677,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     if (!props.value(QStringLiteral("monster_genus")).isEmpty() && !props.value(QStringLiteral("monster_group")).isEmpty()) {
         it.isBeast = true;
         it.category = QStringLiteral("monster.beast");
+    } else if (!hasClass) {
+        it.category = QStringLiteral("gem.metagem");
     } else {
         it.category = resolveCategory(it, db);
     }
@@ -739,6 +759,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                         hdrType = QStringLiteral("enchant");
                     else if (kind.contains(QStringLiteral("Fractured")) || kind.contains(QStringLiteral("분열")))
                         hdrType = QStringLiteral("fractured");
+                    else if (kind.contains(QStringLiteral("Desecrated")) || kind.contains(QStringLiteral("훼손")))
+                        hdrType = QStringLiteral("desecrated");
                     else
                         hdrType.clear();
                     // 혼합 옵션이나 검색 불가 옵션도 머리줄 하나당 한 칸
@@ -918,7 +940,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         }
         it.sockets = total;
         it.links = (game == Game::Poe1 && maxLink >= 2) ? maxLink : -1;
-        it.checkSockets = it.links > 4;
+        it.checkSockets = it.links > 4 || (game == Game::Poe2 && it.isGem && total >= 3);
     }
 
     // ---- 강탈 / 결전
@@ -1004,8 +1026,25 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                     m.checked = true;
             }
         }
-    } else if (it.rarityId == QStringLiteral("rare") || it.rarityId == QStringLiteral("magic")) {
+    } else if (it.rarityId == QStringLiteral("rare") || it.rarityId == QStringLiteral("magic") ||
+               (it.rarityId == QStringLiteral("normal") && it.isFlask)) {
         it.rarityFilter = QStringLiteral("nonunique");
+    }
+
+    const double quality = qMax(0, it.quality);
+    double qualityFactor = 1;
+    // PoE2는 수정할 수 없는 장비의 현재 품질을 사용.
+    if (quality < 20 && (game == Game::Poe1 || (!it.corrupted && !it.mirrored && !it.sanctified)))
+        qualityFactor = 120.0 / (100.0 + quality);
+    bool qualityAffectsPhysical = true;
+    bool qualityAffectsDefences = true;
+    for (const auto& m : it.mods) {
+        if (m.modType != QStringLiteral("enchant"))
+            continue;
+        if (m.statKey == QStringLiteral("stat_2052525717"))
+            qualityAffectsPhysical = false;
+        else if (m.statKey == QStringLiteral("stat_2677401098"))
+            qualityAffectsDefences = false;
     }
 
     // ---- DPS
@@ -1015,14 +1054,12 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         const double chaos = damageSum(multiProps.value(QStringLiteral("chaos_damage")));
         double aps = 0;
         text::firstNumber(props.value(QStringLiteral("attacks_per_second")), &aps);
-        double speedIncr = 0, physIncr = 0;
+        double speedIncr = 0;
         for (const auto& m : it.mods) {
             if (!m.value || m.unmatched)
                 continue;
             if (m.statKey == m_kw.localAttackSpeed())
                 speedIncr += *m.value;
-            else if (m.statKey == m_kw.physicalDamageIncrease())
-                physIncr += *m.value;
         }
         if (speedIncr > 0 && aps > 0) {
             double base = aps / (speedIncr / 100.0 + 1.0);
@@ -1030,11 +1067,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
             base += mod > 0.025 ? (0.05 - mod) : -mod;
             aps = base * (speedIncr / 100.0 + 1.0);
         }
-        double p = phys / 2.0 * aps;
-        const double q = it.quality < 0 ? 0 : it.quality;
-        if (q < 20)
-            p = p * (physIncr + 120.0) / (physIncr + q + 100.0); // Q20 기준
-        it.pdps = p;
+        it.pdps = phys / 2.0 * aps * (qualityAffectsPhysical ? qualityFactor : 1);
         it.edps = ele / 2.0 * aps;
         it.cdps = chaos / 2.0 * aps;
         it.hasDps = aps > 0 && (phys + ele + chaos) > 0;
@@ -1047,24 +1080,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         }
     }
 
-    // 방어 속성: 거래소는 퀄리티 20% 기준 값으로 검색 (APT calc-q20 와 같음)
+    // 방어 속성: 품질은 로컬 증가와 별도로 곱연산.
     if (it.isGear && !it.unidentified) {
-        // 로컬 "% 증가" 옵션 (방어구 전용, 혼합형 포함)
-        static const QHash<QString, QString> incrOf = {
-            {QStringLiteral("stat_1062208444"), QStringLiteral("ar")},  {QStringLiteral("stat_124859000"), QStringLiteral("ev")},
-            {QStringLiteral("stat_4015621042"), QStringLiteral("es")},  {QStringLiteral("stat_2451402625"), QStringLiteral("ar,ev")},
-            {QStringLiteral("stat_3321629045"), QStringLiteral("ar,es")}, {QStringLiteral("stat_1999113824"), QStringLiteral("ev,es")},
-            {QStringLiteral("stat_3523867985"), QStringLiteral("ar,ev,es")},
-        };
-        QHash<QString, double> incr;
-        for (const auto& m : it.mods) {
-            if (!m.value || m.unmatched)
-                continue;
-            const QString t = incrOf.value(m.statKey);
-            for (const QString& k : t.split(QLatin1Char(','), Qt::SkipEmptyParts))
-                incr[k] += *m.value;
-        }
-        const double q = it.quality < 0 ? 0 : it.quality;
         const QList<QPair<QString, QString>> defs = {{QStringLiteral("armour"), QStringLiteral("ar")},
                                                      {QStringLiteral("evasion"), QStringLiteral("ev")},
                                                      {QStringLiteral("energy_shield"), QStringLiteral("es")},
@@ -1073,10 +1090,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
             double v = 0;
             if (!text::firstNumber(props.value(d.first), &v) || v <= 0)
                 continue;
-            if (q < 20) {
-                const double inc = incr.value(d.second);
-                v = v * (inc + 120.0) / (inc + q + 100.0);
-            }
+            if (qualityAffectsDefences)
+                v *= qualityFactor;
             it.props.push_back({d.second, v});
         }
         for (const auto& d : {qMakePair(QStringLiteral("block"), QStringLiteral("block")),

@@ -54,7 +54,7 @@ struct ParsedMod {
 // 아이템 자체 속성 (방어도/회피/DPS 등). key 는 거래소 필터 id (ar/ev/es/ward/block/spirit/dps/pdps/edps)
 struct ItemProp {
     QString key;
-    double value = 0; // 거래소 기준값 (방어/물리 DPS 는 퀄리티 20 기준)
+    double value = 0; // 거래소 검색 기준값
     bool use = false; // 기본으로 검색에 넣을지 (APT 규칙)
 };
 
@@ -75,6 +75,7 @@ struct ParsedItem {
 
     bool unidentified = false;
     bool corrupted = false;
+    bool sanctified = false;
     bool twiceCorrupted = false; // "두 번 타락" (corrupted 도 true)
     bool mirrored = false;
     bool split = false;
@@ -170,6 +171,7 @@ private:
         int tier = 0;
     };
 
+    bool isGemHeader(const QString& firstLine, Lang* lang = nullptr) const;
     QString resolveCategory(const ParsedItem& it, const TradeDb& db) const;
     QString findBaseInName(const TradeDb& db, const QString& s) const;
     ParsedMod buildMod(const ParsedItem& it, const TradeDb& db, const MatcherDb& md, const QVector<StatMatch>& ms,

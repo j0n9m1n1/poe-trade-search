@@ -29,7 +29,7 @@ struct Rates {
 struct Estimate {
     bool ok = false;
     double value = 0, lo = 0, hi = 0; // 기준 화폐 단위
-    int used = 0;                     // 환산 가능한 매물 수
+    int used = 0;                     // 추정에 사용한 매물 수
     QString confidence;               // 높음 / 보통 / 낮음
 };
 

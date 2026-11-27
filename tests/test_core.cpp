@@ -47,6 +47,25 @@ const ParsedMod* findMod(const ParsedItem& it, const QString& statKey)
     }
     return nullptr;
 }
+
+QJsonObject searchFilters(const QJsonObject& query, const char* group)
+{
+    return query.value(QStringLiteral("filters")).toObject().value(QLatin1String(group)).toObject()
+        .value(QStringLiteral("filters")).toObject();
+}
+
+QJsonObject activeStat(const QJsonObject& query, const char* id)
+{
+    const auto groups = query.value(QStringLiteral("stats")).toArray();
+    for (const auto& group : groups) {
+        for (const auto& value : group.toObject().value(QStringLiteral("filters")).toArray()) {
+            const QJsonObject f = value.toObject();
+            if (f.value(QStringLiteral("id")).toString() == QLatin1String(id) && !f.value(QStringLiteral("disabled")).toBool())
+                return f;
+        }
+    }
+    return {};
+}
 } // namespace
 
 class TestCore : public QObject {
@@ -76,6 +95,17 @@ private:
         if (!r)
             qWarning() << "parse failed" << fx << err;
         return r;
+    }
+
+    QJsonObject searchQuery(const ParsedItem& item, const ItemFilterState& state, bool useDb = true)
+    {
+        RequestContext ctx;
+        ctx.server = item.lang;
+        ctx.league = item.game == Game::Poe1 ? QStringLiteral("Covens") : QStringLiteral("Standard");
+        ctx.forBrowser = false;
+        const GameDb& gameDb = dbs[gi(item.game)];
+        return QueryBuilder::build(makeRequest(item, state, kw, &gameDb, ctx), useDb ? &gameDb[item.lang] : nullptr)
+            .value(QStringLiteral("query")).toObject();
     }
 
 private slots:
@@ -498,13 +528,13 @@ private slots:
         QCOMPARE(propOf(*g, "ar"), -1.0);
         // "적 처치 시 1레벨 하위 성소 창조 발동 — 변경이 불가능한 값" 도 매칭
         QVERIFY(findMod(*g, QStringLiteral("stat_1010340836")));
-        // 퀄 10: 거래소 기준(퀄 20)으로 환산. "회피 및 에너지 보호막 141% 증가" 포함
+        // 품질은 로컬 141% 증가와 별도로 곱연산.
         QString q10 = gull;
         q10.replace(QStringLiteral("퀄리티: +20%"), QStringLiteral("퀄리티: +10%"));
         auto g10 = parseText(q10, Game::Poe1);
         QVERIFY(g10);
-        QVERIFY(qAbs(propOf(*g10, "ev") - 301.0 * 261.0 / 251.0) < 0.01);
-        QVERIFY(qAbs(propOf(*g10, "es") - 150.0 * 261.0 / 251.0) < 0.01);
+        QVERIFY(qAbs(propOf(*g10, "ev") - 301.0 * 120.0 / 110.0) < 0.01);
+        QVERIFY(qAbs(propOf(*g10, "es") - 150.0 * 120.0 / 110.0) < 0.01);
         // 쿼리: 켠 속성만 armour_filters 로
         ItemFilterState st = defaultFilterState(*g);
         QCOMPARE(st.props.size(), 2);
@@ -1621,6 +1651,212 @@ private slots:
         QCOMPARE(st.rarity, QStringLiteral("nonunique"));
     }
 
+    void fracturedResistanceQuery()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        const auto ring = parseText(QStringLiteral(
+            "아이템 종류: 반지\n아이템 희귀도: 희귀\n파멸 고리\n토파즈 반지\n--------\n아이템 레벨: 85\n--------\n"
+            "{ 분열된 접미어 속성 부여 \"- 화산\" (등급: 2) — 원소, 화염, 저항 }\n"
+            "화염 저항 +40(36-41)%\n--------\n분열된 아이템\n"), Game::Poe1);
+        QVERIFY(ring && ring->fractured);
+        for (Preset preset : {Preset::Default, Preset::Exact}) {
+            ItemFilterState st;
+            auto item = applyPreset(*ring, preset, 10, &st);
+            item.mods[0].totalRes = true;
+            const auto query = searchQuery(item, st);
+            const auto fire = activeStat(query, "fractured.stat_3372524247");
+            QCOMPARE(fire.value(QStringLiteral("value")).toObject().value(QStringLiteral("min")).toDouble(),
+                     preset == Preset::Default ? 36.0 : 40.0);
+            QVERIFY(activeStat(query, "pseudo.pseudo_total_resistance").isEmpty());
+        }
+    }
+
+    void resistanceWeightsAndExactQuery()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        QString clip = fixture(QStringLiteral("poe1_ko_rare_ring.txt"));
+        clip.replace(QStringLiteral("힘 +12"), QStringLiteral("모든 원소 저항 +12%"));
+        auto item = parseText(clip, Game::Poe1);
+        QVERIFY(item);
+        for (auto& mod : item->mods)
+            mod.checked = mod.resistance;
+        auto query = searchQuery(*item, defaultFilterState(*item));
+        const auto res = activeStat(query, "pseudo.pseudo_total_resistance").value(QStringLiteral("value")).toObject();
+        QCOMPARE(res.value(QStringLiteral("min")).toDouble(), 135.0); // 15×2 + 12×3 + 38 + 31
+        QVERIFY(activeStat(query, "explicit.stat_2901986750").isEmpty());
+
+        ItemFilterState st;
+        const auto exact = applyPreset(*item, Preset::Exact, 10, &st);
+        query = searchQuery(exact, st);
+        QVERIFY(activeStat(query, "pseudo.pseudo_total_resistance").isEmpty());
+        QVERIFY(!activeStat(query, "explicit.stat_3372524247").isEmpty());
+        QVERIFY(!activeStat(query, "explicit.stat_2901986750").isEmpty());
+    }
+
+    void specialItemQuery()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        const auto glove = parseText(QStringLiteral(
+            "아이템 종류: 장갑\n아이템 희귀도: 희귀\n맹공 발\n레비아탄 건틀릿\n--------\n아이템 레벨: 85\n--------\n"
+            "작열의 총주교 아이템\n--------\n세계 포식자 아이템\n"), Game::Poe1);
+        QVERIFY(glove && glove->searing && glove->tangled);
+        auto st = defaultFilterState(*glove);
+        for (bool useDb : {true, false}) {
+            const auto misc = searchFilters(searchQuery(*glove, st, useDb), "misc_filters");
+            for (const char* flag : {"searing_item", "tangled_item"})
+                QCOMPARE(misc.value(QLatin1String(flag)).toObject().value(QStringLiteral("option")).toString(), QStringLiteral("true"));
+        }
+        st.searing = st.tangled = false;
+        const auto misc = searchFilters(searchQuery(*glove, st), "misc_filters");
+        QVERIFY(!misc.contains(QStringLiteral("searing_item")) && !misc.contains(QStringLiteral("tangled_item")));
+
+        const auto influenced = parseText(QStringLiteral(
+            "아이템 종류: 반지\n아이템 희귀도: 희귀\n파멸 고리\n토파즈 반지\n--------\n아이템 레벨: 85\n--------\n"
+            "쉐이퍼 아이템\n"), Game::Poe1);
+        QVERIFY(influenced);
+        QVERIFY(!activeStat(searchQuery(*influenced, defaultFilterState(*influenced)), "pseudo.pseudo_has_shaper_influence").isEmpty());
+        const auto synthesised = parseText(QStringLiteral(
+            "아이템 종류: 반지\n아이템 희귀도: 희귀\n파멸 고리\n결합된 토파즈 반지\n--------\n아이템 레벨: 85\n--------\n"
+            "결합된 아이템\n"), Game::Poe1);
+        QVERIFY(synthesised);
+        const auto synthQuery = searchQuery(*synthesised, defaultFilterState(*synthesised));
+        QCOMPARE(synthQuery.value(QStringLiteral("type")).toString(), QStringLiteral("토파즈 반지"));
+        QVERIFY(searchFilters(synthQuery, "misc_filters").contains(QStringLiteral("synthesised_item")));
+
+        const auto flask = parseText(QStringLiteral(
+            "아이템 종류: 특수 플라스크\n아이템 희귀도: 일반\n황금 플라스크\n--------\n아이템 레벨: 85\n"), Game::Poe1);
+        QVERIFY(flask && flask->isFlask);
+        const auto type = searchFilters(searchQuery(*flask, defaultFilterState(*flask)), "type_filters");
+        QCOMPARE(type.value(QStringLiteral("rarity")).toObject().value(QStringLiteral("option")).toString(), QStringLiteral("nonunique"));
+    }
+
+    void exactRetainsStructuralStats()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        const auto axe = parse(QStringLiteral("poe1_en_magic_axe_fractured.txt"), Game::Poe1);
+        QVERIFY(axe);
+        ItemFilterState st;
+        auto exact = applyPreset(*axe, Preset::Exact, 10, &st);
+        auto query = searchQuery(exact, st);
+        QVERIFY(!activeStat(query, "fractured.stat_1509134228").isEmpty());
+        QVERIFY(!activeStat(query, "fractured.stat_691932474").isEmpty());
+
+        const auto cluster = parse(QStringLiteral("poe1_en_cluster.txt"), Game::Poe1);
+        QVERIFY(cluster);
+        exact = applyPreset(*cluster, Preset::Exact, 10, &st);
+        query = searchQuery(exact, st);
+        const auto passives = activeStat(query, "enchant.stat_3086156145").value(QStringLiteral("value")).toObject();
+        QCOMPARE(passives.value(QStringLiteral("max")).toDouble(), 8.0);
+        QVERIFY(!activeStat(query, "enchant.stat_3948993189").isEmpty());
+        QVERIFY(activeStat(query, "enchant.stat_4079888060").isEmpty());
+    }
+
+    void groupedNumbersAndQuality()
+    {
+        double value = 0;
+        QVERIFY(text::firstNumber(QStringLiteral("1,043 (augmented)"), &value));
+        QCOMPARE(value, 1043.0);
+        QCOMPARE(text::damageRangeSum(QStringLiteral("414-1,043 (augmented), 1,202-1,555")), 4214.0);
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        const auto crossbow = parseText(QStringLiteral(
+            "Item Class: Crossbows\nRarity: Rare\nDoom Bolt\nSiege Crossbow\n--------\n"
+            "Quality: +29% (augmented)\nPhysical Damage: 414-1,043 (augmented)\nAttacks per Second: 2.07 (augmented)\n"
+            "--------\nItem Level: 82\n--------\n25% increased Attack Speed (fractured)\n--------\nFractured Item\n"), Game::Poe2);
+        QVERIFY(crossbow && crossbow->hasDps);
+        ItemFilterState st;
+        auto item = applyPreset(*crossbow, Preset::Default, 10, &st);
+        auto props = searchFilters(searchQuery(item, st), "equipment_filters");
+        QCOMPARE(props.value(QStringLiteral("pdps")).toObject().value(QStringLiteral("min")).toDouble(), 1351.0);
+
+        const auto axe = parse(QStringLiteral("poe1_en_magic_axe_fractured.txt"), Game::Poe1);
+        QVERIFY(axe && axe->hasDps);
+        props = searchFilters(searchQuery(*axe, defaultFilterState(*axe)), "weapon_filters");
+        QCOMPARE(props.value(QStringLiteral("pdps")).toObject().value(QStringLiteral("min")).toDouble(), 291.0);
+
+        const QString clip = QStringLiteral(
+            "아이템 종류: 장갑\n아이템 희귀도: 희귀\n맹공 발\n레비아탄 건틀릿\n--------\n방어도: 600 (augmented)\n"
+            "--------\n아이템 레벨: 85\n--------\n방어도 100% 증가\n");
+        const auto glove = parseText(clip, Game::Poe1);
+        QVERIFY(glove);
+        item = applyPreset(*glove, Preset::Default, 10, &st);
+        props = searchFilters(searchQuery(item, st), "armour_filters");
+        QCOMPARE(props.value(QStringLiteral("ar")).toObject().value(QStringLiteral("min")).toDouble(), 648.0);
+        const auto nonDefence = parseText(clip + QStringLiteral("--------\n퀄리티가 방어력을 증가시키지 않음 (enchant)\n"), Game::Poe1);
+        QVERIFY(nonDefence);
+        QCOMPARE(nonDefence->props.first().value, 600.0);
+
+        QString armourClip = fixture(QStringLiteral("poe2_en_rare_armour.txt"));
+        armourClip.replace(QStringLiteral("Quality: +20"), QStringLiteral("Quality: +10"));
+        armourClip.replace(QStringLiteral("812"), QStringLiteral("1,043"));
+        const auto corrupted = parseText(armourClip, Game::Poe2);
+        QVERIFY(corrupted);
+        props = searchFilters(searchQuery(*corrupted, defaultFilterState(*corrupted)), "equipment_filters");
+        QCOMPARE(props.value(QStringLiteral("ar")).toObject().value(QStringLiteral("min")).toDouble(), 1043.0);
+    }
+
+    void poe2GemHeadersAndSockets()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        const QString clip = QStringLiteral(
+            "아이템 종류: 스킬 젬\n아이템 희귀도: 젬\n화염구\n--------\n주문, 투사체, 화염\n레벨: 19\n--------\n"
+            "요구 사항: 레벨 86, 205 지능\n--------\n홈: G G G G G\n--------\n타락\n");
+        const auto gem = parseText(clip, Game::Poe2);
+        QVERIFY(gem && gem->checkSockets && gem->sockets == 5);
+        for (bool useDb : {true, false}) {
+            const auto query = searchQuery(*gem, defaultFilterState(*gem), useDb);
+            const auto misc = searchFilters(query, "misc_filters");
+            QCOMPARE(misc.value(QStringLiteral("gem_sockets")).toObject().value(QStringLiteral("min")).toDouble(), 5.0);
+            QVERIFY(!searchFilters(query, "equipment_filters").contains(QStringLiteral("rune_sockets")));
+        }
+        QString twoSockets = clip;
+        twoSockets.replace(QStringLiteral("G G G G G"), QStringLiteral("G G"));
+        const auto two = parseText(twoSockets, Game::Poe2);
+        QVERIFY(two && two->sockets == 2 && !two->checkSockets);
+
+        const QString metaClip = fixture(QStringLiteral("poe2_en_meta_gem.txt"));
+        ItemParser parser(kw, dbs, &checked);
+        QVERIFY(parser.looksLikeItem(metaClip));
+        QCOMPARE(parser.guessGame(metaClip, Game::Poe1), Game::Poe2);
+        const auto meta = parseText(metaClip, Game::Poe2);
+        QVERIFY(meta && meta->isGem);
+        QCOMPARE(meta->category, QStringLiteral("gem.metagem"));
+        const auto query = searchQuery(*meta, defaultFilterState(*meta));
+        QCOMPARE(query.value(QStringLiteral("type")).toString(), QStringLiteral("Mirage Archer"));
+        QCOMPARE(searchFilters(query, "misc_filters").value(QStringLiteral("gem_sockets")).toObject()
+                     .value(QStringLiteral("min")).toDouble(), 4.0);
+    }
+
+    void poe2DesecratedAdvancedQuery()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        const QString clip = QStringLiteral(
+            "Item Class: Amulets\nRarity: Rare\nBrood Locket\nGold Amulet\n--------\nItem Level: 81\n--------\n"
+            "{ Desecrated Suffix Modifier \"of Amanamu\" (Tier: 1) — Elemental, Fire, Chaos, Resistance }\n"
+            "+17(13-17)% to Fire and Chaos Resistances\n");
+        for (const QString& flag : {QString(), QStringLiteral("Corrupted"), QStringLiteral("Sanctified")}) {
+            auto item = parseText(flag.isEmpty() ? clip : clip + QStringLiteral("--------\n") + flag, Game::Poe2);
+            QVERIFY(item && item->mods.size() == 1);
+            QCOMPARE(item->mods[0].modType, QStringLiteral("desecrated"));
+            const char* expected = flag.isEmpty() ? "explicit.stat_378817135" : "desecrated.stat_378817135";
+            QCOMPARE(item->mods[0].current()->id, QLatin1String(expected));
+            item->mods[0].checked = true;
+            const auto baseQuery = searchQuery(*item, defaultFilterState(*item));
+            QVERIFY(!activeStat(baseQuery, expected).isEmpty());
+            QVERIFY(activeStat(baseQuery, "pseudo.pseudo_total_resistance").isEmpty());
+            ItemFilterState st;
+            const auto exact = applyPreset(*item, Preset::Exact, 0, &st);
+            const auto stat = activeStat(searchQuery(exact, st), expected);
+            QCOMPARE(stat.value(QStringLiteral("value")).toObject().value(QStringLiteral("min")).toDouble(), 17.0);
+        }
+    }
+
     void estimate()
     {
         Rates r;
@@ -1664,6 +1900,71 @@ private slots:
         }
         QCOMPARE(medianRatio(offers), 170.0); // 165,170,170,170,170
 
+    }
+
+    void estimateSparseAndSplitMarkets()
+    {
+        Rates rates;
+        rates.base = QStringLiteral("chaos");
+        auto offer = [](double price, const QString& seller) {
+            Listing l;
+            l.amount = l.payAmount = price;
+            l.getAmount = 1;
+            l.account = seller;
+            l.currency = QStringLiteral("chaos");
+            return l;
+        };
+        QVector<Listing> sparse{offer(10, QStringLiteral("A")), offer(100, QStringLiteral("B"))};
+        const Estimate few = estimatePrice(sparse, rates);
+        QCOMPARE(few.used, 2);
+        QCOMPARE(few.value, 55.0);
+        QCOMPARE(few.lo, 10.0);
+        QCOMPARE(few.hi, 100.0);
+        QCOMPARE(few.confidence, QStringLiteral("낮음"));
+        QCOMPARE(medianRatio(sparse), 55.0);
+
+        QVector<Listing> split{offer(1, QStringLiteral("one-off"))};
+        for (int i = 0; i < 9; ++i)
+            split.push_back(offer(i < 4 ? 10 : 100, QString::number(i)));
+        const Estimate twoBands = estimatePrice(split, rates);
+        QCOMPARE(twoBands.used, 9);
+        QCOMPARE(twoBands.lo, 10.0);
+        QCOMPARE(twoBands.hi, 100.0);
+        QCOMPARE(twoBands.confidence, QStringLiteral("낮음"));
+        QCOMPARE(medianRatio(split), 10.0);
+
+        QVector<Listing> spam;
+        for (int i = 0; i < 5; ++i)
+            spam.push_back(offer(90, QStringLiteral("spammer")));
+        for (int i = 0; i < 4; ++i)
+            spam.push_back(offer(200, QString::number(i)));
+        QCOMPARE(medianRatio(spam), 200.0);
+    }
+
+    void estimateMissingRatesAndRounding()
+    {
+        Rates rates;
+        rates.base = QStringLiteral("chaos");
+        auto listing = [](double amount, const QString& currency) {
+            Listing l;
+            l.amount = amount;
+            l.currency = currency;
+            return l;
+        };
+        const QVector<Listing> mixed{listing(2, QStringLiteral("divine")), listing(10000, QStringLiteral("chaos")),
+                                     listing(1, QStringLiteral("divine"))};
+        QVERIFY(!estimatePrice(mixed, rates).ok);
+        QCOMPARE(PriceSummary::summarize(mixed, shortCurrencyName), QStringLiteral("1~2 디바인 · 10000 카오스"));
+        rates.toBase.insert(QStringLiteral("divine"), 200);
+        QVERIFY(estimatePrice(mixed, rates).ok);
+
+        Estimate e;
+        e.ok = true;
+        e.value = 2010;
+        e.lo = 2005;
+        e.hi = 2015;
+        const QString shown = formatEstimate(e, rates, 100);
+        QVERIFY2(shown.startsWith(QStringLiteral("≈ 10.1 디바인  (10~10.1")), qPrintable(shown));
     }
 
     void poe2RareArmour()
