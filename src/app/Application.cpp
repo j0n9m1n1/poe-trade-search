@@ -130,8 +130,8 @@ bool Application::start(QString* error)
             reopenLast();
     });
     // 트레이 메뉴는 최소한만. 데이터 갱신 / 프로그램 업데이트는 설정 창에
+    // 마지막 창 다시 열기는 트레이 아이콘 왼쪽 클릭 / {Last} 단축키로
     m_menu = new QMenu;
-    m_menu->addAction(QStringLiteral("마지막 창 다시 열기"), this, &Application::reopenLast);
     m_menu->addAction(QStringLiteral("설정"), this, &Application::openSettings);
     // 업데이트: 새 버전을 모르면 확인(있으면 바로 설치), 알면 설치
     m_updateAction = m_menu->addAction(QStringLiteral("업데이트 확인 (현재 %1)").arg(Updater::currentVersion()));
