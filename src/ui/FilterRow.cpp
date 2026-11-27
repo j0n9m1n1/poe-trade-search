@@ -7,6 +7,7 @@
 #include <QComboBox>
 #include <QEvent>
 #include <QHBoxLayout>
+#include <QMouseEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QRegularExpressionValidator>
@@ -176,7 +177,12 @@ PropRow::PropRow(QWidget* parent) : QWidget(parent)
     auto* lay = new QHBoxLayout(this);
     lay->setContentsMargins(0, 1, 0, 1);
     lay->setSpacing(4);
-    lay->addSpacing(84 + 4 + 26); // FilterRow 의 종류 콤보 + 등급 칸
+    m_name = new QLabel(this); // FilterRow 의 종류 콤보 + 등급 열
+    m_name->setFixedWidth(84 + 4 + 26);
+    m_name->setStyleSheet(QStringLiteral("QLabel{color:#9a9a9a;}"));
+    m_name->setCursor(Qt::PointingHandCursor);
+    m_name->installEventFilter(this);
+    lay->addWidget(m_name);
     m_text = new ToggleLabel(this);
     m_text->setColor(QColor(0xc8, 0xc8, 0xc8)); // 게임 속성 글씨 (회색)
     {
@@ -201,9 +207,20 @@ PropRow::PropRow(QWidget* parent) : QWidget(parent)
     connect(m_text, &ToggleLabel::toggled, this, &PropRow::changed);
 }
 
-void PropRow::setText(const QString& t)
+void PropRow::setLabel(const QString& name, const QString& value)
 {
-    m_text->setText(t);
+    m_name->setText(name);
+    m_text->setText(value);
+}
+
+bool PropRow::eventFilter(QObject* o, QEvent* e)
+{
+    if (o == m_name && e->type() == QEvent::MouseButtonPress &&
+        static_cast<QMouseEvent*>(e)->button() == Qt::LeftButton && m_text->isCheckable()) {
+        m_text->setChecked(!m_text->isChecked()); // toggled -> changed
+        return true;
+    }
+    return QWidget::eventFilter(o, e);
 }
 
 void PropRow::setChecked(bool on)
@@ -221,6 +238,7 @@ void PropRow::setCheckable(bool on)
 {
     m_text->setCheckable(on);
     m_text->setCursor(on ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    m_name->setCursor(on ? Qt::PointingHandCursor : Qt::ArrowCursor);
 }
 
 void PropRow::setColor(const QColor& c)

@@ -51,14 +51,14 @@ private:
     bool m_unmatched = false;
 };
 
-// 아이템 속성 한 줄 (레어도 / 아이템 레벨 / 퀄리티 / 방어도 ...): PoE Overlay 처럼 옵션 줄과 같은 열에
-// [빈칸(종류+등급 폭)][이름: 값 (누르면 켜고 끔)][최소][최대]  또는  [이름: 값][콤보]
+// 아이템 속성 한 줄 (레어도 / 아이템 레벨 / 퀄리티 / 방어도 ...): 옵션 줄과 같은 열에
+// [이름 (종류+등급 열)][값 (옵션 글자 열, 누르면 켜고 끔)][최소][최대]  또는  [이름][값][콤보]
 class PropRow : public QWidget {
     Q_OBJECT
 public:
     explicit PropRow(QWidget* parent = nullptr);
 
-    void setText(const QString& t);
+    void setLabel(const QString& name, const QString& value);
     void setChecked(bool on); // changed 안 냄
     bool isChecked() const;
     void setCheckable(bool on);
@@ -74,7 +74,11 @@ public:
 signals:
     void changed();
 
+protected:
+    bool eventFilter(QObject* o, QEvent* e) override; // 이름을 눌러도 켜고 끔
+
 private:
+    QLabel* m_name;
     ToggleLabel* m_text;
     QLineEdit* m_min;
     QLineEdit* m_max;

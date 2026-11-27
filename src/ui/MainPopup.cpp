@@ -597,40 +597,33 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
         m_useType->setVisible(!base.isEmpty());
         applyRarityColor(it);
     }
-    // 영향 배지: 첫째 왼쪽, 둘째 오른쪽 (게임 헤더 양쪽 아이콘 자리)
+    // 영향 배지: 첫째 왼쪽, 나머지 오른쪽 (게임 헤더 양쪽 아이콘 자리). 아이콘은 Application 이 받아서 붙임
     {
-        QVector<QPair<QString, QString>> badges; // 이름, 색
-        static const QHash<QString, QString> inflColor = {
-            {QStringLiteral("shaper_item"), QStringLiteral("#7fa8f0")},   {QStringLiteral("elder_item"), QStringLiteral("#b98be6")},
-            {QStringLiteral("crusader_item"), QStringLiteral("#e8d27a")}, {QStringLiteral("redeemer_item"), QStringLiteral("#7fd3e6")},
-            {QStringLiteral("hunter_item"), QStringLiteral("#8fd36b")},   {QStringLiteral("warlord_item"), QStringLiteral("#ec7a62")},
+        struct InflIcon {
+            const char* id;
+            const char* color;
         };
+        static const QHash<QString, InflIcon> inflIcon = {
+            {QStringLiteral("shaper_item"), {"shapers-exalted-orb", "#7fa8f0"}},
+            {QStringLiteral("elder_item"), {"elders-exalted-orb", "#b98be6"}},
+            {QStringLiteral("crusader_item"), {"crusaders-exalted-orb", "#e8d27a"}},
+            {QStringLiteral("redeemer_item"), {"redeemers-exalted-orb", "#7fd3e6"}},
+            {QStringLiteral("hunter_item"), {"hunters-exalted-orb", "#8fd36b"}},
+            {QStringLiteral("warlord_item"), {"warlords-exalted-orb", "#ec7a62"}},
+        };
+        m_badges.clear();
         for (int i : it.influences) {
             if (i >= 0 && i < m_kw.influences().size()) {
                 const auto& inf = m_kw.influences()[i];
-                badges.push_back({inf.name.first(Lang::Ko), inflColor.value(inf.flag, QStringLiteral("#cccccc"))});
+                const auto ic = inflIcon.value(inf.flag, {"", "#cccccc"});
+                m_badges.push_back({QString::fromLatin1(ic.id), inf.name.first(Lang::Ko), QString::fromLatin1(ic.color)});
             }
         }
         if (it.searing)
-            badges.push_back({QStringLiteral("총주교"), QStringLiteral("#ff8a3d")});
+            m_badges.push_back({QStringLiteral("exceptional-eldritch-ember"), QStringLiteral("총주교"), QStringLiteral("#ff8a3d")});
         if (it.tangled)
-            badges.push_back({QStringLiteral("포식자"), QStringLiteral("#5fd0b8")});
-        auto setBadge = [](QLabel* l, const QVector<QPair<QString, QString>>& b) {
-            QStringList names;
-            for (const auto& x : b)
-                names << x.first;
-            l->setText(names.join(QLatin1Char('\n')));
-            const QString c = b.isEmpty() ? QStringLiteral("transparent") : b.first().second;
-            l->setStyleSheet(b.isEmpty() ? QStringLiteral("QLabel{background:transparent;}")
-                                         : QStringLiteral("QLabel{color:%1; border:1px solid %1; border-radius:8px; "
-                                                          "padding:1px 3px; font-weight:bold; background:transparent;}")
-                                               .arg(c));
-        };
-        const auto left = badges.mid(0, 1), right = badges.mid(1);
-        setBadge(m_inflL, left);
-        setBadge(m_inflR, right);
-        m_inflL->setVisible(!badges.isEmpty());
-        m_inflR->setVisible(!badges.isEmpty());
+            m_badges.push_back({QStringLiteral("exceptional-eldritch-ichor"), QStringLiteral("포식자"), QStringLiteral("#5fd0b8")});
+        renderBadges();
     }
     m_icon->clear();
     m_icon->setVisible(false);
@@ -807,15 +800,15 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     const QColor propGray(0xc8, 0xc8, 0xc8), warn(0xe0, 0x66, 0x66);
 
     // 레어도 줄: 켜면 콤보 값으로 검색, 끄면 레어도 조건 없음
-    m_rarityRow->setText(QStringLiteral("아이템 희귀도: %1").arg(it.rarityText));
+    m_rarityRow->setLabel(QStringLiteral("아이템 희귀도"), it.rarityText);
     m_rarityRow->setVisible(!it.rarityText.isEmpty() && !it.isCurrency && !it.isCard && !it.isGem);
     m_rarityRow->setChecked(!st.rarity.isEmpty());
     // 복제된 아이템 줄
-    m_mirrorRow->setText(QStringLiteral("복제된 아이템"));
+    m_mirrorRow->setLabel(QStringLiteral("복제"), QStringLiteral("복제된 아이템만"));
     m_mirrorRow->setVisible(it.mirrored);
     m_mirrorRow->setChecked(st.mirrored == 1);
     // 분열 속성 없음 줄 (분열 안 된 고유 제외 장비만)
-    m_notFracRow->setText(QStringLiteral("분열 속성 없음"));
+    m_notFracRow->setLabel(QStringLiteral("분열"), QStringLiteral("분열 속성 없음"));
     m_notFracRow->setVisible((it.isGear || it.isJewel) && it.rarityId != QStringLiteral("unique") && !it.fractured);
     m_notFracRow->setChecked(st.notFractured);
     // 레벨 줄: 아이템 레벨 / 젬 레벨 / 지도 등급
@@ -827,23 +820,23 @@ void MainPopup::renderMisc(const ItemFilterState& st)
         const QString name = kind == SearchRequest::LevelKind::GemLevel  ? QStringLiteral("젬 레벨")
                              : kind == SearchRequest::LevelKind::MapTier ? QStringLiteral("지도 등급")
                                                                           : QStringLiteral("아이템 레벨");
-        m_lvRow->setText(QStringLiteral("%1: %2").arg(name).arg(v));
+        m_lvRow->setLabel(name, QString::number(v));
         m_lvRow->setVisible(v > 0);
         m_lvRow->setChecked(st.useLevel);
         m_lvRow->setValues(st.levelMin, st.levelMax);
         m_lvRow->setColor(it.highlightLevel ? warn : propGray);
     }
     // 퀄리티 / 홈 / 링크 줄
-    m_qRow->setText(QStringLiteral("퀄리티: +%1%").arg(it.quality));
+    m_qRow->setLabel(QStringLiteral("퀄리티"), QStringLiteral("+%1%").arg(it.quality));
     m_qRow->setVisible(it.quality > 0);
     m_qRow->setChecked(st.useQuality);
     m_qRow->setValues(st.qualityMin, st.qualityMax);
     m_qRow->setColor(it.highlightQuality ? warn : propGray);
-    m_sockRow->setText((poe1 ? QStringLiteral("홈: %1") : QStringLiteral("룬 홈: %1")).arg(it.sockets));
+    m_sockRow->setLabel(poe1 ? QStringLiteral("홈") : QStringLiteral("룬 홈"), QString::number(it.sockets));
     m_sockRow->setVisible(it.sockets > 0);
     m_sockRow->setChecked(st.useSockets);
     m_sockRow->setValues(st.socketsMin, st.socketsMax);
-    m_linkRow->setText(QStringLiteral("링크: %1").arg(it.links));
+    m_linkRow->setLabel(QStringLiteral("링크"), QString::number(it.links));
     m_linkRow->setVisible(poe1 && it.links > 1);
     m_linkRow->setChecked(st.useSockets);
     m_linkRow->setValues(st.linksMin, st.linksMax);
@@ -919,7 +912,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
             else
                 val = QString::number(qRound(v));
             const bool atQ20 = q20.contains(pw.key) && it.quality < 20;
-            pw.row->setText(QStringLiteral("%1: %2%3").arg(pw.label, val, atQ20 ? QStringLiteral(" (퀄 20)") : QString()));
+            pw.row->setLabel(pw.label, val + (atQ20 ? QStringLiteral(" (퀄 20)") : QString()));
             pw.row->setToolTip(q20.contains(pw.key) ? QStringLiteral("거래소는 퀄리티 20% 기준 값으로 검색합니다")
                                                     : QStringLiteral("누르면 검색에 넣거나 뺍니다"));
             pw.row->setVisible(ps != nullptr);
@@ -1255,6 +1248,89 @@ void MainPopup::refreshCurrencyCombo()
     m_currency->setIconSize(QSize(one.width() * 2 + 2, one.height()));
     m_currency->setToolTip(QStringLiteral("가격 화폐: %1\n(등가물 = 모든 화폐. 색채의 오브 같은 화폐로 올린 매물을 제외하려면 기준 화폐 또는 신성한 오브를 고르세요)")
                                .arg(m_currency->currentData(Qt::ToolTipRole).toString()));
+}
+
+QStringList MainPopup::badgeIconIds() const
+{
+    QStringList ids;
+    for (const Badge& b : m_badges) {
+        if (!b.iconId.isEmpty())
+            ids << b.iconId;
+    }
+    return ids;
+}
+
+void MainPopup::setBadgeIcon(const QString& staticId, const QString& path)
+{
+    if (staticId.isEmpty() || path.isEmpty() || m_badgeIcons.value(staticId) == path)
+        return;
+    m_badgeIcons.insert(staticId, path);
+    renderBadges();
+}
+
+void MainPopup::renderBadges()
+{
+    // 왼쪽 = 첫째, 오른쪽 = 나머지. 아이콘이 다 있으면 아이콘만, 하나라도 없으면 글자 배지
+    const QVector<Badge> left = m_badges.mid(0, 1), right = m_badges.mid(1);
+    constexpr int kIcon = 30, kGap = 2;
+    auto iconsFor = [this](const QVector<Badge>& bs, QVector<QPixmap>* out) {
+        for (const Badge& b : bs) {
+            const QPixmap pm(m_badgeIcons.value(b.iconId));
+            if (pm.isNull())
+                return false;
+            out->push_back(pm);
+        }
+        return true;
+    };
+    QVector<QPixmap> li, ri;
+    const bool iconMode = !m_badges.isEmpty() && iconsFor(left, &li) && iconsFor(right, &ri);
+    const int dpr = qMax(1, qRound(devicePixelRatioF()));
+    auto compose = [&](const QVector<QPixmap>& ps) {
+        if (ps.isEmpty())
+            return QPixmap();
+        QPixmap out(QSize(ps.size() * kIcon + (ps.size() - 1) * kGap, kIcon) * dpr);
+        out.setDevicePixelRatio(dpr);
+        out.fill(Qt::transparent);
+        QPainter p(&out);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        for (int k = 0; k < ps.size(); ++k)
+            p.drawPixmap(QRect(k * (kIcon + kGap), 0, kIcon, kIcon), ps[k]);
+        return out;
+    };
+    auto names = [](const QVector<Badge>& bs) {
+        QStringList n;
+        for (const Badge& b : bs)
+            n << b.name;
+        return n;
+    };
+    auto apply = [&](QLabel* l, const QVector<Badge>& bs, const QVector<QPixmap>& ps) {
+        l->setToolTip(names(bs).join(QStringLiteral(", ")));
+        if (bs.isEmpty()) {
+            l->clear();
+            l->setStyleSheet(QStringLiteral("QLabel{background:transparent;}"));
+        } else if (iconMode) {
+            l->setStyleSheet(QStringLiteral("QLabel{background:transparent; border:none;}"));
+            l->setWordWrap(false); // 줄바꿈 켠 채 픽스맵 넣으면 높이가 0 으로 잡힘
+            l->setMinimumHeight(kIcon);
+            l->setPixmap(compose(ps));
+        } else {
+            l->setPixmap(QPixmap());
+            l->setWordWrap(true);
+            l->setMinimumHeight(0);
+            l->setText(names(bs).join(QLatin1Char('\n')));
+            l->setStyleSheet(QStringLiteral("QLabel{color:%1; border:1px solid %1; border-radius:8px; "
+                                            "padding:1px 3px; font-weight:bold; background:transparent;}")
+                                 .arg(bs.first().color));
+        }
+    };
+    apply(m_inflL, left, li);
+    apply(m_inflR, right, ri);
+    // 이름이 가운데 오게 양쪽 폭을 같게. 아이콘이면 아이콘 폭만큼만
+    const int w = iconMode ? qMax(kIcon, qMax(li.size(), ri.size()) * (kIcon + kGap) - kGap) + 4 : 64;
+    m_inflL->setFixedWidth(w);
+    m_inflR->setFixedWidth(w);
+    m_inflL->setVisible(!m_badges.isEmpty());
+    m_inflR->setVisible(!m_badges.isEmpty());
 }
 
 void MainPopup::setUnitIcon(const QString& unitName, const QString& path)
