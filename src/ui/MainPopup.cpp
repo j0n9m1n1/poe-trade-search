@@ -8,6 +8,7 @@
 #include "platform/Platform.h"
 #include "ui/FilterRow.h"
 #include "ui/ToggleLabel.h"
+#include "ui/UiChoices.h"
 
 #include <QAction>
 #include <QCheckBox>
@@ -485,10 +486,8 @@ void MainPopup::buildUi()
     pr->addWidget(m_currency);
     connect(m_currency, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() { refreshCurrencyCombo(); });
     m_status = new QComboBox(this);
-    m_status->addItem(QStringLiteral("즉시 구입만"), QStringLiteral("securable"));
-    m_status->addItem(QStringLiteral("즉시 구입+직접"), QStringLiteral("available"));
-    m_status->addItem(QStringLiteral("직접(접속 중)"), QStringLiteral("online"));
-    m_status->addItem(QStringLiteral("전부"), QStringLiteral("any"));
+    for (const auto& sc : ui::tradeStatusChoices())
+        m_status->addItem(sc.first, sc.second);
     m_status->setToolTip(QStringLiteral("판매 방식"));
     pr->addWidget(m_status);
     m_indexed = new QComboBox(this);
@@ -520,14 +519,14 @@ void MainPopup::buildUi()
     m_price->installEventFilter(this);
     m_price->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_price, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
-        const QString note = PriceSummary::priceNote(m_estimateAmount, m_estimateCurrency);
-        if (note.isEmpty())
+        const QString note = m_priceStale ? QString() : PriceSummary::priceNote(m_estimateAmount, m_estimateCurrency);
+        if (note.isEmpty() && !m_priceStale)
             return;
         QMenu menu(this);
-        QAction* copyAct = menu.addAction(QStringLiteral("가격 노트 복사 (%1)").arg(note));
+        QAction* copyAct = note.isEmpty() ? nullptr : menu.addAction(QStringLiteral("가격 노트 복사 (%1)").arg(note));
         QAction* refreshAct = menu.addAction(QStringLiteral("시세 다시 조회"));
         QAction* picked = menu.exec(m_price->mapToGlobal(pos));
-        if (picked == copyAct)
+        if (copyAct && picked == copyAct)
             emit copyPriceNoteRequested(note);
         else if (picked == refreshAct)
             emit priceCheckRequested();
@@ -651,7 +650,7 @@ bool MainPopup::eventFilter(QObject* o, QEvent* e)
     }
     if (e->type() == QEvent::MouseButtonPress) {
         if (o == m_price && static_cast<QMouseEvent*>(e)->button() == Qt::LeftButton) {
-            const QString note = PriceSummary::priceNote(m_estimateAmount, m_estimateCurrency);
+            const QString note = m_priceStale ? QString() : PriceSummary::priceNote(m_estimateAmount, m_estimateCurrency);
             if (!note.isEmpty())
                 emit copyPriceNoteRequested(note);
             else
@@ -680,9 +679,12 @@ void MainPopup::markStale()
 {
     m_priceMoreAvailable = false;
     emit priceFiltersChanged();
-    // 조건을 바꿨으면 지금 시세는 옛 조건 결과라 색으로 표시
-    if (m_priceText != m_idleText && !m_priceText.endsWith(QStringLiteral("...")))
+    // 조건을 바꿨으면 지금 시세는 옛 조건 결과라 색으로 표시하고 클릭 시 재조회
+    if (m_priceText != m_idleText && !m_priceText.endsWith(QStringLiteral("..."))) {
+        m_priceStale = true;
         setPriceText(m_priceText, QStringLiteral("#e75480"));
+        m_price->setToolTip(QStringLiteral("조건이 변경되었습니다. 클릭하면 시세를 다시 조회합니다."));
+    }
 }
 
 void MainPopup::setLeagueTitle(const QString& league)
@@ -716,6 +718,50 @@ void MainPopup::showItem(const ParsedItem& parsed, const GameDb* gdb, const Conf
 {
     m_cfg = cfg;
     showItemImpl(parsed, gdb, server);
+}
+
+bool MainPopup::syncConfig(const Config& cfg, Lang server)
+{
+    m_cfg = cfg;
+    m_cfgRange = cfg.searchStatRange;
+    if (!m_hasItem)
+        return false;
+    bool changed = false;
+    if (this->server() != server) {
+        QSignalBlocker b(m_server);
+        const int idx = m_server->findData(li(server));
+        if (idx >= 0) {
+            m_server->setCurrentIndex(idx);
+            changed = true;
+        }
+    }
+    if (tradeStatus() != cfg.tradeStatus) {
+        QSignalBlocker b(m_status);
+        const int si = m_status->findData(cfg.tradeStatus);
+        if (si >= 0) {
+            m_status->setCurrentIndex(si);
+            changed = true;
+        }
+        if (m_indexedAuto) {
+            QSignalBlocker bi(m_indexed);
+            const int ii = m_indexed->findData(QueryBuilder::indexedDefault(cfg.searchBeforeDay, cfg.tradeStatus));
+            m_indexed->setCurrentIndex(ii < 0 ? 0 : ii);
+        }
+    }
+    const QString cur = cfg.priceCurrencyFor(m_parsed.game);
+    if (priceCurrency() != cur) {
+        QSignalBlocker b(m_currency);
+        int ci = m_currency->findData(cur);
+        if (ci < 0) {
+            m_currency->addItem(cur, cur);
+            m_currency->setItemData(m_currency->count() - 1, cur, Qt::ToolTipRole);
+            ci = m_currency->count() - 1;
+        }
+        m_currency->setCurrentIndex(ci);
+        refreshCurrencyCombo();
+        changed = true;
+    }
+    return changed;
 }
 
 void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang server)
@@ -966,6 +1012,10 @@ void MainPopup::renderRows()
             installActivator(c);
         connect(r, &FilterRow::changed, this, [this]() { markStale(); });
         connect(r, &FilterRow::rememberToggled, this, [this, i](bool on) {
+            if (i >= 0 && i < m_item.mods.size())
+                m_item.mods[i].autoChecked = on;
+            if (i >= 0 && i < m_parsed.mods.size())
+                m_parsed.mods[i].autoChecked = on;
             const ParsedMod& m = m_item.mods[i];
             emit rememberToggled(m.statKey, m_item.top, on);
             markStale();
@@ -1270,6 +1320,7 @@ void MainPopup::setIcon(const QString& imagePath)
 void MainPopup::priceBusy(const QString& msg)
 {
     m_priceMoreAvailable = false;
+    m_priceStale = false;
     m_estimateAmount = 0;
     m_estimateCurrency.clear();
     m_prices->setRowCount(0);
@@ -1596,11 +1647,14 @@ void MainPopup::setUnitIcon(const QString& unitName, const QString& path)
         }
     }
     setPriceText(m_priceText, m_priceColor);
+    if (m_prices->rowCount() > 0)
+        fitPriceColumns();
 }
 
 void MainPopup::priceDone(const QString& summary, const QString& count, const QString& tooltip,
                           double noteAmount, const QString& noteCurrency)
 {
+    m_priceStale = false;
     m_estimateAmount = noteAmount;
     m_estimateCurrency = noteCurrency;
     setPriceText(summary);
@@ -1624,10 +1678,13 @@ void MainPopup::pricePageStatus(bool hasMore, int loaded, int total, const QStri
     const QString count = QStringLiteral("%1/%2 검색").arg(loaded).arg(total);
     m_priceCount->setText(status.isEmpty() ? count : count + QStringLiteral(" · ") + status);
     m_priceCount->setToolTip(hasMore ? QStringLiteral("목록 맨 아래에서 더 불러오기") : QString());
+    if (m_prices->rowCount() > 0)
+        fitPriceColumns();
 }
 
 void MainPopup::priceIdle(const QString& msg)
 {
+    m_priceStale = false;
     m_estimateAmount = 0;
     m_estimateCurrency.clear();
     m_price->setToolTip(QStringLiteral("누르면 시세를 다시 조회합니다"));

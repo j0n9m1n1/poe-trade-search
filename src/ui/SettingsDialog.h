@@ -11,6 +11,7 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QPushButton;
 class QSpinBox;
 class QTableWidget;
 
@@ -28,6 +29,8 @@ public:
                    const QString& versionInfo, const QString& appUpdateText = QString(), QWidget* parent = nullptr);
 
     Config result() const;
+    void setAppUpdateFinished(const QString& buttonText);
+    void setDataUpdateFinished(int game);
 
 signals:
     void updateDataRequested(int game); // 0 = poe1, 1 = poe2
@@ -66,8 +69,10 @@ private:
     QCheckBox* m_updates;
     QComboBox* m_appUpdate;
     QCheckBox* m_redirect;
-    QLineEdit* m_corrupt;
+    QComboBox* m_corrupt;
     QLineEdit* m_byType;
+    QPushButton* m_appUpdateBtn = nullptr;
+    QPushButton* m_dataBtn[2] = {nullptr, nullptr};
     QTableWidget* m_shortcuts;
     QListWidget* m_checkedList;
 };

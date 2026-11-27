@@ -257,7 +257,7 @@ void PropRow::setExtra(QWidget* w)
     m_min->hide();
     m_max->hide();
     w->setParent(this);
-    w->setFixedWidth(42 * 2 + 4 + 40); // 최소+최대 칸보다 조금 넓게 (롤 칸 쪽으로)
+    w->setFixedWidth(qMax(128, w->sizeHint().width())); // 긴 항목("고유 (반짝이 버전)")도 안 잘리게
     static_cast<QHBoxLayout*>(layout())->insertWidget(layout()->count() - 2, w); // 최소/최대 자리
 }
 

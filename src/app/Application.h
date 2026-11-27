@@ -27,6 +27,7 @@ class DataManager;
 class HotkeyManager;
 class IconCache;
 class MainPopup;
+class SettingsDialog;
 class TradeClient;
 
 namespace platform {
@@ -67,13 +68,15 @@ private:
     void openSettings();
 
     // 프로그램 업데이트 (GitHub Release)
+    QString appUpdateButtonText() const;
     void checkForUpdate(bool manual);
     void installUpdate();
     void applyDownloadedUpdate();
 
-    // 환율 (거래소 일괄 교환 API 로 계산, 30분 캐시)
+    // 환율 (거래소 일괄 교환 API 로 계산, 30분 캐시 / 실패 시 60초 뒤 재시도)
+    static QString ratesKey(Game g, Lang server, const QString& league);
     void ensureRates(Game g, Lang server, const QString& league, std::function<void()> then);
-    Rates ratesFor(Game g, const QString& league) const;
+    Rates ratesFor(Game g, Lang server, const QString& league) const;
 
     // 아이콘
     static QString iconKey(const ParsedItem& it);
@@ -96,7 +99,8 @@ private:
     void registerHotkeys();
     void unregisterHotkeys();
     void updateEscHotkey(bool gameForeground);
-    void syncPopupLeague();
+    bool syncPopupLeague();
+    void resetPopupPrices();
     void applyConfig();
     void saveConfig();
     void restart();
@@ -141,6 +145,7 @@ private:
     QString m_downloadedZip;
     std::unique_ptr<ItemParser> m_parser;
     MainPopup* m_popup = nullptr;
+    QPointer<SettingsDialog> m_settingsDlg;
     QSystemTrayIcon* m_tray = nullptr;
     QMenu* m_menu = nullptr;
     HotkeyManager* m_hotkeys = nullptr;
@@ -168,9 +173,10 @@ private:
     struct RateState {
         Rates rates;
         bool loading = false;
+        qint64 retryAfterMs = 0; // 실패/부분 실패 시 짧은 재시도 대기
         QVector<std::function<void()>> waiters;
     };
-    QHash<QString, RateState> m_rates; // "poe1|League"
+    QHash<QString, RateState> m_rates; // "poe1|ko|League"
 };
 
 } // namespace pts

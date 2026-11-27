@@ -5,6 +5,7 @@
 #include "core/QueryBuilder.h"
 #include "core/TradeDb.h"
 #include "ui/HotkeyEdit.h"
+#include "ui/UiChoices.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -16,6 +17,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -37,7 +39,10 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     root->addWidget(tabs, 1);
 
     // ---------------- 기본
-    auto* basic = new QWidget(tabs);
+    auto* basicScroll = new QScrollArea(tabs);
+    basicScroll->setWidgetResizable(true);
+    basicScroll->setFrameShape(QFrame::NoFrame);
+    auto* basic = new QWidget(basicScroll);
     auto* f = new QFormLayout(basic);
 
     m_game = new QComboBox(basic);
@@ -62,11 +67,8 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     f->addRow(QStringLiteral("검색 서버:"), m_server);
 
     m_status = new QComboBox(basic);
-    m_status->addItem(QStringLiteral("즉시 구입만"), QStringLiteral("securable"));
-    m_status->addItem(QStringLiteral("즉시 구입 + 직접 거래"), QStringLiteral("available"));
-    m_status->addItem(QStringLiteral("직접 거래 (리그 접속 중)"), QStringLiteral("onlineleague"));
-    m_status->addItem(QStringLiteral("직접 거래 (접속 중)"), QStringLiteral("online"));
-    m_status->addItem(QStringLiteral("모두"), QStringLiteral("any"));
+    for (const auto& sc : ui::tradeStatusChoices())
+        m_status->addItem(sc.first, sc.second);
     m_status->setCurrentIndex(qMax(0, m_status->findData(cfg.tradeStatus)));
     f->addRow(QStringLiteral("판매 방식:"), m_status);
 
@@ -149,8 +151,14 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_totalres->setChecked(cfg.autoCheckTotalres);
     f->addRow(m_totalres);
 
-    m_corrupt = new QLineEdit(cfg.autoSelectCorrupt, basic);
-    m_corrupt->setPlaceholderText(QStringLiteral("비움 / yes / no"));
+    m_corrupt = new QComboBox(basic);
+    m_corrupt->addItem(QStringLiteral("아이템 상태 따름 (비움)"), QString());
+    m_corrupt->addItem(QStringLiteral("타락만 (yes)"), QStringLiteral("yes"));
+    m_corrupt->addItem(QStringLiteral("비타락만 (no)"), QStringLiteral("no"));
+    {
+        const int ci = m_corrupt->findData(cfg.autoSelectCorrupt.trimmed().toLower());
+        m_corrupt->setCurrentIndex(ci < 0 ? 0 : ci);
+    }
     f->addRow(QStringLiteral("장비 타락 기본값:"), m_corrupt);
     m_byType = new QLineEdit(cfg.autoSelectByType, basic);
     m_byType->setPlaceholderText(QStringLiteral("예: jewel,accessory.ring"));
@@ -174,14 +182,14 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     {
         auto* row = new QHBoxLayout;
         row->addWidget(m_appUpdate, 1);
-        auto* btn = new QPushButton(appUpdateText.isEmpty() ? QStringLiteral("지금 확인") : appUpdateText, basic);
-        btn->setToolTip(QStringLiteral("새 버전을 확인하고, 있으면 받아서 설치합니다"));
-        connect(btn, &QPushButton::clicked, this, [this, btn]() {
-            btn->setEnabled(false);
-            btn->setText(QStringLiteral("진행 중... (결과는 트레이 알림)"));
+        m_appUpdateBtn = new QPushButton(appUpdateText.isEmpty() ? QStringLiteral("지금 확인") : appUpdateText, basic);
+        m_appUpdateBtn->setToolTip(QStringLiteral("새 버전을 확인하고, 있으면 받아서 설치합니다"));
+        connect(m_appUpdateBtn, &QPushButton::clicked, this, [this]() {
+            m_appUpdateBtn->setEnabled(false);
+            m_appUpdateBtn->setText(QStringLiteral("진행 중... (결과는 트레이 알림)"));
             emit appUpdateRequested();
         });
-        row->addWidget(btn);
+        row->addWidget(m_appUpdateBtn);
         f->addRow(QStringLiteral("프로그램 업데이트:"), row);
     }
 
@@ -195,23 +203,24 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     f->addRow(QStringLiteral("데이터 갱신 주기:"), m_dataAge);
 
     auto* upd = new QHBoxLayout;
-    auto* u1 = new QPushButton(QStringLiteral("PoE1 데이터 갱신"), basic);
-    auto* u2 = new QPushButton(QStringLiteral("PoE2 데이터 갱신"), basic);
-    connect(u1, &QPushButton::clicked, this, [this, u1]() {
-        u1->setEnabled(false);
+    m_dataBtn[0] = new QPushButton(QStringLiteral("PoE1 데이터 갱신"), basic);
+    m_dataBtn[1] = new QPushButton(QStringLiteral("PoE2 데이터 갱신"), basic);
+    connect(m_dataBtn[0], &QPushButton::clicked, this, [this]() {
+        m_dataBtn[0]->setEnabled(false);
         emit updateDataRequested(0);
     });
-    connect(u2, &QPushButton::clicked, this, [this, u2]() {
-        u2->setEnabled(false);
+    connect(m_dataBtn[1], &QPushButton::clicked, this, [this]() {
+        m_dataBtn[1]->setEnabled(false);
         emit updateDataRequested(1);
     });
-    upd->addWidget(u1);
-    upd->addWidget(u2);
+    upd->addWidget(m_dataBtn[0]);
+    upd->addWidget(m_dataBtn[1]);
     f->addRow(upd);
     auto* ver = new QLabel(versionInfo, basic);
     ver->setStyleSheet(QStringLiteral("color:palette(mid);"));
     f->addRow(ver);
-    tabs->addTab(basic, QStringLiteral("기본"));
+    basicScroll->setWidget(basic);
+    tabs->addTab(basicScroll, QStringLiteral("기본"));
 
     // ---------------- 단축키
     auto* keys = new QWidget(tabs);
@@ -251,7 +260,7 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     // ---------------- 자동 체크
     auto* chk = new QWidget(tabs);
     auto* cl = new QVBoxLayout(chk);
-    auto* ch = new QLabel(QStringLiteral("팝업에서 옵션 체크박스를 우클릭하면 여기에 등록됩니다 (고정 옵션 제외).\n"
+    auto* ch = new QLabel(QStringLiteral("팝업에서 옵션 줄을 우클릭하면 여기에 등록됩니다 (고정 옵션 제외).\n"
                                          "Ctrl+Alt+C 고급 설명으로 복사하면 1~2등급일 때만 자동으로 체크합니다."),
                           chk);
     ch->setStyleSheet(QStringLiteral("color:palette(mid);"));
@@ -312,6 +321,20 @@ void SettingsDialog::refreshChecked()
     }
 }
 
+void SettingsDialog::setAppUpdateFinished(const QString& buttonText)
+{
+    if (!m_appUpdateBtn)
+        return;
+    m_appUpdateBtn->setText(buttonText.isEmpty() ? QStringLiteral("지금 확인") : buttonText);
+    m_appUpdateBtn->setEnabled(true);
+}
+
+void SettingsDialog::setDataUpdateFinished(int game)
+{
+    if (game >= 0 && game < 2 && m_dataBtn[game])
+        m_dataBtn[game]->setEnabled(true);
+}
+
 Config SettingsDialog::result() const
 {
     Config c = m_cfg;
@@ -335,7 +358,7 @@ Config SettingsDialog::result() const
     c.autoCheckUnique = m_unique->isChecked();
     c.autoSelectPseudo = m_pseudo->isChecked();
     c.autoCheckTotalres = m_totalres->isChecked();
-    c.autoSelectCorrupt = m_corrupt->text().trimmed();
+    c.autoSelectCorrupt = m_corrupt->currentData().toString();
     c.autoSelectByType = m_byType->text().trimmed();
     c.serverTimeout = m_timeout->value();
     c.serverRedirect = m_redirect->isChecked();

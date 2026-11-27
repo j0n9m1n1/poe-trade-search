@@ -108,4 +108,22 @@ if(PTS_BUILD_TESTS)
     target_link_libraries(test_core PRIVATE pts_core Qt6::Test)
     target_compile_definitions(test_core PRIVATE PTS_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
     add_test(NAME test_core COMMAND test_core)
+
+    if(PTS_BUILD_APP)
+        add_executable(test_app_fixes
+            tests/test_app_fixes.cpp
+            src/ui/MainPopup.h src/ui/MainPopup.cpp
+            src/ui/FilterRow.h src/ui/FilterRow.cpp
+            src/ui/ToggleLabel.h src/ui/ToggleLabel.cpp
+            src/ui/SettingsDialog.h src/ui/SettingsDialog.cpp
+            src/ui/HotkeyEdit.h src/ui/HotkeyEdit.cpp
+            $<$<BOOL:${WIN32}>:src/platform/win/WinPlatform.cpp>
+            $<$<NOT:$<BOOL:${WIN32}>>:src/platform/stub/StubPlatform.cpp>
+        )
+        target_link_libraries(test_app_fixes PRIVATE pts_core Qt6::Widgets Qt6::Test)
+        if(WIN32)
+            target_link_libraries(test_app_fixes PRIVATE user32 advapi32 shell32)
+        endif()
+        add_test(NAME test_app_fixes COMMAND test_app_fixes)
+    endif()
 endif()

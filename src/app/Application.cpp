@@ -103,8 +103,8 @@ bool Application::start(QString* error)
     connect(m_client, &TradeClient::throttled, this, [this](int s) {
         if (m_listingPages && m_listingPages->loading) {
             updateListingPageStatus(QStringLiteral("요청 제한 · %1초 대기").arg(s));
-        } else if (m_popup && m_popup->isVisible()) {
-            m_popup->priceIdle(QStringLiteral("요청 제한 때문에 %1초 대기 중...").arg(s));
+        } else if (m_priceToken != 0 && m_popup && m_popup->isVisible()) {
+            m_popup->priceStatus(QStringLiteral("요청 제한 때문에 %1초 대기 중...").arg(s));
         }
     });
 
@@ -115,12 +115,17 @@ bool Application::start(QString* error)
     connect(m_popup, &MainPopup::moreListingsRequested, this, &Application::loadMoreListings);
     connect(m_popup, &MainPopup::priceFiltersChanged, this, [this]() {
         ++m_priceFilterRevision;
-        if (!m_listingPages)
-            return;
-        if (m_listingPages->loading) {
+        const bool initialLoading = !m_listingPages && m_priceToken != 0;
+        if (m_priceToken != 0) {
             m_client->cancel(m_priceToken);
             m_priceToken = 0;
         }
+        if (initialLoading) {
+            m_popup->priceIdle(QStringLiteral("조건이 변경되었습니다. 클릭하면 다시 조회합니다."));
+            return;
+        }
+        if (!m_listingPages)
+            return;
         m_popup->pricePageStatus(false, m_listingPages->loaded, m_listingPages->search.total);
         m_listingPages.reset();
     });
@@ -256,6 +261,8 @@ void Application::updateGame(Game g, std::function<void()> then)
                        .arg(g == Game::Poe1 ? QStringLiteral("PoE1") : QStringLiteral("PoE2"), err),
                    QSystemTrayIcon::Warning);
         }
+        if (m_settingsDlg)
+            m_settingsDlg->setDataUpdateFinished(gi(g));
         if (then)
             then();
     });
@@ -752,22 +759,37 @@ void Application::loadCurrencyIcons(Game g, Lang l, const QStringList& ids)
 
 // ------------------------------------------------------------ 프로그램 업데이트
 
+QString Application::appUpdateButtonText() const
+{
+    if (m_newTag.isEmpty())
+        return QStringLiteral("지금 확인");
+    return Updater::canSelfInstall() ? QStringLiteral("%1 설치").arg(m_newTag)
+                                     : QStringLiteral("%1 릴리즈 페이지 열기").arg(m_newTag);
+}
+
 void Application::checkForUpdate(bool manual)
 {
     if (!manual && m_cfg.appUpdate == QStringLiteral("off"))
         return;
-    if (!m_updater->enabled() || m_updater->busy())
+    if (!m_updater->enabled() || m_updater->busy()) {
+        if (manual && m_settingsDlg)
+            m_settingsDlg->setAppUpdateFinished(appUpdateButtonText());
         return;
+    }
     m_updater->check([this, manual](const Updater::Release* rel, const QString& error) {
         if (!error.isEmpty()) {
             qWarning() << "update check failed" << error;
             if (manual)
                 notify(QStringLiteral("업데이트를 확인하지 못했습니다: %1").arg(error), QSystemTrayIcon::Warning);
+            if (m_settingsDlg)
+                m_settingsDlg->setAppUpdateFinished(appUpdateButtonText());
             return;
         }
         if (!rel) {
             if (manual)
                 notify(QStringLiteral("최신 버전입니다 (%1).").arg(Updater::currentVersion()));
+            if (m_settingsDlg)
+                m_settingsDlg->setAppUpdateFinished(appUpdateButtonText());
             return;
         }
         const bool firstSeen = m_newTag != rel->tag;
@@ -779,27 +801,39 @@ void Application::checkForUpdate(bool manual)
         if (m_updateAction)
             m_updateAction->setText(canInstall ? QStringLiteral("업데이트 설치 (%1 → %2)").arg(Updater::currentVersion(), rel->tag)
                                                : QStringLiteral("새 버전 %1 릴리즈 페이지 열기").arg(rel->tag));
-        if (canInstall && m_cfg.appUpdate == QStringLiteral("auto") && !manual) {
+        if (canInstall && (manual || m_cfg.appUpdate == QStringLiteral("auto"))) {
+            if (manual)
+                notify(QStringLiteral("새 버전(%1)을 받아서 설치합니다.").arg(rel->tag));
             installUpdate();
             return;
         }
-        if (firstSeen || manual) {
+        if (manual) {
+            notify(QStringLiteral("새 버전(%1)이 있습니다 (%2). 릴리즈 페이지를 엽니다.").arg(rel->tag, why));
+            installUpdate();
+            return;
+        }
+        if (firstSeen) {
             notify(canInstall ? QStringLiteral("새 버전(%1)이 있습니다. 이 알림을 누르거나 트레이 메뉴 / 설정 > 프로그램 업데이트에서 설치하세요.").arg(rel->tag)
                               : QStringLiteral("새 버전(%1)이 있습니다 (%2). 이 알림을 누르면 릴리즈 페이지를 엽니다.").arg(rel->tag, why));
             m_updateNoticeShown = true;
         }
-        if (manual)
-            installUpdate();
+        if (m_settingsDlg)
+            m_settingsDlg->setAppUpdateFinished(appUpdateButtonText());
     });
 }
 
 void Application::installUpdate()
 {
-    if (m_newTag.isEmpty())
+    if (m_newTag.isEmpty()) {
+        if (m_settingsDlg)
+            m_settingsDlg->setAppUpdateFinished(appUpdateButtonText());
         return;
+    }
     QString why;
     if (!Updater::canSelfInstall(&why)) {
         QDesktopServices::openUrl(QUrl(m_newPage));
+        if (m_settingsDlg)
+            m_settingsDlg->setAppUpdateFinished(appUpdateButtonText());
         return;
     }
     if (!m_downloadedZip.isEmpty()) {
@@ -810,23 +844,27 @@ void Application::installUpdate()
     m_updater->download(rel, [this](const QString& zip, const QString& error) {
         if (!error.isEmpty()) {
             notify(QStringLiteral("업데이트를 받지 못했습니다: %1").arg(error), QSystemTrayIcon::Warning);
+            if (m_settingsDlg)
+                m_settingsDlg->setAppUpdateFinished(appUpdateButtonText());
             return;
         }
         m_downloadedZip = zip;
+        if (m_settingsDlg)
+            m_settingsDlg->setAppUpdateFinished(appUpdateButtonText());
         applyDownloadedUpdate();
     });
 }
 
 void Application::applyDownloadedUpdate()
 {
-    // 팝업 보는 중이면 닫힐 때까지 기다렸다가 교체
-    if (m_popup->isVisible()) {
+    // 팝업이나 설정 같은 모달 대화상자가 열려 있으면 닫힐 때까지 기다렸다가 교체
+    if (m_popup->isVisible() || QApplication::activeModalWidget()) {
         QTimer::singleShot(2000, this, &Application::applyDownloadedUpdate);
         return;
     }
     // 받고 나면 알림 없이 바로 설치 후 재실행 (실패할 때만 알림)
     QString err;
-    if (!m_updater->install(m_downloadedZip, &err)) {
+    if (!m_updater->install(m_downloadedZip, &err, QDir(m_dataDir).absolutePath())) {
         notify(QStringLiteral("업데이트를 설치하지 못했습니다: %1").arg(err), QSystemTrayIcon::Warning);
         return;
     }
@@ -836,16 +874,22 @@ void Application::applyDownloadedUpdate()
 
 // ------------------------------------------------------------ 환율
 
-Rates Application::ratesFor(Game g, const QString& league) const
+QString Application::ratesKey(Game g, Lang server, const QString& league)
 {
-    return m_rates.value(gameKey(g) + QLatin1Char('|') + league).rates;
+    return QStringLiteral("%1|%2|%3").arg(gameKey(g), langKey(server), league);
+}
+
+Rates Application::ratesFor(Game g, Lang server, const QString& league) const
+{
+    return m_rates.value(ratesKey(g, server, league)).rates;
 }
 
 void Application::ensureRates(Game g, Lang server, const QString& league, std::function<void()> then)
 {
-    const QString key = gameKey(g) + QLatin1Char('|') + league;
+    const QString key = ratesKey(g, server, league);
     RateState& rs = m_rates[key];
-    if (rs.rates.fresh()) {
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (rs.rates.fresh() || (rs.retryAfterMs > 0 && now < rs.retryAfterMs)) {
         then();
         return;
     }
@@ -858,19 +902,29 @@ void Application::ensureRates(Game g, Lang server, const QString& league, std::f
     const QString base = Rates::baseFor(g);
     const QStringList targets = {QStringLiteral("divine"),
                                  g == Game::Poe1 ? QStringLiteral("exalted") : QStringLiteral("chaos")};
-    auto fresh = std::make_shared<Rates>();
-    fresh->base = base;
+    auto fetched = std::make_shared<QHash<QString, double>>();
     auto remaining = std::make_shared<int>(targets.size());
+    const int targetCount = static_cast<int>(targets.size());
     for (const QString& t : targets) {
-        m_client->exchange(g, server, league, base, t, [this, key, t, fresh, remaining](const TradeClient::ExchangeResult& r) {
+        m_client->exchange(g, server, league, base, t, [this, key, base, t, fetched, remaining, targetCount](const TradeClient::ExchangeResult& r) {
             const double ratio = medianRatio(r.listings); // 기준 화폐 몇 개 = t 1개
             if (ratio > 0)
-                fresh->toBase.insert(t, ratio);
+                fetched->insert(t, ratio);
             if (--(*remaining) > 0)
                 return;
             RateState& st = m_rates[key];
-            fresh->at = QDateTime::currentDateTimeUtc();
-            st.rates = *fresh;
+            st.rates.base = base;
+            // 화폐별 마지막 성공 환율은 보존하고 새로 성공한 화폐만 갱신
+            for (auto it = fetched->constBegin(); it != fetched->constEnd(); ++it)
+                st.rates.toBase.insert(it.key(), it.value());
+            if (fetched->size() == targetCount) {
+                st.rates.at = QDateTime::currentDateTimeUtc();
+                st.retryAfterMs = 0;
+            } else {
+                // 전체/부분 실패는 30분 캐시하지 않고 60초 뒤 재시도
+                st.rates.at = QDateTime();
+                st.retryAfterMs = QDateTime::currentMSecsSinceEpoch() + 60000;
+            }
             st.loading = false;
             const auto waiters = st.waiters;
             st.waiters.clear();
@@ -890,10 +944,8 @@ void Application::priceCheck()
     m_listingPages.reset();
     m_priceToken = m_client->newToken();
     const quint64 token = m_priceToken;
-    const quint64 filterRevision = m_priceFilterRevision;
 
-    const ParsedItem it = m_popup->collectItem();
-    const Game g = it.game;
+    const Game g = m_popup->parsedItem().game;
     const QString league = m_cfg.leagueFor(g);
     const Lang server = m_popup->server();
     m_popup->priceBusy(QStringLiteral("시세 확인중..."));
@@ -901,10 +953,14 @@ void Application::priceCheck()
                                   QStringLiteral("mirror")});
 
     // 환율 먼저 (30분에 한 번, 일괄 교환 요청 2개)
-    ensureRates(g, server, league, [this, token, filterRevision, it, g, league, server]() {
-        if (token != m_priceToken)
+    ensureRates(g, server, league, [this, token, g, league, server]() {
+        if (token != m_priceToken || !m_popup->hasItem())
             return;
-        const Rates rates = ratesFor(g, league);
+        // 환율 대기 뒤 옵션(collectItem)과 속성(collectState)을 같은 시점에 읽음
+        const ParsedItem it = m_popup->collectItem();
+        const ItemFilterState state = m_popup->collectState();
+        const quint64 filterRevision = m_priceFilterRevision;
+        const Rates rates = ratesFor(g, server, league);
         const QString want = m_popup->exchangeWant();
 
         // ---- 일괄 교환: 화폐(want 콤보)를 내고 이 아이템을 받는 판매 매물 = 시장 가격 (APT 와 같은 방향)
@@ -916,8 +972,11 @@ void Application::priceCheck()
             m_popup->priceStatus(QStringLiteral("교환 시세 확인중..."));
             m_client->exchange(
                 g, server, league, want, it.exchangeId,
-                [this, token, payName, itemName, want, rates](const TradeClient::ExchangeResult& r) {
+                [this, token, filterRevision, payName, itemName, want, rates](const TradeClient::ExchangeResult& r) {
                     if (token != m_priceToken)
+                        return;
+                    m_priceToken = 0;
+                    if (filterRevision != m_priceFilterRevision)
                         return;
                     if (!r.error.isEmpty()) {
                         m_popup->priceIdle(QStringLiteral("교환 시세를 가져오지 못했습니다: %1 (클릭하면 다시 시도합니다)").arg(r.error));
@@ -976,7 +1035,7 @@ void Application::priceCheck()
         ctx.priceOption = m_popup->priceCurrency();
         ctx.collapse = m_popup->collapse();
         ctx.forBrowser = false;
-        const SearchRequest req = makeRequest(it, m_popup->collectState(), m_kw, &m_dbs[gi(g)], ctx);
+        const SearchRequest req = makeRequest(it, state, m_kw, &m_dbs[gi(g)], ctx);
         const QJsonObject q = QueryBuilder::build(req, &m_dbs[gi(g)][req.lang]);
         const Lang lang = req.lang;
 
@@ -993,8 +1052,8 @@ void Application::priceCheck()
                                QStringLiteral("DPS"), QStringLiteral("등록"), QStringLiteral("판매자")},
                               hidden);
         m_popup->priceStatus(QStringLiteral("시세 확인중..."));
-        auto onProgress = [this, token, g, lang, rates](const TradeClient::PriceProgress& p) {
-            if (token != m_priceToken)
+        auto onProgress = [this, token, filterRevision, g, lang, rates](const TradeClient::PriceProgress& p) {
+            if (token != m_priceToken || filterRevision != m_priceFilterRevision)
                 return;
             appendPriceListings(g, lang, rates, p.listings);
             m_popup->priceStatus(QStringLiteral("시세 확인중... %1/%2").arg(p.fetched).arg(p.requested));
@@ -1002,6 +1061,9 @@ void Application::priceCheck()
         auto onDone = [this, token, filterRevision, g, lang, it, rates](const TradeClient::PriceProgress& all,
                                                                        const QString& error) {
             if (token != m_priceToken)
+                return;
+            m_priceToken = 0;
+            if (filterRevision != m_priceFilterRevision)
                 return;
             learnIcon(it, all.listings);
             if (!error.isEmpty() && all.listings.isEmpty()) {
@@ -1075,6 +1137,7 @@ void Application::loadMoreListings()
         [this, token, count = static_cast<int>(ids.size())](const QVector<Listing>& listings, const QString& error) {
             if (token != m_priceToken || !m_listingPages)
                 return;
+            m_priceToken = 0;
             auto& page = *m_listingPages;
             page.loading = false;
             if (!error.isEmpty()) {
@@ -1190,6 +1253,11 @@ void Application::onRemember(const QString& statKey, const QString& top, bool on
 
 void Application::openSettings()
 {
+    if (m_settingsDlg) {
+        m_settingsDlg->raise();
+        m_settingsDlg->activateWindow();
+        return;
+    }
     auto statText = [this](const QString& key) {
         for (Game g : {Game::Poe1, Game::Poe2}) {
             for (Lang l : {Lang::Ko, Lang::En}) {
@@ -1215,11 +1283,8 @@ void Application::openSettings()
     ver += QStringLiteral("\n데이터 폴더: %1").arg(QDir::toNativeSeparators(m_dataDir));
 
     // 프로그램 업데이트 버튼: 새 버전을 알면 설치, 모르면 확인 (찾으면 바로 설치)
-    QString updText = QStringLiteral("지금 확인");
-    if (!m_newTag.isEmpty())
-        updText = Updater::canSelfInstall() ? QStringLiteral("%1 설치").arg(m_newTag)
-                                             : QStringLiteral("%1 릴리즈 페이지 열기").arg(m_newTag);
-    SettingsDialog dlg(m_cfg, m_dbs, &m_checked, statText, ver, updText, m_popup->isVisible() ? m_popup : nullptr);
+    SettingsDialog dlg(m_cfg, m_dbs, &m_checked, statText, ver, appUpdateButtonText(), m_popup->isVisible() ? m_popup : nullptr);
+    m_settingsDlg = &dlg;
     connect(&dlg, &SettingsDialog::updateDataRequested, this,
             [this](int g) { updateGame(g == 0 ? Game::Poe1 : Game::Poe2); });
     connect(&dlg, &SettingsDialog::appUpdateRequested, this, [this]() {
@@ -1228,7 +1293,9 @@ void Application::openSettings()
         else
             installUpdate();
     });
-    if (dlg.exec() == QDialog::Accepted) {
+    const int rc = dlg.exec();
+    m_settingsDlg = nullptr;
+    if (rc == QDialog::Accepted) {
         unregisterHotkeys();
         m_cfg = dlg.result();
         saveConfig();
@@ -1242,14 +1309,8 @@ void Application::openSettings()
     }
 }
 
-void Application::syncPopupLeague()
+void Application::resetPopupPrices()
 {
-    if (!m_popup || !m_popup->hasItem())
-        return;
-    const QString next = m_cfg.leagueFor(m_popup->parsedItem().game).trimmed();
-    if (m_popup->leagueTitle() == next)
-        return;
-    m_popup->setLeagueTitle(next);
     m_client->cancel(m_priceToken);
     m_priceToken = 0;
     m_client->cancel(m_openTradeToken);
@@ -1262,6 +1323,18 @@ void Application::syncPopupLeague()
         priceCheck();
 }
 
+bool Application::syncPopupLeague()
+{
+    if (!m_popup || !m_popup->hasItem())
+        return false;
+    const QString next = m_cfg.leagueFor(m_popup->parsedItem().game).trimmed();
+    if (m_popup->leagueTitle() == next)
+        return false;
+    m_popup->setLeagueTitle(next);
+    resetPopupPrices();
+    return true;
+}
+
 void Application::applyConfig()
 {
     m_client->setTimeoutSec(m_cfg.serverTimeout);
@@ -1270,7 +1343,12 @@ void Application::applyConfig()
         unregisterHotkeys();
         registerHotkeys();
     }
-    syncPopupLeague();
+    const bool syncedCfg = m_popup && m_popup->hasItem()
+                               ? m_popup->syncConfig(m_cfg, serverFor(m_popup->parsedItem().lang))
+                               : false;
+    const bool syncedLeague = syncPopupLeague();
+    if (syncedCfg && !syncedLeague)
+        resetPopupPrices();
     if (m_popup && m_popup->isVisible())
         watchPopupClicks();
 }
@@ -1284,7 +1362,9 @@ void Application::saveConfig()
 
 void Application::restart()
 {
-    QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("--wait-shutdown")});
+    QProcess::startDetached(QCoreApplication::applicationFilePath(),
+                            {QStringLiteral("--wait-shutdown"), QStringLiteral("--restart-data-dir"),
+                             QDir(m_dataDir).absolutePath()});
     qApp->quit();
 }
 

@@ -45,7 +45,7 @@ public:
     void check(std::function<void(const Release* newer, const QString& error)> cb);
     void download(const Release& r, std::function<void(const QString& zipPath, const QString& error)> cb);
     // 성공하면 호출한 쪽이 바로 앱을 종료해야 함
-    bool install(const QString& zipPath, QString* error);
+    bool install(const QString& zipPath, QString* error, const QString& dataDir = QString());
 
     bool busy() const { return m_busy; }
     QString logPath() const;

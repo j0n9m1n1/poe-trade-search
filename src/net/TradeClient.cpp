@@ -84,6 +84,10 @@ void TradeClient::cancel(quint64 token)
     if (m_running && m_runningJob.token == token) {
         m_runningJob.cb = nullptr; // 콜백 버림
         m_running->abort();
+    } else if (!m_running) {
+        // 대기 중이던 작업이 취소됐으면 타이머를 재계산해 다음 작업을 이어서 처리
+        m_timer.stop();
+        pump();
     }
 }
 
@@ -91,14 +95,25 @@ void TradeClient::pump()
 {
     if (m_running || m_queue.isEmpty())
         return;
-    const qint64 wait = m_limiter.waitMs(m_queue.head().policy, nowMs());
-    if (wait > 0) {
-        if (wait > 1500)
-            emit throttled(static_cast<int>((wait + 999) / 1000));
-        m_timer.start(static_cast<int>(qMin<qint64>(wait, 60 * 60 * 1000)));
+    const qint64 now = nowMs();
+    int readyIdx = -1;
+    qint64 minWait = -1;
+    for (int i = 0; i < m_queue.size(); ++i) {
+        const qint64 w = m_limiter.waitMs(m_queue[i].policy, now);
+        if (w <= 0) {
+            readyIdx = i;
+            break;
+        }
+        if (minWait < 0 || w < minWait)
+            minWait = w;
+    }
+    if (readyIdx >= 0) {
+        start(m_queue.takeAt(readyIdx));
         return;
     }
-    start(m_queue.dequeue());
+    if (minWait > 1500)
+        emit throttled(static_cast<int>((minWait + 999) / 1000));
+    m_timer.start(static_cast<int>(qMin<qint64>(minWait, 60 * 60 * 1000)));
 }
 
 void TradeClient::start(const Job& j)
