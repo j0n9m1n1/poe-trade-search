@@ -63,6 +63,7 @@ private:
     void loadMoreListings();
     void updateListingPageStatus(const QString& status = {});
     void appendPriceListings(Game game, Lang server, const Rates& rates, const QVector<Listing>& listings);
+    void copyPriceNote(const QString& note);
     void openSettings();
 
     // 프로그램 업데이트 (GitHub Release)
@@ -152,6 +153,9 @@ private:
     Expect m_expect = Expect::None;
     bool m_paused = false;
     bool m_customRun = false;
+    bool m_ignoreClipboard = false;
+    QString m_selfClipboardText;
+    qint64 m_selfClipboardAt = 0;
     bool m_hotkeysOn = false;
     bool m_warnedGameInputPrivileges = false;
     bool m_unsupportedWarned = false;

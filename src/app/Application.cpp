@@ -126,6 +126,7 @@ bool Application::start(QString* error)
     });
     connect(m_popup, &MainPopup::settingsRequested, this, &Application::openSettings);
     connect(m_popup, &MainPopup::rememberToggled, this, &Application::onRemember);
+    connect(m_popup, &MainPopup::copyPriceNoteRequested, this, &Application::copyPriceNote);
     connect(m_popup, &MainPopup::popupHidden, this, [this]() {
         ++m_popupSeq;
         m_popupPos = m_popup->pos();
@@ -313,7 +314,15 @@ Lang Application::serverFor(Lang itemLang) const
 
 void Application::onClipboardChanged()
 {
+    if (m_ignoreClipboard)
+        return;
     const QString text = QGuiApplication::clipboard()->text();
+    if (!m_selfClipboardText.isEmpty() && text == m_selfClipboardText) {
+        // 앱이 복사한 가격 노트가 클립보드 감시를 다시 트리거하지 않게 무시
+        if (QDateTime::currentMSecsSinceEpoch() - m_selfClipboardAt < 2000)
+            return;
+        m_selfClipboardText.clear();
+    }
     if (m_expect != Expect::None) {
         if (text.trimmed().isEmpty())
             return; // 우리가 비운 것
@@ -421,6 +430,7 @@ void Application::onHotkey(int id)
     if (m_paused)
         return;
     if (lower.startsWith(kRun)) {
+        m_selfClipboardText.clear();
         m_expect = Expect::Search;
         QGuiApplication::clipboard()->clear();
         m_expectTimer.start(1500);
@@ -932,19 +942,25 @@ void Application::priceCheck()
                                              l.amount < mid * 0.5, l.online,
                                              QStringLiteral("%1 %2 → %3 %4")
                                                  .arg(PriceSummary::formatAmount(l.payAmount), payName,
-                                                      PriceSummary::formatAmount(l.getAmount), itemName));
+                                                      PriceSummary::formatAmount(l.getAmount), itemName),
+                                             l.amount, want);
                     }
                     QString summary = QStringLiteral("해당 교환 매물이 없습니다");
+                    double estAmount = 0;
+                    QString estCurrency;
                     if (!perOne.isEmpty()) {
                         // 미끼 뺀 가장 싼 5개의 중앙값 (환율 계산과 같은 방식)
                         const double med = medianRatio(rows);
+                        estAmount = med;
+                        estCurrency = want;
                         double conv = 0;
                         summary = QStringLiteral("1개 ≈ %1 %2").arg(PriceSummary::formatAmount(med), payName);
                         if (rates.convert(med, want, &conv) && want != rates.base)
                             summary += QStringLiteral(" (%1)").arg(formatValue(conv, rates));
                         summary += QStringLiteral(" · 매물 %1").arg(r.total);
                     }
-                    m_popup->priceDone(summary, QStringLiteral("%1/%2 건").arg(r.listings.size()).arg(r.total));
+                    m_popup->priceDone(summary, QStringLiteral("%1/%2 건").arg(r.listings.size()).arg(r.total),
+                                       QString(), estAmount, estCurrency);
                 },
                 token);
             return;
@@ -995,15 +1011,22 @@ void Application::priceCheck()
             const QString dist =
                 PriceSummary::summarize(all.listings, [this, g, lang](const QString& id) { return currencyName(g, lang, id); });
             QString summary;
+            PriceTag estPrice;
             if (all.listings.isEmpty()) {
                 summary = all.total == 0 ? QStringLiteral("해당 물품의 거래가 없습니다") : QStringLiteral("가격이 붙은 매물이 없습니다");
             } else {
                 const Estimate e = estimatePrice(all.listings, rates);
-                summary = e.ok ? formatEstimate(e, rates, all.total) : dist;
+                if (e.ok) {
+                    summary = formatEstimate(e, rates, all.total);
+                    estPrice = displayPrice(e.value, rates);
+                } else {
+                    summary = dist;
+                }
             }
             const int loaded = static_cast<int>(all.listings.size());
             m_popup->priceDone(summary, QStringLiteral("%1/%2 검색").arg(loaded).arg(all.total),
-                               dist.isEmpty() ? QString() : QStringLiteral("분포: ") + dist);
+                               dist.isEmpty() ? QString() : QStringLiteral("분포: ") + dist,
+                               estPrice.amount, estPrice.currency);
             if (filterRevision == m_priceFilterRevision && !all.search.ids.isEmpty() && all.fetched < all.total) {
                 m_listingPages = ListingPages{g, lang, rates, all.search, all.fetched, loaded};
                 updateListingPageStatus(error.isEmpty() ? QString() : QStringLiteral("추가 조회 실패"));
@@ -1086,6 +1109,9 @@ void Application::appendPriceListings(Game game, Lang server, const Rates& rates
     loadCurrencyIcons(game, server, currencies);
     for (const Listing& l : listings) {
         const bool stale = l.indexed.isValid() && l.indexed.daysTo(now) >= 3;
+        QString tip = PriceSummary::listingTooltip(l);
+        if (tip.isEmpty())
+            tip = currencyName(game, server, l.currency);
         m_popup->priceAddRow({PriceSummary::formatAmount(l.amount) + QLatin1Char(' ') +
                                   shortCurrencyName(l.currency).replace(QLatin1Char('-'), QLatin1Char(' ')),
                               formatConversion(l.amount, l.currency, rates),
@@ -1093,8 +1119,21 @@ void Application::appendPriceListings(Game game, Lang server, const Rates& rates
                               l.quality >= 0 ? QString::number(l.quality) : QString(),
                               l.dps > 0 ? QString::number(l.dps, 'f', 1) : QString(),
                               PriceSummary::ago(l.indexed), l.account},
-                             stale, l.online, currencyName(game, server, l.currency));
+                             stale, l.online, tip, l.amount, l.currency);
     }
+}
+
+void Application::copyPriceNote(const QString& note)
+{
+    if (note.isEmpty())
+        return;
+    m_selfClipboardText = note;
+    m_selfClipboardAt = QDateTime::currentMSecsSinceEpoch();
+    m_ignoreClipboard = true;
+    QGuiApplication::clipboard()->setText(note);
+    m_ignoreClipboard = false;
+    if (m_popup)
+        m_popup->showCopyFeedback(note);
 }
 
 // ------------------------------------------------------------ 아이콘

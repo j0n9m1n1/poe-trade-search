@@ -35,6 +35,16 @@ struct Estimate {
 
 Estimate estimatePrice(const QVector<Listing>& listings, const Rates& rates);
 
+// 표시 단위 수량과 거래소 화폐 id (가격 노트 복사용)
+struct PriceTag {
+    double amount = 0;
+    QString currency;
+    bool valid() const { return amount > 0 && !currency.isEmpty(); }
+};
+
+// 기준 화폐 값 -> 표시 단위로 반올림한 수량·화폐 id (formatValue 와 같은 기준)
+PriceTag displayPrice(double baseValue, const Rates& rates);
+
 // 디바인 이상이면 디바인, 아니면 기준 화폐로 ("28.1 디바인", "350 카오스")
 QString formatValue(double baseValue, const Rates& rates);
 QString formatEstimate(const Estimate& e, const Rates& rates, int total);

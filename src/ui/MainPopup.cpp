@@ -3,22 +3,27 @@
 
 #include "core/Keywords.h"
 #include "core/PriceEstimate.h"
+#include "core/PriceSummary.h"
 #include "core/TradeDb.h"
 #include "platform/Platform.h"
 #include "ui/FilterRow.h"
 #include "ui/ToggleLabel.h"
 
+#include <QAction>
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QComboBox>
+#include <QCursor>
 #include <QFontMetrics>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHash>
+#include <QMenu>
 #include <QPainter>
 #include <QStyle>
 #include <QIcon>
+#include <QToolTip>
 #include <QUrl>
 #include <QRegularExpression>
 #include <QStyledItemDelegate>
@@ -42,6 +47,25 @@ namespace pts {
 
 namespace {
 constexpr int kMaxFilterViewportHeight = 420;
+constexpr int kPriceAmountRole = Qt::UserRole + 1;
+constexpr int kPriceCurrencyRole = Qt::UserRole + 2;
+constexpr int kBaseTooltipRole = Qt::UserRole + 3;
+
+QString appendTooltipLine(const QString& base, const QString& extra, const QString& color = QString())
+{
+    if (extra.isEmpty())
+        return base;
+    if (base.startsWith(QLatin1Char('<'))) {
+        const QString styled =
+            color.isEmpty()
+                ? QStringLiteral("<div style=\"margin-top:4px;\">%1</div>").arg(extra.toHtmlEscaped())
+                : QStringLiteral("<div style=\"color:%1; margin-top:4px;\">%2</div>").arg(color, extra.toHtmlEscaped());
+        if (base.endsWith(QStringLiteral("</div>")))
+            return base.left(base.size() - 6) + styled + QStringLiteral("</div>");
+        return base + styled;
+    }
+    return base.isEmpty() ? extra : base + QLatin1Char('\n') + extra;
+}
 
 class FilterScrollArea : public QScrollArea {
 public:
@@ -423,6 +447,12 @@ void MainPopup::buildUi()
     m_prices->setIconSize(QSize(18, 18));
     m_prices->verticalHeader()->setDefaultSectionSize(22);
     m_prices->viewport()->installEventFilter(this);
+    m_prices->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_prices, &QTableWidget::cellClicked, this, [this](int row, int col) {
+        if (col == 0)
+            copyRowPriceNote(row);
+    });
+    connect(m_prices, &QWidget::customContextMenuRequested, this, &MainPopup::showPriceContextMenu);
     auto* listingScrollBar = m_prices->verticalScrollBar();
     connect(listingScrollBar, &QScrollBar::valueChanged, this, [this, listingScrollBar](int value) {
         if (m_priceMoreAvailable && value == listingScrollBar->maximum() && value > listingScrollBar->minimum())
@@ -476,6 +506,22 @@ void MainPopup::buildUi()
     m_price->setMinimumHeight(26);
     m_price->setToolTip(QStringLiteral("누르면 시세를 다시 조회합니다"));
     m_price->installEventFilter(this);
+    m_price->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_price, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        const QString note = PriceSummary::priceNote(m_estimateAmount, m_estimateCurrency);
+        if (note.isEmpty())
+            return;
+        QMenu menu(this);
+        QAction* copyAct = menu.addAction(QStringLiteral("가격 노트 복사 (%1)").arg(note));
+        QAction* refreshAct = menu.addAction(QStringLiteral("시세 다시 조회"));
+        QAction* picked = menu.exec(m_price->mapToGlobal(pos));
+        if (picked == copyAct)
+            emit copyPriceNoteRequested(note);
+        else if (picked == refreshAct)
+            emit priceCheckRequested();
+    });
+    m_copyFeedbackTimer.setSingleShot(true);
+    connect(&m_copyFeedbackTimer, &QTimer::timeout, this, [this]() { setPriceText(m_priceText, m_priceColor); });
     m_idleText = QStringLiteral("시세를 검색하려면 클릭하세요");
     setPriceText(m_idleText);
     m_refresh = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), QStringLiteral("새로고침"), this);
@@ -592,7 +638,11 @@ bool MainPopup::eventFilter(QObject* o, QEvent* e)
     }
     if (e->type() == QEvent::MouseButtonPress) {
         if (o == m_price && static_cast<QMouseEvent*>(e)->button() == Qt::LeftButton) {
-            emit priceCheckRequested();
+            const QString note = PriceSummary::priceNote(m_estimateAmount, m_estimateCurrency);
+            if (!note.isEmpty())
+                emit copyPriceNoteRequested(note);
+            else
+                emit priceCheckRequested();
             return true;
         }
         if ((qobject_cast<QLineEdit*>(o) || qobject_cast<QComboBox*>(o)) && !isActiveWindow()) {
@@ -1178,6 +1228,8 @@ void MainPopup::setIcon(const QString& imagePath)
 void MainPopup::priceBusy(const QString& msg)
 {
     m_priceMoreAvailable = false;
+    m_estimateAmount = 0;
+    m_estimateCurrency.clear();
     m_prices->setRowCount(0);
     m_lastRowKey.clear();
     m_priceCount->clear();
@@ -1210,7 +1262,8 @@ void MainPopup::priceColumns(const QStringList& headers, const QVector<int>& hid
         m_prices->horizontalHeader()->setSectionResizeMode(lastVisible, QHeaderView::Stretch);
 }
 
-void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, const QString& tooltip)
+void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, const QString& tooltip,
+                            double priceAmount, const QString& priceCurrency)
 {
     // 같은 판매자가 같은 가격으로 연달아 올린 건 한 줄로 묶고 "×N" (APT)
     const QString key = cells.isEmpty() ? QString() : cells.first() + QLatin1Char('\x1f') + cells.last();
@@ -1222,7 +1275,8 @@ void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, cons
             if (x >= 0)
                 t = t.left(x);
             s->setText(t + QStringLiteral("  ×%1").arg(m_lastRowCount));
-            s->setToolTip(QStringLiteral("같은 판매자가 같은 가격으로 %1개 올림").arg(m_lastRowCount));
+            const QString grpNote = QStringLiteral("같은 판매자가 같은 가격으로 %1개 올림").arg(m_lastRowCount);
+            s->setToolTip(appendTooltipLine(s->data(kBaseTooltipRole).toString(), grpNote, QStringLiteral("#b8b8b8")));
         }
         return;
     }
@@ -1231,16 +1285,25 @@ void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, cons
     const int r = m_prices->rowCount();
     m_prices->insertRow(r);
     const QColor dimC = dimColor(palette());
+    const QString note = PriceSummary::priceNote(priceAmount, priceCurrency);
     for (int c = 0; c < cells.size() && c < m_prices->columnCount(); ++c) {
         auto* item = new QTableWidgetItem(cells[c]);
+        if (c == 0 && !note.isEmpty()) {
+            item->setData(kPriceAmountRole, priceAmount);
+            item->setData(kPriceCurrencyRole, priceCurrency);
+        }
         if (c < 2)
             applyUnitIcon(item); // "1 카오스" -> "1" + 카오스 아이콘
         if (c < 3)
             item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         if (dim)
             item->setForeground(dimC);
-        if (!tooltip.isEmpty())
+        if (c == 0 && !note.isEmpty()) {
+            item->setToolTip(appendTooltipLine(tooltip, QStringLiteral("클릭하면 가격 노트를 복사합니다: %1").arg(note),
+                                               QStringLiteral("#9ad0a4")));
+        } else if (!tooltip.isEmpty()) {
             item->setToolTip(tooltip);
+        }
         m_prices->setItem(r, c, item);
     }
     // 마지막 칸(판매자) 앞에 접속 상태 점
@@ -1248,9 +1311,18 @@ void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, cons
     if (QTableWidgetItem* s = m_prices->item(r, last)) {
         if (online >= 0) {
             s->setText(QStringLiteral("● ") + s->text());
+            const QString onlineColor = online == 1 ? QStringLiteral("#2e9e5b")
+                                                    : (online == 2 ? QStringLiteral("#d2891e") : dimC.name());
             s->setForeground(online == 1 ? QColor(QStringLiteral("#2e9e5b"))
                                          : (online == 2 ? QColor(QStringLiteral("#d2891e")) : dimC));
-            s->setToolTip(online == 1 ? QStringLiteral("접속 중") : (online == 2 ? QStringLiteral("자리 비움") : QStringLiteral("오프라인 (즉시 구입은 가능할 수 있습니다)")));
+            const QString onlineText = online == 1 ? QStringLiteral("접속 중")
+                                                   : (online == 2 ? QStringLiteral("자리 비움")
+                                                                  : QStringLiteral("오프라인 (즉시 구입은 가능할 수 있습니다)"));
+            const QString sellerTip = appendTooltipLine(tooltip, onlineText, onlineColor);
+            s->setData(kBaseTooltipRole, sellerTip);
+            s->setToolTip(sellerTip);
+        } else {
+            s->setData(kBaseTooltipRole, tooltip);
         }
     }
     if (r == 0)
@@ -1294,6 +1366,7 @@ QString MainPopup::withUnitIcons(const QString& plain) const
 
 void MainPopup::setPriceText(const QString& plain, const QString& color)
 {
+    m_copyFeedbackTimer.stop();
     // 매물이 없거나 조건이 바뀌어 다시 찾아야 할 때 다시 검색 버튼을 눈에 띄게
     const bool attention = plain.contains(QStringLiteral("없습니다")) || plain.contains(QStringLiteral("못했습니다")) ||
                            !color.isEmpty();
@@ -1483,11 +1556,21 @@ void MainPopup::setUnitIcon(const QString& unitName, const QString& path)
     setPriceText(m_priceText, m_priceColor);
 }
 
-void MainPopup::priceDone(const QString& summary, const QString& count, const QString& tooltip)
+void MainPopup::priceDone(const QString& summary, const QString& count, const QString& tooltip,
+                          double noteAmount, const QString& noteCurrency)
 {
+    m_estimateAmount = noteAmount;
+    m_estimateCurrency = noteCurrency;
     setPriceText(summary);
-    if (!tooltip.isEmpty())
+    const QString note = PriceSummary::priceNote(m_estimateAmount, m_estimateCurrency);
+    if (!note.isEmpty()) {
+        const QString copyHint = QStringLiteral("클릭하면 가격 노트를 복사합니다: %1").arg(note);
+        m_price->setToolTip(tooltip.isEmpty() ? copyHint : tooltip + QStringLiteral("\n\n") + copyHint);
+    } else if (!tooltip.isEmpty()) {
         m_price->setToolTip(tooltip + QStringLiteral("\n\n누르면 다시 조회합니다"));
+    } else {
+        m_price->setToolTip(QStringLiteral("누르면 시세를 다시 조회합니다"));
+    }
     m_priceCount->setText(count);
     fitPriceColumns();
     m_prices->scrollToTop();
@@ -1503,7 +1586,49 @@ void MainPopup::pricePageStatus(bool hasMore, int loaded, int total, const QStri
 
 void MainPopup::priceIdle(const QString& msg)
 {
+    m_estimateAmount = 0;
+    m_estimateCurrency.clear();
+    m_price->setToolTip(QStringLiteral("누르면 시세를 다시 조회합니다"));
     setPriceText(msg);
+}
+
+void MainPopup::showCopyFeedback(const QString& note)
+{
+    const QString msg = QStringLiteral("가격 노트를 복사했습니다: %1").arg(note);
+    m_price->setStyleSheet(QStringLiteral("QLabel{padding:2px 4px; color:#6fd08c;}"));
+    m_price->setTextFormat(Qt::PlainText);
+    m_price->setText(msg);
+    m_copyFeedbackTimer.start(2500);
+    QToolTip::showText(QCursor::pos(), msg, this, QRect(), 2000);
+}
+
+void MainPopup::copyRowPriceNote(int row)
+{
+    QTableWidgetItem* it = m_prices->item(row, 0);
+    if (!it)
+        return;
+    const QString note = PriceSummary::priceNote(it->data(kPriceAmountRole).toDouble(),
+                                                 it->data(kPriceCurrencyRole).toString());
+    if (!note.isEmpty())
+        emit copyPriceNoteRequested(note);
+}
+
+void MainPopup::showPriceContextMenu(const QPoint& pos)
+{
+    const QModelIndex idx = m_prices->indexAt(pos);
+    if (!idx.isValid())
+        return;
+    QTableWidgetItem* it = m_prices->item(idx.row(), 0);
+    if (!it)
+        return;
+    const QString note = PriceSummary::priceNote(it->data(kPriceAmountRole).toDouble(),
+                                                 it->data(kPriceCurrencyRole).toString());
+    if (note.isEmpty())
+        return;
+    QMenu menu(this);
+    QAction* copyAct = menu.addAction(QStringLiteral("가격 노트 복사 (%1)").arg(note));
+    if (menu.exec(m_prices->viewport()->mapToGlobal(pos)) == copyAct)
+        emit copyPriceNoteRequested(note);
 }
 
 void MainPopup::setSearchBusy(bool busy)
@@ -1581,6 +1706,8 @@ void MainPopup::closeEvent(QCloseEvent* e)
 void MainPopup::hideEvent(QHideEvent* e)
 {
     m_dragging = false;
+    if (m_copyFeedbackTimer.isActive())
+        setPriceText(m_priceText, m_priceColor);
     QWidget::hideEvent(e);
     setSearchBusy(false);
     platform::setNoActivate(this, true);
