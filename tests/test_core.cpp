@@ -148,6 +148,7 @@ private slots:
         QVERIFY(Updater::isNewer(QStringLiteral("0.2.0"), QStringLiteral("v0.2.1")));
         QVERIFY(Updater::isNewer(QStringLiteral("0.2.0-ci.15"), QStringLiteral("v0.3.0")));
         QVERIFY(!Updater::isNewer(QStringLiteral("0.2.0"), QStringLiteral("v0.2.0")));
+        QVERIFY(Updater::isNewer(QStringLiteral("0.0.9"), QStringLiteral("v0.0.10"))); // 문자열 비교면 거꾸로 됨
         QVERIFY(!Updater::isNewer(QStringLiteral("0.2.0-ci.15"), QStringLiteral("v0.2.0")));
         QVERIFY(!Updater::isNewer(QStringLiteral("0.10.0"), QStringLiteral("v0.9.9")));
         QVERIFY(!Updater::isNewer(QStringLiteral("0.2.0"), QStringLiteral("nightly")));
