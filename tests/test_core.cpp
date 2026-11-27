@@ -92,6 +92,26 @@ private slots:
     }
 
     // ---------------- 데이터 없이 도는 테스트
+    void configAutoPriceRefresh()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("Config.txt"));
+        QVERIFY(json::writeFile(path, QJsonDocument(QJsonObject{
+                                          {QStringLiteral("config_version"), Config::kConfigVersion}}),
+                                true, false, nullptr));
+        Config config;
+        QVERIFY(config.load(path));
+        QVERIFY(config.autoPriceRefresh);
+        QVERIFY(!config.migrated);
+
+        config.autoPriceRefresh = false;
+        QVERIFY(config.save(path));
+        Config reloaded;
+        QVERIFY(reloaded.load(path));
+        QVERIFY(!reloaded.autoPriceRefresh);
+    }
+
     void normalize()
     {
         QCOMPARE(text::normalizeStat(QStringLiteral("+41 to maximum Life")), QStringLiteral("# to maximum life"));

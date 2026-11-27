@@ -615,7 +615,6 @@ void MainPopup::buildUi()
                 other->setCurrentIndex(0);
             }
             markStale();
-            emit priceCheckRequested();
         };
     };
     connect(m_want1, qOverload<int>(&QComboBox::currentIndexChanged), this, exch(m_want2));
@@ -630,6 +629,8 @@ void MainPopup::buildUi()
 void MainPopup::installActivator(QWidget* w)
 {
     w->installEventFilter(this);
+    if (auto* edit = qobject_cast<QLineEdit*>(w))
+        connect(edit, &QLineEdit::returnPressed, this, &MainPopup::priceCheckRequested);
 }
 
 bool MainPopup::eventFilter(QObject* o, QEvent* e)

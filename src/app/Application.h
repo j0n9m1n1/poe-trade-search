@@ -137,6 +137,7 @@ private:
     };
     std::optional<ListingPages> m_listingPages;
     quint64 m_priceFilterRevision = 0;
+    QTimer m_priceRefreshTimer;
     QString m_newTag, m_newPage;
     QString m_downloadedZip;
     std::unique_ptr<ItemParser> m_parser;

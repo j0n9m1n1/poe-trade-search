@@ -110,17 +110,24 @@ bool Application::start(QString* error)
 
     // ---- 팝업
     m_popup = new MainPopup(m_kw);
+    m_priceRefreshTimer.setSingleShot(true);
+    m_priceRefreshTimer.setTimerType(Qt::PreciseTimer);
+    m_priceRefreshTimer.setInterval(800);
+    connect(&m_priceRefreshTimer, &QTimer::timeout, this, &Application::priceCheck);
     connect(m_popup, &MainPopup::openTradeRequested, this, &Application::openTrade);
     connect(m_popup, &MainPopup::priceCheckRequested, this, &Application::priceCheck);
     connect(m_popup, &MainPopup::moreListingsRequested, this, &Application::loadMoreListings);
     connect(m_popup, &MainPopup::priceFiltersChanged, this, [this]() {
         ++m_priceFilterRevision;
-        if (!m_listingPages)
-            return;
-        if (m_listingPages->loading) {
+        const bool refresh = m_cfg.autoPriceRefresh && m_popup->isVisible();
+        if (refresh || (m_listingPages && m_listingPages->loading)) {
             m_client->cancel(m_priceToken);
             m_priceToken = 0;
         }
+        if (refresh)
+            m_priceRefreshTimer.start();
+        if (!m_listingPages)
+            return;
         m_popup->pricePageStatus(false, m_listingPages->loaded, m_listingPages->search.total);
         m_listingPages.reset();
     });
@@ -128,6 +135,7 @@ bool Application::start(QString* error)
     connect(m_popup, &MainPopup::rememberToggled, this, &Application::onRemember);
     connect(m_popup, &MainPopup::copyPriceNoteRequested, this, &Application::copyPriceNote);
     connect(m_popup, &MainPopup::popupHidden, this, [this]() {
+        m_priceRefreshTimer.stop();
         ++m_popupSeq;
         m_popupPos = m_popup->pos();
         platform::stopWatchingOutsideMousePress();
@@ -503,6 +511,7 @@ void Application::handleItemText(const QString& text)
         return;
     }
 
+    m_priceRefreshTimer.stop();
     m_client->cancel(m_priceToken); // 앞 아이템 시세 조회 중이면 끊음
     m_priceToken = 0;
     m_listingPages.reset();
@@ -884,6 +893,7 @@ void Application::ensureRates(Game g, Lang server, const QString& league, std::f
 
 void Application::priceCheck()
 {
+    m_priceRefreshTimer.stop();
     if (!m_popup->hasItem())
         return;
     m_client->cancel(m_priceToken);
@@ -1249,6 +1259,7 @@ void Application::syncPopupLeague()
     const QString next = m_cfg.leagueFor(m_popup->parsedItem().game).trimmed();
     if (m_popup->leagueTitle() == next)
         return;
+    m_priceRefreshTimer.stop();
     m_popup->setLeagueTitle(next);
     m_client->cancel(m_priceToken);
     m_priceToken = 0;
@@ -1264,6 +1275,8 @@ void Application::syncPopupLeague()
 
 void Application::applyConfig()
 {
+    if (!m_cfg.autoPriceRefresh)
+        m_priceRefreshTimer.stop();
     m_client->setTimeoutSec(m_cfg.serverTimeout);
     m_customRun = !m_cfg.clipboardWatch; // Ctrl+C 감시 끔 ({Run} 단축키는 그대로 동작)
     if (m_hotkeysOn) {
