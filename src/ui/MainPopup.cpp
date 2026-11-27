@@ -16,6 +16,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHash>
+#include <QPainter>
 #include <QStyle>
 #include <QIcon>
 #include <QUrl>
@@ -392,6 +393,7 @@ void MainPopup::buildUi()
     m_currency->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     m_currency->setToolTip(QStringLiteral("가격 화폐 (등가물 = 모든 화폐. 색채의 오브 같은 화폐로 올린 매물을 제외하려면 기준 화폐 또는 신성한 오브를 고르세요)"));
     pr->addWidget(m_currency);
+    connect(m_currency, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() { refreshCurrencyCombo(); });
     m_status = new QComboBox(this);
     m_status->addItem(QStringLiteral("즉시 구입만"), QStringLiteral("securable"));
     m_status->addItem(QStringLiteral("즉시 구입+직접"), QStringLiteral("available"));
@@ -705,8 +707,10 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
         m_status->setCurrentIndex(si < 0 ? 0 : si);
         m_collapse->setChecked(cfg.collapseListings);
         m_currency->clear();
-        for (const TradeChoice& pc : priceCurrencies(it.game))
+        for (const TradeChoice& pc : priceCurrencies(it.game)) {
             m_currency->addItem(pc.text, pc.id);
+            m_currency->setItemData(m_currency->count() - 1, pc.text, Qt::ToolTipRole); // 원래 이름 (아이콘으로 줄여도)
+        }
         const QString cur = cfg.priceCurrencyFor(it.game);
         int ci = m_currency->findData(cur);
         if (ci < 0) { // 설정 파일에 목록 밖 값을 직접 넣은 경우
@@ -714,6 +718,7 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
             ci = m_currency->count() - 1;
         }
         m_currency->setCurrentIndex(ci);
+        refreshCurrencyCombo();
     }
     m_priceMin->setText(cfg.searchPriceMinimum > 0 ? QString::number(cfg.searchPriceMinimum) : QString());
     priceIdle(m_idleText);
@@ -1179,11 +1184,57 @@ void MainPopup::applyUnitIcon(QTableWidgetItem* item) const
         item->setToolTip(t);
 }
 
+void MainPopup::refreshCurrencyCombo()
+{
+    // 화폐 이름 대신 아이콘으로 폭 줄이기: 등가물 = [기준] 등가물, A 또는 신성 = [A][신성], 단일 = [A]
+    // 아이콘을 아직 못 받았으면 원래 이름 그대로
+    const QString base = m_parsed.game == Game::Poe2 ? QStringLiteral("exalted") : QStringLiteral("chaos");
+    const QSize one(18, 18);
+    for (int i = 0; i < m_currency->count(); ++i) {
+        const QString id = m_currency->itemData(i).toString();
+        const QString full = m_currency->itemData(i, Qt::ToolTipRole).toString();
+        QStringList ids;
+        QString shortText;
+        if (id.isEmpty()) {
+            ids << base;
+            shortText = QStringLiteral("등가물");
+        } else if (id.endsWith(QStringLiteral("_divine"))) {
+            ids << id.section(QLatin1Char('_'), 0, 0) << QStringLiteral("divine");
+        } else {
+            ids << id;
+        }
+        QStringList paths;
+        for (const QString& c : ids) {
+            const QString p = m_unitIcons.value(shortCurrencyName(c));
+            if (!p.isEmpty())
+                paths << p;
+        }
+        if (paths.size() != ids.size()) {
+            m_currency->setItemIcon(i, QIcon());
+            m_currency->setItemText(i, full.isEmpty() ? m_currency->itemText(i) : full);
+            continue;
+        }
+        QPixmap pm(one.width() * 2 + 2, one.height());
+        pm.fill(Qt::transparent);
+        {
+            QPainter p(&pm);
+            for (int k = 0; k < paths.size(); ++k)
+                p.drawPixmap(k * (one.width() + 2), 0, QPixmap(paths[k]).scaled(one, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        }
+        m_currency->setItemIcon(i, QIcon(pm));
+        m_currency->setItemText(i, shortText);
+    }
+    m_currency->setIconSize(QSize(one.width() * 2 + 2, one.height()));
+    m_currency->setToolTip(QStringLiteral("가격 화폐: %1\n(등가물 = 모든 화폐. 색채의 오브 같은 화폐로 올린 매물을 제외하려면 기준 화폐 또는 신성한 오브를 고르세요)")
+                               .arg(m_currency->currentData(Qt::ToolTipRole).toString()));
+}
+
 void MainPopup::setUnitIcon(const QString& unitName, const QString& path)
 {
     if (unitName.isEmpty() || path.isEmpty() || m_unitIcons.value(unitName) == path)
         return;
     m_unitIcons.insert(unitName, path);
+    refreshCurrencyCombo();
     // 이미 그린 줄 / 추정가에도 반영
     for (int r = 0; r < m_prices->rowCount(); ++r) {
         for (int c = 0; c < 2 && c < m_prices->columnCount(); ++c) {

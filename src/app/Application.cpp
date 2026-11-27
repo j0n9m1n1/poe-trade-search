@@ -438,6 +438,8 @@ void Application::handleItemText(const QString& text)
     }
 
     m_client->cancel(m_priceToken); // 앞 아이템 시세 조회 중이면 끊음
+    // 화폐 콤보/가격 칸 아이콘 (받아둔 파일이면 바로 붙음)
+    loadCurrencyIcons(g, it->lang, {QStringLiteral("chaos"), QStringLiteral("divine"), QStringLiteral("exalted")});
     m_popup->showItem(*it, &m_dbs[gi(g)], m_cfg, serverFor(it->lang));
     showIconFor(*it);
     showPopup();

@@ -93,6 +93,7 @@ private:
     QString withUnitIcons(const QString& plain) const;
     void applyUnitIcon(QTableWidgetItem* item) const;
     void fitPriceColumns();
+    void refreshCurrencyCombo(); // 화폐 콤보를 아이콘으로 (폭 줄이기)
     void fitRowsArea(); // 속성 줄 + 옵션 줄 높이에 맞춰 영역 크기
     int rangePct() const;
 
