@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ui/FilterRow.h"
 
+#include "ui/FilterValueStep.h"
 #include "ui/ToggleLabel.h"
 
 #include <QCheckBox>
@@ -11,6 +12,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QRegularExpressionValidator>
+#include <QWheelEvent>
 #include <cmath>
 
 namespace pts {
@@ -27,6 +29,57 @@ QString fromOpt(const OptDouble& v)
 {
     return v ? QString::number(*v) : QString();
 }
+
+class FilterValueEdit : public QLineEdit {
+public:
+    explicit FilterValueEdit(QWidget* parent) : QLineEdit(parent)
+    {
+        setToolTip(QStringLiteral("이 칸을 선택한 뒤 휠을 돌리면 값을 조절합니다. Shift를 누르면 10배로 조절합니다."));
+    }
+
+    void setRowValue(const OptDouble& value)
+    {
+        m_rowValue = value;
+        m_angle = 0;
+    }
+
+protected:
+    void wheelEvent(QWheelEvent* event) override
+    {
+        const int delta = event->angleDelta().y();
+        if (!hasFocus() || !rect().contains(event->position().toPoint()) || delta == 0) {
+            event->ignore();
+            return;
+        }
+        event->accept();
+        constexpr int anglePerNotch = 120;
+        m_angle += delta;
+        const int notches = m_angle / anglePerNotch;
+        m_angle %= anglePerNotch;
+        if (notches == 0)
+            return;
+        const OptDouble current = toOpt(text());
+        const double next = filterValueStep(current, m_rowValue, notches, event->modifiers() & Qt::ShiftModifier);
+        if (current && next == *current)
+            return;
+        QString value = QString::number(next, 'f', 12);
+        while (value.endsWith(QLatin1Char('0')))
+            value.chop(1);
+        value.chop(value.endsWith(QLatin1Char('.')) ? 1 : 0);
+        selectAll();
+        insert(value);
+    }
+
+    void focusOutEvent(QFocusEvent* event) override
+    {
+        m_angle = 0;
+        QLineEdit::focusOutEvent(event);
+    }
+
+private:
+    OptDouble m_rowValue;
+    int m_angle = 0;
+};
 } // namespace
 
 FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
@@ -57,8 +110,8 @@ FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
     m_roll->setToolTip(QStringLiteral("롤 % (Ctrl+Alt+C 고급 설명의 범위 기준, 좋은 방향 100%)"));
     m_res = new QCheckBox(this);
     m_res->setToolTip(QStringLiteral("저항 합산 검색"));
-    m_min = new QLineEdit(this);
-    m_max = new QLineEdit(this);
+    m_min = new FilterValueEdit(this);
+    m_max = new FilterValueEdit(this);
     auto* v = new QRegularExpressionValidator(QRegularExpression(QStringLiteral("^-?\\d*(\\.\\d*)?$")), this);
     for (QLineEdit* e : {m_min, m_max}) {
         e->setFixedWidth(kFilterValueWidth);
@@ -144,6 +197,8 @@ void FilterRow::setMod(const ParsedMod& m, bool compactCluster)
     }
     m_res->setVisible(m.resistance);
     m_res->setChecked(m.totalRes);
+    static_cast<FilterValueEdit*>(m_min)->setRowValue(m.value);
+    static_cast<FilterValueEdit*>(m_max)->setRowValue(m.value);
     m_min->setText(fromOpt(m.min));
     m_max->setText(fromOpt(m.max));
     m_min->setEnabled(!m.optionStat && !m.unmatched);
@@ -200,8 +255,8 @@ PropRow::PropRow(QWidget* parent) : QWidget(parent)
     lay->addWidget(m_text);
     lay->addStretch(1);
     lay->addSpacing(36); // FilterRow 의 롤 % 칸
-    m_min = new QLineEdit(this);
-    m_max = new QLineEdit(this);
+    m_min = new FilterValueEdit(this);
+    m_max = new FilterValueEdit(this);
     auto* v = new QRegularExpressionValidator(QRegularExpression(QStringLiteral("^-?\\d*(\\.\\d*)?$")), this);
     for (QLineEdit* e : {m_min, m_max}) {
         e->setFixedWidth(kFilterValueWidth);
@@ -272,8 +327,10 @@ void PropRow::setEditsVisible(bool min, bool max)
     }
 }
 
-void PropRow::setValues(const OptDouble& mn, const OptDouble& mx)
+void PropRow::setValues(const OptDouble& mn, const OptDouble& mx, double rowValue)
 {
+    static_cast<FilterValueEdit*>(m_min)->setRowValue(rowValue);
+    static_cast<FilterValueEdit*>(m_max)->setRowValue(rowValue);
     m_min->setText(mn ? QString::number(*mn) : QString());
     m_max->setText(mx ? QString::number(*mx) : QString());
 }

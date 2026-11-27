@@ -18,6 +18,7 @@
 #include "net/RateLimiter.h"
 #include "net/TradeClient.h"
 #include "net/Updater.h"
+#include "ui/FilterValueStep.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -92,6 +93,18 @@ private slots:
     }
 
     // ---------------- 데이터 없이 도는 테스트
+    void filterWheelSteps()
+    {
+        QCOMPARE(filterValueStep(26.0, 40.0, 1, false), 27.0);
+        QCOMPARE(filterValueStep(26.0, 40.0, -2, true), 6.0);
+        QCOMPARE(filterValueStep(std::nullopt, 40.0, -1, false), 39.0);
+        QCOMPARE(filterValueStep(std::nullopt, 1.25, 1, false), 1.35);
+        QCOMPARE(filterValueStep(2.0, 1.25, -1, true), 1.0);
+        QCOMPARE(filterValueStep(1.25, 0.0, 1, true), 2.25);
+        QCOMPARE(filterValueStep(-0.25, std::nullopt, -1, false), -0.35);
+        QCOMPARE(filterValueStep(std::nullopt, std::nullopt, 1, false), 1.0);
+    }
+
     void configAutoPriceRefresh()
     {
         QTemporaryDir dir;

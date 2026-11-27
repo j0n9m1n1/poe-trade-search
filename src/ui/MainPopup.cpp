@@ -1001,7 +1001,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
         row->setLabel(label, QString::number(count));
         row->setVisible(count > 0);
         row->setChecked(filter.use);
-        row->setValues(filter.min, std::nullopt);
+        row->setValues(filter.min, std::nullopt, count);
     };
     renderEmptyAffix(m_emptyPrefixRow, QStringLiteral("빈 접두어"), it.emptyPrefixes, st.emptyPrefixes);
     renderEmptyAffix(m_emptySuffixRow, QStringLiteral("빈 접미어"), it.emptySuffixes, st.emptySuffixes);
@@ -1017,23 +1017,23 @@ void MainPopup::renderMisc(const ItemFilterState& st)
         m_lvRow->setLabel(name, QString::number(v));
         m_lvRow->setVisible(v > 0);
         m_lvRow->setChecked(st.useLevel);
-        m_lvRow->setValues(st.levelMin, st.levelMax);
+        m_lvRow->setValues(st.levelMin, st.levelMax, v);
         m_lvRow->setColor(it.highlightLevel ? warn : propGray);
     }
     // 퀄리티 / 홈 / 링크 줄
     m_qRow->setLabel(QStringLiteral("퀄리티"), QStringLiteral("+%1%").arg(it.quality));
     m_qRow->setVisible(it.quality > 0);
     m_qRow->setChecked(st.useQuality);
-    m_qRow->setValues(st.qualityMin, st.qualityMax);
+    m_qRow->setValues(st.qualityMin, st.qualityMax, it.quality);
     m_qRow->setColor(it.highlightQuality ? warn : propGray);
     m_sockRow->setLabel(poe1 ? QStringLiteral("홈") : QStringLiteral("룬 홈"), QString::number(it.sockets));
     m_sockRow->setVisible(it.sockets > 0);
     m_sockRow->setChecked(st.useSockets);
-    m_sockRow->setValues(st.socketsMin, st.socketsMax);
+    m_sockRow->setValues(st.socketsMin, st.socketsMax, it.sockets);
     m_linkRow->setLabel(QStringLiteral("링크"), QString::number(it.links));
     m_linkRow->setVisible(poe1 && it.links > 1);
     m_linkRow->setChecked(st.useSockets);
-    m_linkRow->setValues(st.linksMin, st.linksMax);
+    m_linkRow->setValues(st.linksMin, st.linksMax, it.links);
 
     // 결합 / 역병
     const bool mapP1 = poe1 && it.isMap;
@@ -1116,7 +1116,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
                                                     : QStringLiteral("누르면 검색에 넣거나 뺍니다"));
             pw.row->setVisible(ps != nullptr);
             pw.row->setChecked(ps && ps->use);
-            pw.row->setValues(ps ? ps->min : OptDouble(), ps ? ps->max : OptDouble());
+            pw.row->setValues(ps ? ps->min : OptDouble(), ps ? ps->max : OptDouble(), v);
         }
     }
     m_useName->setChecked(st.useName && !st.byCategory);
