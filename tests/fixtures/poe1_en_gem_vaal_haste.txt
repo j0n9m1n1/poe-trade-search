@@ -1,0 +1,47 @@
+Item Class: Skill Gems
+Rarity: Gem
+Haste
+--------
+Aura, Spell, AoE, Duration, Vaal
+Level: 20 (Max)
+Reservation: 50% Mana
+Cooldown Time: 1.20 sec
+Cast Time: Instant
+--------
+Requirements:
+Level: 70
+Dex: 155
+--------
+Casts an aura that increases the movement speed, attack speed and cast speed of you and your allies.
+--------
+Aura radius is +1.9 metres
+You and nearby allies gain 16% increased Movement Speed
+You and nearby allies gain 24% increased Cast Speed
+You and nearby allies gain 24% increased Attack Speed
+
+Additional Effects From Quality:
+0% increased Area of Effect
+--------
+Vaal Haste
+--------
+Cooldown Time: 0.50 sec
+Souls Per Use: 50
+Can Store 1 Use
+Soul Gain Prevention: 6 sec
+Cast Time: Instant
+--------
+Casts a temporary aura that grants you and your allies a large increase to movement speed, attack speed and cast speed.
+--------
+Base duration is 4.00 seconds
+Buff Duration modifiers also apply to this skill's Soul Gain Prevention
+Aura radius is +1.9 metres
+You and nearby allies gain 20% increased Movement Speed
+You and nearby allies gain 31% increased Cast Speed
+You and nearby allies gain 31% increased Attack Speed
+
+Additional Effects From Quality:
+0% increased Area of Effect
+--------
+Place into an item socket of the right colour to gain this skill. Right click to remove from a socket.
+--------
+Corrupted

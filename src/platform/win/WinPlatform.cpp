@@ -227,7 +227,8 @@ bool cursorOverGame(QString* detail)
     POINT p;
     if (!GetCursorPos(&p))
         return false;
-    HWND game = FindWindowW(kPoeClass, nullptr);
+    HWND fg = GetForegroundWindow();
+    HWND game = isPoeWindow(fg) ? fg : FindWindowW(kPoeClass, nullptr);
     HWND h = WindowFromPoint(p);
     HWND root = h ? GetAncestor(h, GA_ROOT) : nullptr;
     wchar_t cls[96] = {};

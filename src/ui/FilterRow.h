@@ -14,6 +14,9 @@ namespace pts {
 
 class ToggleLabel;
 
+constexpr int kFilterValueWidth = 42;
+constexpr int kFilterColumnSpacing = 4;
+
 // 옵션 한 줄: [타입][등급 P1/S1][옵션 문구(누르면 검색에 넣고 뺌)][롤%][합산][최소][최대]
 class FilterRow : public QWidget {
     Q_OBJECT

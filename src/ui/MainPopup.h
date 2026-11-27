@@ -11,6 +11,7 @@
 class QCheckBox;
 class QFrame;
 class QComboBox;
+class QHBoxLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -34,6 +35,7 @@ public:
     explicit MainPopup(const Keywords& kw, QWidget* parent = nullptr);
 
     void showItem(const ParsedItem& parsed, const GameDb* gdb, const Config& cfg, Lang server);
+    void fitToAvailableHeight(int height);
     bool hasItem() const { return m_hasItem; }
     const ParsedItem& parsedItem() const { return m_parsed; }
 
@@ -60,6 +62,7 @@ public:
     void priceAddRow(const QStringList& cells, bool dim, int online, const QString& tooltip = QString());
     void priceDone(const QString& summary, const QString& count, const QString& tooltip = QString());
     void priceIdle(const QString& msg);
+    void setSearchBusy(bool busy);
 
     void setLeagueTitle(const QString& league);
     // 화폐 이름(카오스/디바인/전체 이름) 아이콘. 가격 칸과 추정가에 이름 대신 아이콘
@@ -78,6 +81,7 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent* e) override;
+    void mousePressEvent(QMouseEvent* e) override;
     void closeEvent(QCloseEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     bool eventFilter(QObject* o, QEvent* e) override;
@@ -134,6 +138,7 @@ private:
     QLabel* m_name;     // 희귀 이름 표시용
     QLabel* m_info;
     ToggleLabel* m_all;
+    QHBoxLayout* m_filterHeader;
 
     QScrollArea* m_scroll;
     struct PropWidgets {

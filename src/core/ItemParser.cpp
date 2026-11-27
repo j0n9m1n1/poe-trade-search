@@ -587,6 +587,14 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     }
 
     if (it.rarityId == QStringLiteral("gem")) {
+        const QStringList vaalWords = m_kw.kw(QStringLiteral("vaal")).t[li(L)];
+        auto isVaalName = [&](const QString& s) {
+            for (const QString& v : vaalWords) {
+                if (s.startsWith(v + QLatin1Char(' ')))
+                    return true;
+            }
+            return false;
+        };
         // 변형 젬: items 의 text 가 이름, type + disc 로 검색
         for (int i : db.itemsByText(type)) {
             const ItemEntry& e = db.item(i);
@@ -597,10 +605,27 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                 break;
             }
         }
-        for (const QString& v : m_kw.kw(QStringLiteral("vaal")).t[li(L)]) {
-            if (type.startsWith(v + QLatin1Char(' ')))
-                it.vaalGem = true;
+        // 바알 젬: 헤더는 기본 젬("가속"/"Arc of Oscillating"), 바알 스킬 이름("바알 가속"/"Vaal Arc")은 뒤쪽 한 줄 섹션.
+        // 거래소에 같은 구분자(변형 젬이면 alt_x 등, 아니면 없음)의 바알 젬이 있을 때만 바꿈
+        if (!isVaalName(type)) {
+            for (int s = 1; s < sections.size() && !isVaalName(type); ++s) {
+                const QStringList& sec = sections[s];
+                if (sec.size() != 1 || !isVaalName(sec.first()))
+                    continue;
+                for (const QVector<int>& cands : {db.itemsByType(sec.first()), db.itemsByText(sec.first())}) {
+                    for (int i : cands) {
+                        const ItemEntry& e = db.item(i);
+                        if (e.disc == it.disc && isVaalName(e.type)) {
+                            type = e.type;
+                            break;
+                        }
+                    }
+                    if (isVaalName(type))
+                        break;
+                }
+            }
         }
+        it.vaalGem = isVaalName(type);
     }
 
     if (!db.hasType(type)) {

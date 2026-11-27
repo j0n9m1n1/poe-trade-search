@@ -48,6 +48,7 @@ cmake --build build
 ```
 
 테스트, 릴리즈 방법, 코드 구조는 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)를 참고하세요.
+에이전트가 적용한 변경과 검증 범위는 [에이전트 작업 이력](docs/DEVELOPMENT.md#에이전트-작업-이력)에 기록함.
 
 ## 라이선스
 

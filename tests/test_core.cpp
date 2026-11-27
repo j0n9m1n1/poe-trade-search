@@ -29,10 +29,12 @@ using namespace pts;
 namespace {
 QString fixture(const QString& name)
 {
+    // 저장소는 LF 지만 Windows(core.autocrlf)는 CRLF 로 체크아웃함 -> 테스트의 "\n" 치환이 안 먹지 않게 LF 로 통일
+    // (실제 CRLF 클립보드 파싱은 corruptedFoulbornDefaults 에서 따로 확인)
     QFile f(QStringLiteral(PTS_FIXTURE_DIR "/") + name);
     if (!f.open(QIODevice::ReadOnly))
         return {};
-    return QString::fromUtf8(f.readAll());
+    return QString::fromUtf8(f.readAll()).remove(QLatin1Char('\r'));
 }
 
 const ParsedMod* findMod(const ParsedItem& it, const QString& statKey)
@@ -264,6 +266,13 @@ private slots:
         QCOMPARE(once->corruptDefault, 1);
         QCOMPARE(once->twiceCorruptDefault, 2); // 한 번 타락 -> 두 번 타락 제외
         QCOMPARE(once->mutatedDefault, 0);      // 고유 아님
+        // 게임 클립보드는 CRLF: 줄 끝만 다르고 결과는 같아야 함
+        auto crlf = parseText(QString(ring).replace(QLatin1Char('\n'), QStringLiteral("\r\n")), Game::Poe1);
+        QVERIFY(crlf);
+        QCOMPARE(crlf->type, once->type);
+        QCOMPARE(crlf->mods.size(), once->mods.size());
+        QVERIFY(crlf->corrupted && !crlf->twiceCorrupted);
+        QCOMPARE(crlf->corruptDefault, 1);
 
         QString t = ring;
         t.replace(QStringLiteral("\nCorrupted"), QStringLiteral("\nTwice Corrupted"));
@@ -846,6 +855,109 @@ private slots:
         QCOMPARE(it->level, 20);
         QVERIFY(it->levelMax && it->checkLevel && it->checkQuality);
         QCOMPARE(it->category, QStringLiteral("gem.activegem"));
+    }
+
+    void poe1VaalGemSkillSection()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        auto typeOf = [&](const ParsedItem& it, Lang server) {
+            RequestContext ctx;
+            ctx.server = server;
+            const ItemFilterState st = defaultFilterState(it);
+            return QueryBuilder::build(makeRequest(it, st, kw, &dbs[0], ctx), &dbs[0][server])
+                .value(QStringLiteral("query")).toObject().value(QStringLiteral("type"));
+        };
+        // 헤더는 기본 젬 이름, 바알 스킬 이름은 뒤쪽 한 줄 섹션 -> 바알 젬으로 검색
+        struct Case {
+            const char* fx;
+            Lang lang;
+            const char* base;
+            const char* vaal;
+        };
+        const Case cases[] = {
+            {"poe1_ko_gem_vaal_haste.txt", Lang::Ko, "가속", "바알 가속"},
+            {"poe1_en_gem_vaal_haste.txt", Lang::En, "Haste", "Vaal Haste"},
+        };
+        for (const Case& c : cases) {
+            auto it = parse(QString::fromUtf8(c.fx), Game::Poe1);
+            QVERIFY2(it, c.fx);
+            QVERIFY(it->isGem && it->vaalGem && it->corrupted && !it->transfigured);
+            QCOMPARE(it->rawType, QString::fromUtf8(c.base));
+            QCOMPARE(it->type, QString::fromUtf8(c.vaal));
+            QVERIFY(it->disc.isEmpty());
+            QCOMPARE(it->category, QStringLiteral("gem.activegem"));
+            QCOMPARE(it->level, 20);
+            QVERIFY(it->levelMax && it->checkLevel);
+            QCOMPARE(defaultFilterState(*it).corrupted, 1);
+            QCOMPARE(typeOf(*it, c.lang).toString(), QString::fromUtf8(c.vaal));
+        }
+        // 한국어 아이템을 영어 서버로 검색해도 바알 젬
+        auto ko = parse(QStringLiteral("poe1_ko_gem_vaal_haste.txt"), Game::Poe1);
+        QVERIFY(ko);
+        QCOMPARE(typeOf(*ko, Lang::En).toString(), QStringLiteral("Vaal Haste"));
+
+        // 헤더에 바알 이름이 바로 있는 형식은 그대로
+        auto hdr = parseText(QStringLiteral("Item Class: Skill Gems\nRarity: Gem\nVaal Haste\n--------\n"
+                                            "Aura, Spell, AoE, Duration, Vaal\nLevel: 20 (Max)\n--------\nCorrupted"),
+                             Game::Poe1);
+        QVERIFY(hdr && hdr->vaalGem);
+        QCOMPARE(hdr->type, QStringLiteral("Vaal Haste"));
+
+        // 바알 변형 젬: 헤더 변형 이름 먼저 풀고, 같은 구분자의 바알 젬으로
+        auto gemText = [](const QString& cls, const QString& head, const QString& vaal, const QString& corrupt) {
+            return cls + QStringLiteral("\n") + head + QStringLiteral("\n--------\nLevel: 20 (Max)\n--------\n") + vaal +
+                   QStringLiteral("\n--------\n") + corrupt;
+        };
+        const QString enCls = QStringLiteral("Item Class: Skill Gems\nRarity: Gem");
+        const QString koCls = QStringLiteral("아이템 종류: 스킬 젬\n아이템 희귀도: 젬");
+        struct TfCase {
+            const char* head;
+            const char* vaal;
+            const char* disc;
+            bool ko;
+        };
+        const TfCase tf[] = {
+            {"Arc of Oscillating", "Vaal Arc", "alt_y", false},
+            {"Arc of Surging", "Vaal Arc", "alt_x", false},
+            {"뇌동의 연쇄 번개", "바알 연쇄 번개", "alt_y", true},
+            {"쇄도의 연쇄 번개", "바알 연쇄 번개", "alt_x", true},
+        };
+        for (const TfCase& c : tf) {
+            auto g = parseText(gemText(c.ko ? koCls : enCls, QString::fromUtf8(c.head), QString::fromUtf8(c.vaal),
+                                       c.ko ? QStringLiteral("타락") : QStringLiteral("Corrupted")),
+                               Game::Poe1);
+            QVERIFY2(g, c.head);
+            QVERIFY2(g->vaalGem && g->transfigured, c.head);
+            QCOMPARE(g->type, QString::fromUtf8(c.vaal));
+            QCOMPARE(g->disc, QString::fromUtf8(c.disc));
+            const QJsonObject t = typeOf(*g, c.ko ? Lang::Ko : Lang::En).toObject();
+            QCOMPARE(t.value(QStringLiteral("option")).toString(), QString::fromUtf8(c.vaal));
+            QCOMPARE(t.value(QStringLiteral("discriminator")).toString(), QString::fromUtf8(c.disc));
+        }
+        // 구분자가 안 맞는 바알 줄이면 안 바꿈 (변형 구분자 유지)
+        auto mis = parseText(gemText(enCls, QStringLiteral("Arc of Oscillating"), QStringLiteral("Vaal Haste"),
+                                     QStringLiteral("Corrupted")),
+                             Game::Poe1);
+        QVERIFY(mis && mis->transfigured && !mis->vaalGem);
+        QCOMPARE(mis->type, QStringLiteral("Arc"));
+        QCOMPARE(mis->disc, QStringLiteral("alt_y"));
+        // 일반 기본 젬 + 바알 줄 -> 구분자 없는 바알 젬 (변형 바알 젬으로 안 감)
+        auto base = parseText(gemText(enCls, QStringLiteral("Arc"), QStringLiteral("Vaal Arc"), QStringLiteral("Corrupted")),
+                              Game::Poe1);
+        QVERIFY(base && base->vaalGem && !base->transfigured);
+        QCOMPARE(base->type, QStringLiteral("Vaal Arc"));
+        QVERIFY(base->disc.isEmpty());
+
+        // 바알 섹션 없는 일반 타락 젬은 기본 젬 그대로
+        auto plain = parseText(QStringLiteral("아이템 종류: 스킬 젬\n아이템 희귀도: 젬\n가속\n--------\n"
+                                              "오라, 주문, 효과 범위, 지속시간\n레벨: 20 (최대)\n--------\n"
+                                              "아이템 홈에 장착하여 스킬을 획득하십시오. 제거하려면 홈을 우클릭하십시오.\n"
+                                              "--------\n타락"),
+                               Game::Poe1);
+        QVERIFY(plain && plain->isGem && plain->corrupted && !plain->vaalGem);
+        QCOMPARE(plain->type, QStringLiteral("가속"));
+        QCOMPARE(typeOf(*plain, Lang::Ko).toString(), QStringLiteral("가속"));
     }
 
     void poe1Unique()

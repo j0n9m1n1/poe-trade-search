@@ -221,22 +221,25 @@ void MainPopup::buildUi()
     root->addLayout(head);
 
 
-    auto* hdr = new QHBoxLayout;
-    m_info = new QLabel(QStringLiteral("옵션"), this);
-    auto* lmin = new QLabel(QStringLiteral("최소"), this);
-    auto* lmax = new QLabel(QStringLiteral("최대"), this);
-    lmin->setFixedWidth(42);
-    lmax->setFixedWidth(42);
+    auto* filterHeader = new QWidget(this);
+    m_filterHeader = new QHBoxLayout(filterHeader);
+    m_filterHeader->setSpacing(kFilterColumnSpacing);
+    m_info = new QLabel(QStringLiteral("옵션"), filterHeader);
+    auto* lmin = new QLabel(QStringLiteral("최소"), filterHeader);
+    auto* lmax = new QLabel(QStringLiteral("최대"), filterHeader);
+    lmin->setFixedWidth(kFilterValueWidth);
+    lmax->setFixedWidth(kFilterValueWidth);
     lmin->setAlignment(Qt::AlignCenter);
     lmax->setAlignment(Qt::AlignCenter);
-    m_all = new ToggleLabel(this);
+    m_all = new ToggleLabel(filterHeader);
     m_all->setText(QStringLiteral("전체"));
     m_all->setToolTip(QStringLiteral("일반 옵션 전체 선택/해제 (고정·제작 옵션 제외)"));
-    hdr->addWidget(m_info, 1);
-    hdr->addWidget(lmin);
-    hdr->addWidget(lmax);
-    hdr->addWidget(m_all);
-    root->addLayout(hdr);
+    m_filterHeader->addWidget(m_info);
+    m_filterHeader->addWidget(m_all);
+    m_filterHeader->addStretch(1);
+    m_filterHeader->addWidget(lmin);
+    m_filterHeader->addWidget(lmax);
+    root->addWidget(filterHeader);
 
     // ---- 본문 (옵션 / 교환 / 기타 필터)
     auto* page1 = new QWidget(this);
@@ -251,6 +254,7 @@ void MainPopup::buildUi()
     m_rowsBox = new QWidget(scroll);
     m_rowsLayout = new QVBoxLayout(m_rowsBox);
     m_rowsLayout->setContentsMargins(0, 0, 6, 0); // 오른쪽 여유 (스크롤바/테두리에 안 잘리게)
+    m_filterHeader->setContentsMargins(0, 0, m_rowsLayout->contentsMargins().right(), 0);
     m_rowsLayout->setSpacing(2);
     m_detail = new QLabel(m_rowsBox);
     m_detail->setWordWrap(true);
@@ -259,6 +263,7 @@ void MainPopup::buildUi()
     m_rowsLayout->addWidget(m_detail);
     m_rowsLayout->addStretch(1);
     scroll->setWidget(m_rowsBox);
+    scroll->viewport()->installEventFilter(this);
     p1->addWidget(scroll, 1);
 
     // 일괄 교환
@@ -434,7 +439,7 @@ void MainPopup::buildUi()
     m_price->installEventFilter(this);
     m_idleText = QStringLiteral("시세를 검색하려면 클릭하세요");
     setPriceText(m_idleText);
-    m_refresh = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), QStringLiteral("다시 검색"), this);
+    m_refresh = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), QStringLiteral("시세 새로고침"), this);
     m_refresh->setToolTip(QStringLiteral("지금 조건으로 시세를 다시 조회합니다"));
     m_refresh->setCursor(Qt::PointingHandCursor);
     connect(m_refresh, &QPushButton::clicked, this, &MainPopup::priceCheckRequested);
@@ -449,6 +454,7 @@ void MainPopup::buildUi()
     auto* bottom = new QHBoxLayout;
     m_search = new QPushButton(QStringLiteral("거래소에서 찾기"), this);
     m_close = new QPushButton(QStringLiteral("닫기"), this);
+    m_close->setToolTip(QStringLiteral("Esc로 닫기"));
     m_search->setMinimumHeight(34);
     m_close->setMinimumHeight(34);
     QFont bf = m_close->font();
@@ -527,13 +533,18 @@ void MainPopup::installActivator(QWidget* w)
 
 bool MainPopup::eventFilter(QObject* o, QEvent* e)
 {
+    if (e->type() == QEvent::Resize && o == m_scroll->viewport()) {
+        const int right = m_scroll->width() - m_scroll->viewport()->geometry().right() - 1;
+        m_filterHeader->setContentsMargins(0, 0, m_rowsLayout->contentsMargins().right() + right, 0);
+    }
     if (e->type() == QEvent::MouseButtonPress) {
         if (o == m_price && static_cast<QMouseEvent*>(e)->button() == Qt::LeftButton) {
             emit priceCheckRequested();
             return true;
         }
-        if (qobject_cast<QLineEdit*>(o) && !isActiveWindow()) {
-            // 포커스 안 뺏고 떠 있다가 입력칸 누르면 그때 활성화 (원본 WS_EX_NOACTIVATE 토글)
+        if ((qobject_cast<QLineEdit*>(o) || qobject_cast<QComboBox*>(o)) && !isActiveWindow()) {
+            // 포커스 안 뺏고 떠 있다가 입력칸/콤보를 누르면 그때 활성화 (원본 WS_EX_NOACTIVATE 토글).
+            // 콤보 펼침이 게임에서 포커스를 뺏은 뒤 닫힐 때 포커스 공백으로 ESC가 안 먹는 것도 방지
             platform::activateWindow(this);
         }
     }
@@ -654,15 +665,16 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
         m_range->addItem(QStringLiteral("-%1% (넓게)").arg(base * 2), base * 2);
         m_range->setCurrentIndex(m_cfgRange > 0 ? 1 : 0);
         const bool hasMods = !it.mods.isEmpty();
-        m_preset->setEnabled(hasMods);
-        m_range->setEnabled(hasMods && !exactValuesOnly(it));
+        m_preset->setVisible(hasMods);
+        m_range->setVisible(hasMods);
+        m_range->setEnabled(!exactValuesOnly(it));
     }
 
     if (it.hasDps)
         m_info->setText(QStringLiteral("DPS: P.%1 + E.%2 = T.%3")
                             .arg(num(it.pdps), num(it.edps), num(it.pdps + it.edps + it.cdps)));
     else
-        m_info->setText(QStringLiteral("옵션"));
+        m_info->setText(it.mods.isEmpty() ? QStringLiteral("속성") : QStringLiteral("옵션"));
 
     // 젬/화폐/카드 설명 문단은 안 보여 줌 (게임에서 보면 됨)
     m_detail->clear();
@@ -728,10 +740,18 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
         refreshCurrencyCombo();
     }
     m_priceMin->setText(cfg.searchPriceMinimum > 0 ? QString::number(cfg.searchPriceMinimum) : QString());
+    setSearchBusy(false);
     priceIdle(m_idleText);
     setLeagueTitle(cfg.leagueFor(it.game));
 
     applyPresetAndRender();
+    adjustSize();
+}
+
+void MainPopup::fitToAvailableHeight(int height)
+{
+    m_prices->setMinimumHeight(qBound(64, height / 5, 170));
+    setMaximumHeight(height);
     adjustSize();
 }
 
@@ -755,11 +775,17 @@ void MainPopup::applyPresetAndRender()
 void MainPopup::fitRowsArea()
 {
     // 속성 줄 묶음 / 구분선
-    bool anyProp = false;
-    for (PropRow* r : m_propRows->findChildren<PropRow*>())
-        anyProp = anyProp || !r->isHidden();
-    m_propRows->setVisible(anyProp);
-    m_propSep->setVisible(anyProp && !m_rows.isEmpty());
+    int propCount = 0;
+    int propHeight = 0;
+    for (PropRow* row : m_propRows->findChildren<PropRow*>()) {
+        if (!row->isHidden()) {
+            ++propCount;
+            propHeight += row->sizeHint().height();
+        }
+    }
+    m_propRows->setVisible(propCount > 0);
+    m_propSep->setVisible(propCount > 0 && !m_rows.isEmpty());
+    propHeight += qMax(0, propCount - 1) * m_propRows->layout()->spacing();
 
     // 옵션 영역은 내용만큼만 (빈 공간은 매물 목록에). 너무 많으면 스크롤
     const int w = qMax(m_scroll->viewport()->width(), 600);
@@ -768,22 +794,30 @@ void MainPopup::fitRowsArea()
         QWidget* x = m_rowsLayout->itemAt(i)->widget();
         if (!x || x->isHidden())
             continue;
-        h += (x->hasHeightForWidth() ? x->heightForWidth(w) : x->sizeHint().height()) + m_rowsLayout->spacing();
+        const int rowHeight = x == m_propRows ? propHeight
+                            : x->hasHeightForWidth() ? x->heightForWidth(w) : x->sizeHint().height();
+        h += rowHeight + m_rowsLayout->spacing();
     }
-    // 줄바꿈 라벨은 최소 높이를 넉넉히 잡아서, 그보다 작으면 스크롤바가 생김
-    m_rowsLayout->activate();
-    h = qMax(h, m_rowsBox->minimumSizeHint().height());
-    m_scroll->setMinimumHeight(qBound(60, h + 6, 420));
+    const bool hasRows = h > 0;
+    m_filterHeader->parentWidget()->setVisible(hasRows);
+    m_scroll->setVisible(hasRows);
+    const int wanted = qMin(420, h + 6);
+    m_scroll->setMinimumHeight(qMin(34, wanted));
+    m_scroll->setMaximumHeight(wanted);
 }
 
 void MainPopup::renderRows()
 {
     clearRows();
+    bool canSelectAll = false;
     for (int i = 0; i < m_item.mods.size(); ++i) {
         auto* r = new FilterRow(m_rowsBox);
         r->setMod(m_item.mods[i]);
+        canSelectAll |= r->isPlain() && r->isCheckable();
         installActivator(r->minEdit());
         installActivator(r->maxEdit());
+        for (QComboBox* c : r->findChildren<QComboBox*>())
+            installActivator(c);
         connect(r, &FilterRow::changed, this, [this]() { markStale(); });
         connect(r, &FilterRow::rememberToggled, this, [this, i](bool on) {
             const ParsedMod& m = m_item.mods[i];
@@ -794,6 +828,7 @@ void MainPopup::renderRows()
         m_rows.push_back(r);
     }
     QSignalBlocker b(m_all);
+    m_all->setVisible(canSelectAll);
     m_all->setChecked(m_item.checkAllUnique);
 }
 
@@ -1381,6 +1416,12 @@ void MainPopup::priceIdle(const QString& msg)
     setPriceText(msg);
 }
 
+void MainPopup::setSearchBusy(bool busy)
+{
+    m_search->setEnabled(!busy);
+    m_search->setText(busy ? QStringLiteral("거래소 여는 중...") : QStringLiteral("거래소에서 찾기"));
+}
+
 void MainPopup::keyPressEvent(QKeyEvent* e)
 {
     if (e->key() == Qt::Key_Escape) {
@@ -1394,6 +1435,14 @@ void MainPopup::keyPressEvent(QKeyEvent* e)
     QWidget::keyPressEvent(e);
 }
 
+void MainPopup::mousePressEvent(QMouseEvent* e)
+{
+    // 게임이 이미 포그라운드가 아닌 상태에서 팝업을 눌렀으면 활성화해 ESC 닫기가 동작하게 함
+    if (!isActiveWindow() && !platform::foregroundGame().foreground)
+        platform::activateWindow(this);
+    QWidget::mousePressEvent(e);
+}
+
 void MainPopup::closeEvent(QCloseEvent* e)
 {
     e->ignore();
@@ -1403,6 +1452,7 @@ void MainPopup::closeEvent(QCloseEvent* e)
 void MainPopup::hideEvent(QHideEvent* e)
 {
     QWidget::hideEvent(e);
+    setSearchBusy(false);
     platform::setNoActivate(this, true);
     emit popupHidden();
 }

@@ -114,6 +114,8 @@ bool Application::start(QString* error)
         m_popupPos = m_popup->pos();
         m_clickTimer.stop();
         m_client->cancel(m_priceToken);
+        m_client->cancel(m_openTradeToken);
+        m_openTradeToken = 0;
         if (m_hotkeys->has(kEscId))
             m_hotkeys->remove(kEscId);
     });
@@ -303,12 +305,20 @@ void Application::onForegroundTick()
     } else if (m_hotkeysOn) {
         unregisterHotkeys();
     }
-    // ESC: 팝업 떠 있고 게임이 앞에 있을 때만 가로챔
-    const bool wantEsc = w.foreground && m_popup->isVisible();
-    if (wantEsc && !m_hotkeys->has(kEscId))
-        m_hotkeys->add(kEscId, 0, 0x1B);
-    else if (!wantEsc && m_hotkeys->has(kEscId))
+    updateEscHotkey(w.foreground);
+}
+
+void Application::updateEscHotkey(bool gameForeground)
+{
+    // ESC: 팝업 떠 있고 게임이 앞에 있을 때만 가로챔 (콤보 펼침/대화상자 열려 있으면 넘겨줌)
+    const bool modalOrCombo = QApplication::activePopupWidget() || QApplication::activeModalWidget();
+    const bool wantEsc = gameForeground && m_popup->isVisible() && !modalOrCombo;
+    if (wantEsc && !m_hotkeys->has(kEscId)) {
+        if (!m_hotkeys->add(kEscId, 0, 0x1B))
+            qWarning() << "ESC hotkey register failed";
+    } else if (!wantEsc && m_hotkeys->has(kEscId)) {
         m_hotkeys->remove(kEscId);
+    }
 }
 
 void Application::registerHotkeys()
@@ -339,6 +349,8 @@ void Application::unregisterHotkeys()
 void Application::onHotkey(int id)
 {
     if (id == kEscId) {
+        if (QApplication::activePopupWidget() || QApplication::activeModalWidget())
+            return;
         m_popup->hide();
         return;
     }
@@ -438,6 +450,8 @@ void Application::handleItemText(const QString& text)
     }
 
     m_client->cancel(m_priceToken); // 앞 아이템 시세 조회 중이면 끊음
+    m_client->cancel(m_openTradeToken);
+    m_openTradeToken = 0;
     // 화폐 콤보/가격 칸 아이콘 (받아둔 파일이면 바로 붙음)
     loadCurrencyIcons(g, it->lang, {QStringLiteral("chaos"), QStringLiteral("divine"), QStringLiteral("exalted")});
     m_popup->showItem(*it, &m_dbs[gi(g)], m_cfg, serverFor(it->lang));
@@ -473,40 +487,48 @@ void Application::handleItemText(const QString& text)
 
 void Application::showPopup()
 {
-    m_popup->adjustSize();
-    if (m_cfg.popupPosition == QStringLiteral("center")) {
-        // 커서가 있는 화면(=보통 게임 화면)의 가운데
-        QScreen* scr = QGuiApplication::screenAt(QCursor::pos());
-        if (!scr)
-            scr = QGuiApplication::primaryScreen();
-        const QRect a = scr->availableGeometry();
-        const QSize sz = m_popup->size() + QSize(16, 40); // 창 테두리/제목줄 여유
-        const int x = qBound(a.left(), a.center().x() - sz.width() / 2, qMax(a.left(), a.right() - sz.width()));
-        const int y = qBound(a.top(), a.center().y() - sz.height() / 2, qMax(a.top(), a.bottom() - sz.height()));
-        m_popup->move(x, y);
-    } else if (m_cfg.popupPosition == QStringLiteral("cursor")) {
-        // 커서 오른쪽 (모자라면 왼쪽), 세로는 커서가 위쪽 1/3 쯤 오게. 화면 밖으로 안 나가게
-        const QPoint c = QCursor::pos();
-        QScreen* scr = QGuiApplication::screenAt(c);
-        if (!scr)
-            scr = QGuiApplication::primaryScreen();
-        const QRect a = scr->availableGeometry();
-        const QSize sz = m_popup->size() + QSize(16, 40); // 창 테두리/제목줄 여유
-        int x = c.x() + 24;
-        if (x + sz.width() > a.right())
-            x = c.x() - 24 - sz.width();
-        int y = c.y() - sz.height() / 3;
-        x = qBound(a.left(), x, qMax(a.left(), a.right() - sz.width()));
-        y = qBound(a.top(), y, qMax(a.top(), a.bottom() - sz.height()));
-        m_popup->move(x, y);
-    } else if (!m_popup->isVisible()) {
-        if (m_popupPos.isNull())
-            m_popupPos = QGuiApplication::primaryScreen()->availableGeometry().topLeft() + QPoint(30, 30);
-        m_popup->move(m_popupPos);
+    const bool centered = m_cfg.popupPosition == QStringLiteral("center");
+    const bool nearCursor = m_cfg.popupPosition == QStringLiteral("cursor");
+    const QPoint cursor = QCursor::pos();
+    QPoint position = m_popup->isVisible() ? m_popup->pos() : m_popupPos;
+    QScreen* screen = nullptr;
+    if (centered || nearCursor)
+        screen = QGuiApplication::screenAt(cursor);
+    else if (!position.isNull())
+        screen = QGuiApplication::screenAt(position);
+    if (!screen)
+        screen = QGuiApplication::primaryScreen();
+    const QRect area = screen->availableGeometry();
+    const QSize framePadding(16, 40); // 창 테두리와 제목줄
+    m_popup->fitToAvailableHeight(qMax(1, area.height() - framePadding.height()));
+    const QSize size = m_popup->size() + framePadding;
+    if (centered) {
+        position = area.center() - QPoint(size.width() / 2, size.height() / 2);
+    } else if (nearCursor) {
+        // 커서 오른쪽에 공간이 없으면 왼쪽에 표시
+        int x = cursor.x() + 24;
+        if (x + size.width() > area.right() + 1)
+            x = cursor.x() - 24 - size.width();
+        position = QPoint(x, cursor.y() - size.height() / 3);
+    } else if (position.isNull() || !area.contains(position)) {
+        position = area.topLeft() + QPoint(30, 30);
     }
-    platform::setNoActivate(m_popup, true);
-    m_popup->show();
-    m_popup->raise();
+    const int x = qBound(area.left(), position.x(), qMax(area.left(), area.right() + 1 - size.width()));
+    const int y = qBound(area.top(), position.y(), qMax(area.top(), area.bottom() + 1 - size.height()));
+    m_popup->move(x, y);
+    ++m_popupSeq;
+    const bool gameFg = platform::foregroundGame().foreground;
+    if (gameFg) {
+        platform::setNoActivate(m_popup, true);
+        m_popup->show();
+        m_popup->raise();
+    } else {
+        // 게임이 앞에 없는 상태(트레이 클릭으로 다시 열기 등)에서는 활성화해 ESC 닫기가 바로 동작하게 함
+        m_popup->show();
+        platform::activateWindow(m_popup);
+        m_popup->raise();
+    }
+    updateEscHotkey(gameFg);
     m_shownAt.restart();
     m_mouseWasDown = platform::mouseButtonDown();
     m_clickTimer.start();
@@ -552,11 +574,14 @@ void Application::checkOutsideClick()
     }
     // 그래도 아니면: 잠깐 뒤 활성 창이 PoE 면 게임을 누른 것 (다른 프로그램을 눌렀으면 그 프로그램이 활성)
     // (underMouse 는 활성화 안 되는 창에서 안 풀릴 때가 있어서 커서 좌표로 확인)
-    QTimer::singleShot(150, this, [this, why]() {
+    const quint64 seq = m_popupSeq;
+    QTimer::singleShot(150, this, [this, why, seq]() {
+        if (seq != m_popupSeq || !m_popup->isVisible())
+            return;
         const bool fg = platform::foregroundGame().foreground;
         const bool outside = !m_popup->frameGeometry().contains(QCursor::pos());
         qInfo().noquote() << "outside click (" << why << ") foregroundPoe=" << fg << " outside=" << outside;
-        if (m_popup->isVisible() && fg && outside)
+        if (fg && outside)
             m_popup->hide();
     });
 }
@@ -566,12 +591,22 @@ void Application::showPopupMessage(const QString& title, const QString& msg)
     QMessageBox box(QMessageBox::Information, title, msg, QMessageBox::Ok, m_popup->isVisible() ? m_popup : nullptr);
     box.setWindowFlags(box.windowFlags() | Qt::WindowStaysOnTopHint);
     box.exec();
+    if (m_popup->isVisible()) {
+        const bool gameFg = platform::foregroundGame().foreground;
+        if (!gameFg)
+            platform::activateWindow(m_popup);
+        updateEscHotkey(gameFg);
+    }
 }
 
 void Application::openTrade()
 {
     if (!m_popup->hasItem())
         return;
+    m_client->cancel(m_openTradeToken);
+    m_openTradeToken = m_client->newToken();
+    const quint64 token = m_openTradeToken;
+
     const ParsedItem it = m_popup->collectItem();
     const Game g = it.game;
     const QString league = m_cfg.leagueFor(g);
@@ -579,16 +614,23 @@ void Application::openTrade()
 
     const QString want = m_popup->exchangeWant();
     if (!want.isEmpty()) {
+        m_popup->setSearchBusy(true);
         // 시세 조회와 같은 방향: 화폐를 내고 이 아이템을 받는 판매 매물
-        m_client->exchange(g, server, league, want, it.exchangeId,
-                           [this, g, server, league](const TradeClient::ExchangeResult& r) {
-                               if (!r.error.isEmpty() || r.id.isEmpty()) {
-                                   showPopupMessage(QStringLiteral("검색 실패"), r.error);
-                                   return;
-                               }
-                               QDesktopServices::openUrl(endpoints::webExchange(g, server, league, r.id));
-                               m_popup->hide();
-                           });
+        m_client->exchange(
+            g, server, league, want, it.exchangeId,
+            [this, token, g, server, league](const TradeClient::ExchangeResult& r) {
+                if (token != m_openTradeToken)
+                    return;
+                m_openTradeToken = 0;
+                m_popup->setSearchBusy(false);
+                if (!r.error.isEmpty() || r.id.isEmpty()) {
+                    showPopupMessage(QStringLiteral("검색 실패"), r.error);
+                    return;
+                }
+                QDesktopServices::openUrl(endpoints::webExchange(g, server, league, r.id));
+                m_popup->hide();
+            },
+            token);
         return;
     }
 
@@ -606,19 +648,28 @@ void Application::openTrade()
     const QJsonObject q = QueryBuilder::build(req, &m_dbs[gi(g)][req.lang]);
 
     if (m_cfg.serverRedirect) {
+        m_openTradeToken = 0;
         QDesktopServices::openUrl(endpoints::redirectSearch(g, req.lang, league, QJsonDocument(q).toJson(QJsonDocument::Compact)));
         m_popup->hide();
         return;
     }
-    m_client->search(g, req.lang, league, q, [this, g, lang = req.lang, league](const TradeClient::SearchResult& r) {
-        if (!r.error.isEmpty()) {
-            showPopupMessage(QStringLiteral("검색 실패"),
-                             QStringLiteral("거래소 검색에 실패했습니다: %1\n한국/글로벌 거래소에 접속되는지 확인한 뒤 다시 시도해 주세요.").arg(r.error));
-            return;
-        }
-        QDesktopServices::openUrl(endpoints::webSearch(g, lang, league, r.id));
-        m_popup->hide();
-    });
+    m_popup->setSearchBusy(true);
+    m_client->search(
+        g, req.lang, league, q,
+        [this, token, g, lang = req.lang, league](const TradeClient::SearchResult& r) {
+            if (token != m_openTradeToken)
+                return;
+            m_openTradeToken = 0;
+            m_popup->setSearchBusy(false);
+            if (!r.error.isEmpty()) {
+                showPopupMessage(QStringLiteral("검색 실패"),
+                                 QStringLiteral("거래소 검색에 실패했습니다: %1\n한국/글로벌 거래소에 접속되는지 확인한 뒤 다시 시도해 주세요.").arg(r.error));
+                return;
+            }
+            QDesktopServices::openUrl(endpoints::webSearch(g, lang, league, r.id));
+            m_popup->hide();
+        },
+        token);
 }
 
 QString Application::currencyName(Game g, Lang l, const QString& id) const
@@ -1034,7 +1085,7 @@ void Application::openSettings()
     if (!m_newTag.isEmpty())
         updText = Updater::canSelfInstall() ? QStringLiteral("%1 설치").arg(m_newTag)
                                              : QStringLiteral("%1 릴리즈 페이지 열기").arg(m_newTag);
-    SettingsDialog dlg(m_cfg, m_dbs, &m_checked, statText, ver, updText);
+    SettingsDialog dlg(m_cfg, m_dbs, &m_checked, statText, ver, updText, m_popup->isVisible() ? m_popup : nullptr);
     connect(&dlg, &SettingsDialog::updateDataRequested, this,
             [this](int g) { updateGame(g == 0 ? Game::Poe1 : Game::Poe2); });
     connect(&dlg, &SettingsDialog::appUpdateRequested, this, [this]() {
@@ -1048,6 +1099,12 @@ void Application::openSettings()
         m_cfg = dlg.result();
         saveConfig();
         applyConfig();
+    }
+    if (m_popup->isVisible()) {
+        const bool gameFg = platform::foregroundGame().foreground;
+        if (!gameFg)
+            platform::activateWindow(m_popup);
+        updateEscHotkey(gameFg);
     }
 }
 

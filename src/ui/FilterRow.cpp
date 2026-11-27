@@ -33,7 +33,7 @@ FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
 {
     auto* lay = new QHBoxLayout(this);
     lay->setContentsMargins(0, 1, 0, 1);
-    lay->setSpacing(4);
+    lay->setSpacing(kFilterColumnSpacing);
 
     m_type = new QComboBox(this);
     m_type->setFixedWidth(84);
@@ -61,7 +61,7 @@ FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
     m_max = new QLineEdit(this);
     auto* v = new QRegularExpressionValidator(QRegularExpression(QStringLiteral("^-?\\d*(\\.\\d*)?$")), this);
     for (QLineEdit* e : {m_min, m_max}) {
-        e->setFixedWidth(42);
+        e->setFixedWidth(kFilterValueWidth);
         e->setValidator(v);
         e->setAlignment(Qt::AlignRight);
     }
@@ -176,7 +176,7 @@ PropRow::PropRow(QWidget* parent) : QWidget(parent)
 {
     auto* lay = new QHBoxLayout(this);
     lay->setContentsMargins(0, 1, 0, 1);
-    lay->setSpacing(4);
+    lay->setSpacing(kFilterColumnSpacing);
     m_name = new QLabel(this); // FilterRow 의 종류 콤보 + 등급 열
     m_name->setFixedWidth(84 + 4 + 26);
     m_name->setStyleSheet(QStringLiteral("QLabel{color:#9a9a9a;}"));
@@ -198,7 +198,7 @@ PropRow::PropRow(QWidget* parent) : QWidget(parent)
     m_max = new QLineEdit(this);
     auto* v = new QRegularExpressionValidator(QRegularExpression(QStringLiteral("^-?\\d*(\\.\\d*)?$")), this);
     for (QLineEdit* e : {m_min, m_max}) {
-        e->setFixedWidth(42);
+        e->setFixedWidth(kFilterValueWidth);
         e->setValidator(v);
         e->setAlignment(Qt::AlignRight);
         lay->addWidget(e);

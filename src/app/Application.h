@@ -85,6 +85,7 @@ private:
 
     void registerHotkeys();
     void unregisterHotkeys();
+    void updateEscHotkey(bool gameForeground);
     void applyConfig();
     void saveConfig();
     void restart();
@@ -134,6 +135,8 @@ private:
     bool m_unsupportedWarned = false;
     Game m_lastGame = Game::Poe1;
     quint64 m_priceToken = 0;
+    quint64 m_openTradeToken = 0;
+    quint64 m_popupSeq = 0;
     QPoint m_popupPos;
 
     struct RateState {
