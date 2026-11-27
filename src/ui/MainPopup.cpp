@@ -597,7 +597,7 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
         m_useType->setVisible(!base.isEmpty());
         applyRarityColor(it);
     }
-    // 영향 배지: 첫째 왼쪽, 나머지 오른쪽 (게임 헤더 양쪽 아이콘 자리). 아이콘은 Application 이 받아서 붙임
+    // 영향/엘드리치/분열 배지: 첫째 왼쪽, 나머지 오른쪽 (게임 헤더 양쪽 아이콘 자리). 아이콘은 Application 이 받아서 붙임
     {
         struct InflIcon {
             const char* id;
@@ -623,6 +623,8 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
             m_badges.push_back({QStringLiteral("exceptional-eldritch-ember"), QStringLiteral("총주교"), QStringLiteral("#ff8a3d")});
         if (it.tangled)
             m_badges.push_back({QStringLiteral("exceptional-eldritch-ichor"), QStringLiteral("포식자"), QStringLiteral("#5fd0b8")});
+        if (it.fractured) // 분열된 아이템: 분열의 오브 (PoE1/PoE2 둘 다 있음)
+            m_badges.push_back({QStringLiteral("fracturing-orb"), QStringLiteral("분열"), QStringLiteral("#a29162")});
         renderBadges();
     }
     m_icon->clear();

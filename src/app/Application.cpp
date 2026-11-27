@@ -442,7 +442,7 @@ void Application::handleItemText(const QString& text)
     loadCurrencyIcons(g, it->lang, {QStringLiteral("chaos"), QStringLiteral("divine"), QStringLiteral("exalted")});
     m_popup->showItem(*it, &m_dbs[gi(g)], m_cfg, serverFor(it->lang));
     showIconFor(*it);
-    // 영향/엘드리치 배지 아이콘 (영향 엑잘티드 오브, 섬뜩한 불씨/영액)
+    // 영향/엘드리치/분열 배지 아이콘 (영향 엑잘티드 오브, 섬뜩한 불씨/영액, 분열의 오브)
     for (const QString& id : m_popup->badgeIconIds()) {
         const StaticEntry* s = m_dbs[gi(g)][it->lang].staticById(id);
         if (!s || s->image.isEmpty())
