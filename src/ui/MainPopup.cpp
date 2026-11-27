@@ -267,8 +267,8 @@ void MainPopup::buildUi()
     ex->setContentsMargins(0, 0, 0, 0);
     m_want1 = new QComboBox(m_exchangeBox);
     m_want2 = new QComboBox(m_exchangeBox);
-    m_want1->setToolTip(QStringLiteral("이 아이템을 팔고 받을 화폐 (일괄 교환 시세). '일반 검색'을 고르면 아이템으로 검색합니다"));
-    m_want2->setToolTip(QStringLiteral("같은 종류의 다른 아이템과 교환 시세"));
+    m_want1->setToolTip(QStringLiteral("이 화폐로 파는 일괄 교환 매물을 봅니다. '일반 검색'을 고르면 아이템으로 검색합니다"));
+    m_want2->setToolTip(QStringLiteral("같은 종류의 다른 아이템으로 파는 일괄 교환 매물을 봅니다"));
     ex->addWidget(m_want1, 1);
     ex->addWidget(m_want2, 1);
     p1->addWidget(m_exchangeBox);
@@ -1147,12 +1147,15 @@ QString MainPopup::withUnitIcons(const QString& plain) const
     // "≈ 29 디바인" 의 화폐 이름 -> 아이콘. 맨 앞 금액 부분은 굵게
     QString html = plain.toHtmlEscaped();
     bool replaced = false;
-    for (auto u = m_unitIcons.constBegin(); u != m_unitIcons.constEnd(); ++u) {
-        const QRegularExpression re(QStringLiteral("(\\d) %1(?=\\s|$|\\))").arg(QRegularExpression::escape(u.key().toHtmlEscaped())));
+    // 긴 이름부터 ("카오스" 가 먼저 걸리면 "카오스 오브" 의 "오브" 가 남음)
+    QStringList names = m_unitIcons.keys();
+    std::sort(names.begin(), names.end(), [](const QString& a, const QString& b) { return a.size() > b.size(); });
+    for (const QString& name : names) {
+        const QRegularExpression re(QStringLiteral("(\\d) %1(?=\\s|$|\\))").arg(QRegularExpression::escape(name.toHtmlEscaped())));
         if (!re.match(html).hasMatch())
             continue;
         const QString img = QStringLiteral("\\1 <img src=\"%1\" width=\"20\" height=\"20\" align=\"middle\">")
-                                .arg(QUrl::fromLocalFile(u.value()).toString());
+                                .arg(QUrl::fromLocalFile(m_unitIcons.value(name)).toString());
         html.replace(re, img);
         replaced = true;
     }

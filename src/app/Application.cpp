@@ -563,7 +563,8 @@ void Application::openTrade()
 
     const QString want = m_popup->exchangeWant();
     if (!want.isEmpty()) {
-        m_client->exchange(g, server, league, it.exchangeId, want,
+        // 시세 조회와 같은 방향: 화폐를 내고 이 아이템을 받는 판매 매물
+        m_client->exchange(g, server, league, want, it.exchangeId,
                            [this, g, server, league](const TradeClient::ExchangeResult& r) {
                                if (!r.error.isEmpty() || r.id.isEmpty()) {
                                    showPopupMessage(QStringLiteral("검색 실패"), r.error);
@@ -784,15 +785,16 @@ void Application::priceCheck()
         const Rates rates = ratesFor(g, league);
         const QString want = m_popup->exchangeWant();
 
-        // ---- 일괄 교환
+        // ---- 일괄 교환: 화폐(want 콤보)를 내고 이 아이템을 받는 판매 매물 = 시장 가격 (APT 와 같은 방향)
+        // 예전엔 아이템을 내고 화폐를 받는 방향이라 아이템을 "사겠다는" 매물만 나왔음 (초대 1건 vs 판매 13건)
         if (!want.isEmpty()) {
-            const QString haveName = currencyName(g, server, it.exchangeId);
-            const QString wantName = currencyName(g, server, want);
+            const QString payName = currencyName(g, server, want);
+            const QString itemName = currencyName(g, server, it.exchangeId);
             loadCurrencyIcons(g, server, {want});
             m_popup->priceStatus(QStringLiteral("교환 시세 확인중..."));
             m_client->exchange(
-                g, server, league, it.exchangeId, want,
-                [this, token, haveName, wantName, want, rates](const TradeClient::ExchangeResult& r) {
+                g, server, league, want, it.exchangeId,
+                [this, token, payName, itemName, want, rates](const TradeClient::ExchangeResult& r) {
                     if (token != m_priceToken)
                         return;
                     if (!r.error.isEmpty()) {
@@ -801,30 +803,31 @@ void Application::priceCheck()
                     }
                     m_popup->priceColumns({QStringLiteral("1개당"), QStringLiteral("환산"), QStringLiteral("재고"),
                                            QStringLiteral("등록"), QStringLiteral("판매자")});
-                    // 나한테 좋은(1개당 많이 주는) 순서. 중앙값 절반도 안 되는 미끼 매물은 흐리게
+                    // 싼 순서 (1개당 내는 화폐). 중앙값 절반도 안 되는 미끼 매물은 흐리게
                     QVector<Listing> rows = r.listings;
+                    for (Listing& l : rows)
+                        l.amount = l.payAmount / l.getAmount; // 아이템 1개당 내는 화폐 (TradeClient 가 0 인 건 걸러 줌)
                     std::stable_sort(rows.begin(), rows.end(),
-                                     [](const Listing& a, const Listing& b) { return a.amount > b.amount; });
+                                     [](const Listing& a, const Listing& b) { return a.amount < b.amount; });
                     QVector<double> perOne;
                     for (const Listing& l : rows)
                         perOne << l.amount;
                     const double mid = perOne.isEmpty() ? 0 : perOne[perOne.size() / 2];
                     for (const Listing& l : rows) {
-                        m_popup->priceAddRow({PriceSummary::formatAmount(l.amount) + QLatin1Char(' ') + wantName,
+                        m_popup->priceAddRow({PriceSummary::formatAmount(l.amount) + QLatin1Char(' ') + payName,
                                               formatConversion(l.amount, want, rates), QString::number(l.stock),
                                               PriceSummary::ago(l.indexed), l.account},
                                              l.amount < mid * 0.5, l.online,
                                              QStringLiteral("%1 %2 → %3 %4")
-                                                 .arg(PriceSummary::formatAmount(l.payAmount), haveName,
-                                                      PriceSummary::formatAmount(l.getAmount), wantName));
+                                                 .arg(PriceSummary::formatAmount(l.payAmount), payName,
+                                                      PriceSummary::formatAmount(l.getAmount), itemName));
                     }
                     QString summary = QStringLiteral("해당 교환 매물이 없습니다");
                     if (!perOne.isEmpty()) {
-                        // 상위 5개 중앙값
-                        const QVector<double> top = perOne.mid(0, 5);
-                        const double med = top[top.size() / 2];
+                        // 미끼 뺀 가장 싼 5개의 중앙값 (환율 계산과 같은 방식)
+                        const double med = medianRatio(rows);
                         double conv = 0;
-                        summary = QStringLiteral("1개 ≈ %1 %2").arg(PriceSummary::formatAmount(med), wantName);
+                        summary = QStringLiteral("1개 ≈ %1 %2").arg(PriceSummary::formatAmount(med), payName);
                         if (rates.convert(med, want, &conv) && want != rates.base)
                             summary += QStringLiteral(" (%1)").arg(formatValue(conv, rates));
                         summary += QStringLiteral(" · 매물 %1").arg(r.total);
