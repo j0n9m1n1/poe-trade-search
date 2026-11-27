@@ -13,6 +13,7 @@
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QCursor>
 #include <QFontMetrics>
 #include <QFrame>
@@ -23,6 +24,7 @@
 #include <QPainter>
 #include <QStyle>
 #include <QIcon>
+#include <QLayout>
 #include <QToolTip>
 #include <QUrl>
 #include <QRegularExpression>
@@ -882,6 +884,13 @@ void MainPopup::fitToAvailableHeight(int height)
 {
     m_prices->setMinimumHeight(qBound(64, height / 5, 170));
     setMaximumHeight(height);
+    // 옵션 영역(page1) 크기 변경이 아직 대기 중인 레이아웃 이벤트로 남아 있으면 이전 아이템(젬 등) 크기로 계산됨
+    // -> 대기 중인 레이아웃 요청을 먼저 처리하고 다시 계산 (안 하면 지도 등 옵션 많은 템에서 옵션 영역이 2줄로 눌림)
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::LayoutRequest);
+    if (QLayout* l = layout()) {
+        l->invalidate();
+        l->activate();
+    }
     // adjustSize()는 최상위 창을 화면의 2/3로 줄여 옵션이 잘릴 수 있음
     resize(width(), qMin(height, sizeHint().height()));
 }
@@ -923,7 +932,9 @@ void MainPopup::fitRowsArea()
     int h = 0;
     for (int i = 0; i < m_rowsLayout->count(); ++i) {
         QWidget* x = m_rowsLayout->itemAt(i)->widget();
-        if (!x || x->isHidden())
+        // 떠 있는 창에 새로 넣은 줄은 Qt 가 다음 이벤트 때 보여 줘서 지금은 isHidden() 임 -> 명시적으로 숨긴 것만 뺌
+        // (안 그러면 젬 다음에 지도를 띄울 때 옵션 영역이 2줄 높이로 눌림)
+        if (!x || (x->isHidden() && x->testAttribute(Qt::WA_WState_ExplicitShowHide)))
             continue;
         const int rowHeight = x == m_propRows ? propHeight
                             : x->hasHeightForWidth() ? x->heightForWidth(w) : x->sizeHint().height();
