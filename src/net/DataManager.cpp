@@ -70,8 +70,9 @@ bool DataManager::isStale(Game g, int maxAgeDays) const
     for (Lang l : {Lang::Ko, Lang::En}) {
         const QDir d(cacheDir(g, l));
         if (QFileInfo::exists(d.filePath(QStringLiteral("stats.json"))) &&
-            !QFileInfo::exists(d.filePath(QStringLiteral("matchers.ndjson"))))
-            return true; // 매처 데이터 생기기 전 캐시
+            !QFileInfo::exists(d.filePath(QStringLiteral("matchers.ndjson"))) &&
+            !QFileInfo::exists(d.filePath(QStringLiteral("matchers.tried"))))
+            return true; // 매처 데이터 생기기 전 캐시 (실패 기록이 있으면 매 시작마다 반복하지 않음)
     }
     const QDateTime t = updatedAt(g);
     return !t.isValid() || (maxAgeDays > 0 && t.daysTo(QDateTime::currentDateTimeUtc()) >= maxAgeDays);
@@ -149,16 +150,30 @@ void DataManager::update(Game g, std::function<void(bool, const QString&)> done)
                     const QString d = cacheDir(g, l);
                     const QString t = d + QStringLiteral(".new");
                     if (okLang->value(li(l)) == kinds().size()) {
-                        // 매처를 못 받았으면 예전 것 유지
+                        // 매처를 못 받았으면 예전 것 유지, 그래도 없으면 시도 표시만 남겨 무한 재다운로드 방지
                         const QString oldM = QDir(d).filePath(QStringLiteral("matchers.ndjson"));
                         const QString newM = QDir(t).filePath(QStringLiteral("matchers.ndjson"));
                         if (!QFileInfo::exists(newM) && QFileInfo::exists(oldM))
                             QFile::copy(oldM, newM);
-                        QDir(d).removeRecursively();
-                        QDir().rename(t, d);
-                        json::writeRaw(QDir(d).filePath(QStringLiteral("updated.txt")),
-                                       QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toUtf8());
-                        any = true;
+                        if (!QFileInfo::exists(newM))
+                            json::writeRaw(QDir(t).filePath(QStringLiteral("matchers.tried")), QByteArrayLiteral("1"));
+                        const QString backup = d + QStringLiteral(".old");
+                        QDir(backup).removeRecursively();
+                        const bool hadOld = QFileInfo::exists(d);
+                        bool swapped = true;
+                        if (hadOld && !QDir().rename(d, backup))
+                            swapped = false;
+                        if (swapped && QDir().rename(t, d)) {
+                            QDir(backup).removeRecursively();
+                            json::writeRaw(QDir(d).filePath(QStringLiteral("updated.txt")),
+                                           QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toUtf8());
+                            any = true;
+                        } else {
+                            if (hadOld && QFileInfo::exists(backup) && !QFileInfo::exists(d))
+                                QDir().rename(backup, d);
+                            QDir(t).removeRecursively();
+                            *lastError = QStringLiteral("%1 캐시 폴더를 교체하지 못했습니다").arg(langKey(l));
+                        }
                     } else {
                         QDir(t).removeRecursively();
                     }

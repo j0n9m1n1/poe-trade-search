@@ -84,4 +84,4 @@ Name: "{userstartup}\Poe Trade Search"; Filename: "{app}\PoeTradeSearch.exe"; Ta
 ; 일반 설치: 마지막 화면 "실행" 체크박스
 Filename: "{app}\PoeTradeSearch.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 ; 자동 업데이트(조용한 설치): 끝나면 바로 다시 켬
-Filename: "{app}\PoeTradeSearch.exe"; Parameters: "--updated --wait-shutdown"; Flags: nowait skipifnotsilent
+Filename: "{app}\PoeTradeSearch.exe"; Parameters: "--updated --wait-shutdown --restart-data-dir ""{param:PTSDATADIR|}"""; Flags: nowait skipifnotsilent

@@ -36,8 +36,13 @@ QNetworkRequest request(const QUrl& url, int timeoutMs)
 }
 
 // 압축을 풀어 실행 폴더에 덮어쓰고 재실행. 실패해도 기존 버전으로 다시 켬
-const char* kScript = R"PS1(param([int]$ProcId, [string]$Zip, [string]$Dest, [string]$Exe, [string]$Log)
+const char* kScript = R"PS1(param([int]$ProcId, [string]$Zip, [string]$Dest, [string]$Exe, [string]$Log, [string]$DataDir)
 function Log($m) { Add-Content -LiteralPath $Log -Value ("{0} {1}" -f (Get-Date -Format s), $m) }
+function Relaunch([string]$Flag) {
+    $a = @($Flag, '--wait-shutdown')
+    if ($DataDir) { $a += @('--restart-data-dir', ('"{0}"' -f $DataDir)) }
+    Start-Process -FilePath $Exe -ArgumentList $a
+}
 try {
     Log "waiting for process $ProcId"
     try { Wait-Process -Id $ProcId -Timeout 30 -ErrorAction Stop } catch {}
@@ -47,31 +52,38 @@ try {
     $src = $tmp
     $items = @(Get-ChildItem -LiteralPath $tmp)
     if ($items.Count -eq 1 -and $items[0].PSIsContainer) { $src = $items[0].FullName }
-    Copy-Item -Path (Join-Path $src '*') -Destination $Dest -Recurse -Force
+    Get-ChildItem -LiteralPath $src -Force | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $Dest -Recurse -Force }
     Remove-Item -LiteralPath $tmp -Recurse -Force
     Remove-Item -LiteralPath $Zip -Force
     Log "updated"
-    Start-Process -FilePath $Exe -ArgumentList '--updated','--wait-shutdown'
+    Relaunch '--updated'
 } catch {
     Log ("failed: " + $_)
-    Start-Process -FilePath $Exe -ArgumentList '--update-failed','--wait-shutdown'
+    Relaunch '--update-failed'
 }
 )PS1";
 
 // 설치판: 새 설치 프로그램을 조용히 실행. 성공하면 설치 프로그램이 앱을 다시 켬 (installer.iss [Run])
-const char* kSetupScript = R"PS1(param([int]$ProcId, [string]$Setup, [string]$Exe, [string]$Log)
+const char* kSetupScript = R"PS1(param([int]$ProcId, [string]$Setup, [string]$Exe, [string]$Log, [string]$DataDir)
 function Log($m) { Add-Content -LiteralPath $Log -Value ("{0} {1}" -f (Get-Date -Format s), $m) }
+function RelaunchFailed() {
+    $a = @('--update-failed', '--wait-shutdown')
+    if ($DataDir) { $a += @('--restart-data-dir', ('"{0}"' -f $DataDir)) }
+    Start-Process -FilePath $Exe -ArgumentList $a
+}
 try {
     Log "waiting for process $ProcId"
     try { Wait-Process -Id $ProcId -Timeout 30 -ErrorAction Stop } catch {}
     Start-Sleep -Milliseconds 500
-    $p = Start-Process -FilePath $Setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+    $sArgs = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-')
+    if ($DataDir) { $sArgs += ('/PTSDATADIR="{0}"' -f $DataDir) }
+    $p = Start-Process -FilePath $Setup -ArgumentList $sArgs -Wait -PassThru
     Log ("setup exit " + $p.ExitCode)
     Remove-Item -LiteralPath $Setup -Force -ErrorAction SilentlyContinue
-    if ($p.ExitCode -ne 0) { Start-Process -FilePath $Exe -ArgumentList '--update-failed','--wait-shutdown' }
+    if ($p.ExitCode -ne 0) { RelaunchFailed }
 } catch {
     Log ("failed: " + $_)
-    Start-Process -FilePath $Exe -ArgumentList '--update-failed','--wait-shutdown'
+    RelaunchFailed
 }
 )PS1";
 
@@ -139,10 +151,16 @@ void Updater::check(std::function<void(const Release*, const QString&)> cb)
         cb(nullptr, QStringLiteral("업데이트 저장소가 설정되지 않았습니다"));
         return;
     }
+    if (m_busy) {
+        cb(nullptr, QStringLiteral("이미 업데이트 작업이 진행 중입니다"));
+        return;
+    }
+    m_busy = true;
     const QUrl url(QStringLiteral("https://api.github.com/repos/%1/releases/latest").arg(m_repo));
     QNetworkReply* r = m_nam->get(request(url, 15000));
-    connect(r, &QNetworkReply::finished, this, [r, cb]() {
+    connect(r, &QNetworkReply::finished, this, [this, r, cb]() {
         r->deleteLater();
+        m_busy = false;
         const int status = r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (status == 404) {
             cb(nullptr, QString()); // 릴리즈 아직 없음
@@ -231,7 +249,7 @@ void Updater::download(const Release& rel, std::function<void(const QString&, co
     });
 }
 
-bool Updater::install(const QString& zipPath, QString* error)
+bool Updater::install(const QString& zipPath, QString* error, const QString& dataDir)
 {
     QString why;
     if (!canSelfInstall(&why)) {
@@ -264,6 +282,8 @@ bool Updater::install(const QString& zipPath, QString* error)
     }
     args << QStringLiteral("-Exe") << QDir::toNativeSeparators(QCoreApplication::applicationFilePath())
          << QStringLiteral("-Log") << QDir::toNativeSeparators(logPath());
+    if (!dataDir.isEmpty())
+        args << QStringLiteral("-DataDir") << QDir::toNativeSeparators(dataDir);
     if (!QProcess::startDetached(QStringLiteral("powershell.exe"), args)) {
         if (error)
             *error = QStringLiteral("PowerShell을 실행하지 못했습니다");

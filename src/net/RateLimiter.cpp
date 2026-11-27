@@ -76,10 +76,20 @@ void RateLimiter::update(Policy p, const std::function<QByteArray(const QByteArr
                 if (x.size() >= 3) {
                     const int cur = x[0].toInt();
                     const int restricted = x[2].toInt();
-                    if (restricted > 0)
+                    if (restricted > 0) {
                         s.blockedUntil = qMax(s.blockedUntil, now + static_cast<qint64>(restricted) * 1000);
-                    else if (cur >= r.max)
-                        s.blockedUntil = qMax(s.blockedUntil, now + static_cast<qint64>(r.period) * 1000);
+                    } else if (cur >= r.max) {
+                        // 창 안 로컬 요청 기록이 서버 집계(cur) 이상이면 waitMs() 가 가장 오래된 요청 만료까지만 대기.
+                        // 앱 시작 전이나 브라우저 요청 등으로 로컬 기록이 부족할 때만 보수적으로 전체 주기 동안 대기.
+                        const qint64 window = static_cast<qint64>(r.period) * 1000;
+                        int inWindow = 0;
+                        for (qint64 t : s.times) {
+                            if (now - t < window)
+                                ++inWindow;
+                        }
+                        if (inWindow < cur)
+                            s.blockedUntil = qMax(s.blockedUntil, now + window);
+                    }
                 }
             }
         }
