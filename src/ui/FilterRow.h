@@ -23,7 +23,7 @@ class FilterRow : public QWidget {
 public:
     explicit FilterRow(QWidget* parent = nullptr);
 
-    void setMod(const ParsedMod& m);
+    void setMod(const ParsedMod& m, bool compactCluster = false);
     void apply(ParsedMod& m) const; // UI 값 -> ParsedMod
     void setChecked(bool on);
     bool isCheckable() const;

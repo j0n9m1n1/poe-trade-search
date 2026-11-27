@@ -152,88 +152,105 @@ void TradeClient::priceCheck(Game g, Lang server, const QString& league, const Q
                              std::function<void(const PriceProgress&)> progress,
                              std::function<void(const PriceProgress&, const QString&)> done, quint64 token)
 {
-    search(
-        g, server, league, query,
-        [this, g, server, count, progress, done, token](const SearchResult& sr) {
-            auto all = std::make_shared<PriceProgress>();
-            if (!sr.error.isEmpty()) {
-                done(*all, sr.error);
+    search(g, server, league, query, [this, g, server, count, progress, done, token](const SearchResult& sr) {
+        auto all = std::make_shared<PriceProgress>();
+        if (!sr.error.isEmpty()) {
+            done(*all, sr.error);
+            return;
+        }
+        all->search = sr;
+        all->total = sr.total;
+        all->requested = qBound(0, count, static_cast<int>(sr.ids.size()));
+        fetchFirstPricePage(g, server, all, progress, done, token);
+    }, token);
+}
+
+void TradeClient::fetchFirstPricePage(Game g, Lang server, const std::shared_ptr<PriceProgress>& all,
+                                      std::function<void(const PriceProgress&)> progress,
+                                      std::function<void(const PriceProgress&, const QString&)> done, quint64 token)
+{
+    if (all->fetched == all->requested) {
+        done(*all, QString());
+        return;
+    }
+    const QStringList chunk = all->search.ids.mid(all->fetched, qMin(10, all->requested - all->fetched));
+    fetchListings(g, server, all->search.id, chunk,
+        [this, g, server, all, progress, done, token, count = static_cast<int>(chunk.size())]
+        (const QVector<Listing>& listings, const QString& error) {
+            if (!error.isEmpty()) {
+                done(*all, error);
                 return;
             }
-            all->total = sr.total;
-            const QStringList ids = sr.ids.mid(0, count);
-            all->requested = ids.size();
-            if (ids.isEmpty()) {
-                done(*all, QString());
+            all->fetched += count;
+            all->listings += listings;
+            if (progress) {
+                PriceProgress step;
+                step.listings = listings;
+                step.fetched = all->fetched;
+                step.requested = all->requested;
+                step.total = all->total;
+                progress(step);
+            }
+            fetchFirstPricePage(g, server, all, progress, done, token);
+        }, token);
+}
+
+void TradeClient::fetchListings(Game g, Lang server, const QString& searchId, const QStringList& ids,
+                                std::function<void(const QVector<Listing>&, const QString&)> done, quint64 token)
+{
+    get(Policy::Fetch, endpoints::fetch(g, server, ids, searchId),
+        [done](int, const QByteArray& body, const QString& error) {
+            if (!error.isEmpty()) {
+                done({}, error);
                 return;
             }
-            const int batches = (ids.size() + 9) / 10;
-            auto remaining = std::make_shared<int>(batches);
-            auto failed = std::make_shared<QString>();
-            for (int b = 0; b < batches; ++b) {
-                const QStringList chunk = ids.mid(b * 10, 10);
-                get(
-                    Policy::Fetch, endpoints::fetch(g, server, chunk, sr.id),
-                    [all, remaining, failed, progress, done, chunk](int, const QByteArray& body, const QString& error) {
-                        PriceProgress step;
-                        if (!error.isEmpty()) {
-                            *failed = error;
-                        } else {
-                            const QJsonArray res =
-                                QJsonDocument::fromJson(body).object().value(QStringLiteral("result")).toArray();
-                            for (const auto& v : res) {
-                                const QJsonObject l = v.toObject().value(QStringLiteral("listing")).toObject();
-                                const QJsonObject item = v.toObject().value(QStringLiteral("item")).toObject();
-                                const QJsonObject price = l.value(QStringLiteral("price")).toObject();
-                                if (price.isEmpty())
-                                    continue;
-                                Listing x;
-                                x.amount = price.value(QStringLiteral("amount")).toDouble();
-                                x.currency = price.value(QStringLiteral("currency")).toString();
-                                x.account = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("name")).toString();
-                                x.indexed = parseTime(l.value(QStringLiteral("indexed")).toString());
-                                x.icon = item.value(QStringLiteral("icon")).toString();
-                                x.itemName = item.value(QStringLiteral("name")).toString();
-                                x.baseType = item.value(QStringLiteral("baseType")).toString();
-                                x.ilvl = item.value(QStringLiteral("ilvl")).toInt(-1);
-                                x.stack = item.value(QStringLiteral("stackSize")).toInt(0);
-                                x.dps = item.value(QStringLiteral("extended")).toObject().value(QStringLiteral("dps")).toDouble(0);
-                                for (const auto& pv : item.value(QStringLiteral("properties")).toArray()) {
-                                    const QJsonObject p = pv.toObject();
-                                    const QString pn = p.value(QStringLiteral("name")).toString();
-                                    if (p.value(QStringLiteral("type")).toInt(-1) == 6 || pn == QStringLiteral("Quality") ||
-                                        pn == QStringLiteral("퀄리티")) {
-                                        const QJsonArray vals = p.value(QStringLiteral("values")).toArray();
-                                        if (!vals.isEmpty()) {
-                                            double q = 0;
-                                            if (text::firstNumber(vals[0].toArray().at(0).toString(), &q))
-                                                x.quality = static_cast<int>(q);
-                                        }
-                                    }
-                                }
-                                const QJsonValue on = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("online"));
-                                if (on.isObject())
-                                    x.online = on.toObject().value(QStringLiteral("status")).toString() == QStringLiteral("afk") ? 2 : 1;
-                                else
-                                    x.online = 0;
-                                if (x.amount > 0)
-                                    step.listings.push_back(x);
-                            }
+            const QJsonValue result = QJsonDocument::fromJson(body).object().value(QStringLiteral("result"));
+            if (!result.isArray()) {
+                done({}, QStringLiteral("매물 응답 형식이 올바르지 않습니다"));
+                return;
+            }
+            QVector<Listing> listings;
+            const QJsonArray res = result.toArray();
+            for (const auto& v : res) {
+                const QJsonObject l = v.toObject().value(QStringLiteral("listing")).toObject();
+                const QJsonObject item = v.toObject().value(QStringLiteral("item")).toObject();
+                const QJsonObject price = l.value(QStringLiteral("price")).toObject();
+                if (price.isEmpty())
+                    continue;
+                Listing x;
+                x.amount = price.value(QStringLiteral("amount")).toDouble();
+                x.currency = price.value(QStringLiteral("currency")).toString();
+                x.account = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("name")).toString();
+                x.indexed = parseTime(l.value(QStringLiteral("indexed")).toString());
+                x.icon = item.value(QStringLiteral("icon")).toString();
+                x.itemName = item.value(QStringLiteral("name")).toString();
+                x.baseType = item.value(QStringLiteral("baseType")).toString();
+                x.ilvl = item.value(QStringLiteral("ilvl")).toInt(-1);
+                x.stack = item.value(QStringLiteral("stackSize")).toInt(0);
+                x.dps = item.value(QStringLiteral("extended")).toObject().value(QStringLiteral("dps")).toDouble(0);
+                for (const auto& pv : item.value(QStringLiteral("properties")).toArray()) {
+                    const QJsonObject p = pv.toObject();
+                    const QString pn = p.value(QStringLiteral("name")).toString();
+                    if (p.value(QStringLiteral("type")).toInt(-1) == 6 || pn == QStringLiteral("Quality") ||
+                        pn == QStringLiteral("퀄리티")) {
+                        const QJsonArray vals = p.value(QStringLiteral("values")).toArray();
+                        if (!vals.isEmpty()) {
+                            double q = 0;
+                            if (text::firstNumber(vals[0].toArray().at(0).toString(), &q))
+                                x.quality = static_cast<int>(q);
                         }
-                        all->listings += step.listings;
-                        all->fetched += chunk.size();
-                        step.fetched = all->fetched;
-                        step.requested = all->requested;
-                        step.total = all->total;
-                        if (progress)
-                            progress(step);
-                        if (--(*remaining) == 0)
-                            done(*all, all->listings.isEmpty() ? *failed : QString());
-                    },
-                    token);
+                    }
+                }
+                const QJsonValue on = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("online"));
+                if (on.isObject())
+                    x.online = on.toObject().value(QStringLiteral("status")).toString() == QStringLiteral("afk") ? 2 : 1;
+                else
+                    x.online = 0;
+                if (x.amount > 0)
+                    listings.push_back(x);
             }
-        },
-        token);
+            done(listings, QString());
+        }, token);
 }
 
 void TradeClient::exchange(Game g, Lang server, const QString& league, const QString& have, const QString& want,

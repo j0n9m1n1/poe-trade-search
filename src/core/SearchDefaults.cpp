@@ -208,6 +208,12 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
         // 부여된 젬(보조 젬 내장)은 같은 젬이라도 시세가 따로라 부여 여부를 맞춤 (안 하면 싼 부여된 매물이 섞임)
         if (it.isGem && it.game == Game::Poe1)
             r.gemImbued = it.imbued ? 1 : 2;
+        // 수정 가능: 타락 아님 + 복제 아님 (거래소에 전용 필터가 없어 두 필터로, PoE1/PoE2 공통)
+        if (st.modifiable) {
+            r.corrupted = 2;
+            r.twiceCorrupted = 0;
+            r.mirrored = 2;
+        }
     }
     r.synthesised = st.synthesised;
     r.blighted = st.blighted;

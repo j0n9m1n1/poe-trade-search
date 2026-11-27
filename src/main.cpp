@@ -41,6 +41,13 @@ void logHandler(QtMsgType type, const QMessageLogContext&, const QString& msg)
 
 QString pickDataDir()
 {
+    const QStringList args = QCoreApplication::arguments();
+    const qsizetype restartDir = args.indexOf(QStringLiteral("--restart-data-dir"));
+    if (args.contains(QStringLiteral("--wait-shutdown")) && restartDir >= 0 && restartDir + 1 < args.size()) {
+        const QString dir = args.at(restartDir + 1);
+        if (QDir::isAbsolutePath(dir))
+            return dir;
+    }
     const QString env = qEnvironmentVariable("PTS_DATA_DIR");
     if (!env.isEmpty())
         return env;
@@ -104,11 +111,6 @@ int main(int argc, char** argv)
 
     const QString dataDir = pickDataDir();
 
-    // 로그 (원본: 실행 파일 이름.log)
-    g_log = new QFile(QDir(dataDir).filePath(QStringLiteral("PoeTradeSearch.log")));
-    g_log->open(QIODevice::WriteOnly | QIODevice::Truncate);
-    qInstallMessageHandler(logHandler);
-
     // 중복 실행 방지. --wait-shutdown 이면 이전 프로세스 종료를 10초까지 기다림
     const bool waitShutdown = QCoreApplication::arguments().contains(QStringLiteral("--wait-shutdown"));
     QLockFile lock(QDir(dataDir).filePath(QStringLiteral("PoeTradeSearch.lock")));
@@ -119,6 +121,11 @@ int main(int argc, char** argv)
                                               : QStringLiteral("프로그램이 이미 실행 중입니다. 트레이 아이콘을 확인해 주세요."));
         return 1;
     }
+
+    // 재실행 시 이전 인스턴스가 종료된 뒤 로그 열기
+    g_log = new QFile(QDir(dataDir).filePath(QStringLiteral("PoeTradeSearch.log")));
+    g_log->open(QIODevice::WriteOnly | QIODevice::Truncate);
+    qInstallMessageHandler(logHandler);
 
     pts::platform::createInstanceMutex();
 

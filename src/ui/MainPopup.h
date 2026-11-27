@@ -61,6 +61,7 @@ public:
     void priceColumns(const QStringList& headers, const QVector<int>& hidden = {});
     void priceAddRow(const QStringList& cells, bool dim, int online, const QString& tooltip = QString());
     void priceDone(const QString& summary, const QString& count, const QString& tooltip = QString());
+    void pricePageStatus(bool hasMore, int loaded, int total, const QString& status = {});
     void priceIdle(const QString& msg);
     void setSearchBusy(bool busy);
 
@@ -75,6 +76,8 @@ public:
 signals:
     void openTradeRequested();
     void priceCheckRequested();
+    void moreListingsRequested();
+    void priceFiltersChanged();
     void settingsRequested();
     void rememberToggled(const QString& statKey, const QString& top, bool on);
     void popupHidden();
@@ -177,6 +180,7 @@ private:
     QCheckBox* m_special1;
     QCheckBox* m_special2;
     QComboBox* m_corrupt;
+    QCheckBox* m_modifiable; // 수정 가능 (타락·복제 아님)
     QComboBox* m_mutated;
     QComboBox* m_infl1;
     QComboBox* m_infl2;
@@ -190,6 +194,7 @@ private:
     QString m_priceText, m_priceColor;
     QHash<QString, QString> m_unitIcons; // 화폐 이름 -> 아이콘 파일
     QTableWidget* m_prices;
+    bool m_priceMoreAvailable = false;
     QLineEdit* m_priceMin;
     QComboBox* m_listCount;
     QComboBox* m_status;

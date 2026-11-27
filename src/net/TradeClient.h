@@ -12,6 +12,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <functional>
+#include <memory>
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -49,6 +50,7 @@ public:
 
     struct PriceProgress {
         QVector<Listing> listings; // 이번에 새로 받은 것
+        SearchResult search; // 완료 응답에서 이어서 불러올 검색 결과
         int fetched = 0;
         int requested = 0;
         int total = 0;
@@ -57,6 +59,8 @@ public:
     void priceCheck(Game g, Lang server, const QString& league, const QJsonObject& query, int count,
                     std::function<void(const PriceProgress&)> progress,
                     std::function<void(const PriceProgress& all, const QString& error)> done, quint64 token);
+    void fetchListings(Game g, Lang server, const QString& searchId, const QStringList& ids,
+                       std::function<void(const QVector<Listing>&, const QString&)> done, quint64 token);
 
     struct ExchangeResult {
         QString id;
@@ -83,6 +87,9 @@ private:
     };
     void pump();
     void start(const Job& j);
+    void fetchFirstPricePage(Game g, Lang server, const std::shared_ptr<PriceProgress>& all,
+                             std::function<void(const PriceProgress&)> progress,
+                             std::function<void(const PriceProgress&, const QString&)> done, quint64 token);
 
     QNetworkAccessManager* m_nam;
     RateLimiter m_limiter;

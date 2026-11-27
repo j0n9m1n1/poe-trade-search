@@ -87,7 +87,7 @@ FilterRow::FilterRow(QWidget* parent) : QWidget(parent)
     connect(m_max, &QLineEdit::textEdited, this, &FilterRow::changed);
 }
 
-void FilterRow::setMod(const ParsedMod& m)
+void FilterRow::setMod(const ParsedMod& m, bool compactCluster)
 {
     QSignalBlocker b1(m_type), b2(m_text), b3(m_res);
     m_type->clear();
@@ -116,6 +116,12 @@ void FilterRow::setMod(const ParsedMod& m)
         const QString tierPrefix = QStringLiteral("T%1 ").arg(m.tier);
         if (m.tier > 0 && shown.startsWith(tierPrefix))
             shown = shown.mid(tierPrefix.size());
+    }
+    if (compactCluster && m.modType == QStringLiteral("enchant")) {
+        shown.replace(QStringLiteral(" / 추가된 소형 패시브 스킬 효과: "), QStringLiteral(" / "));
+        shown.replace(QStringLiteral("추가된 소형 패시브 스킬 효과:"), QStringLiteral("소형 패시브:"));
+        shown.replace(QStringLiteral(" / Added Small Passive Skills grant: "), QStringLiteral(" / "));
+        shown.replace(QStringLiteral("Added Small Passive Skills grant:"), QStringLiteral("Small passives:"));
     }
     if (m.unmatched)
         shown = QStringLiteral("%1  (거래소 옵션을 찾지 못했습니다)").arg(shown);

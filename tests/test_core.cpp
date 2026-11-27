@@ -960,6 +960,70 @@ private slots:
         QCOMPARE(typeOf(*plain, Lang::Ko).toString(), QStringLiteral("가속"));
     }
 
+    void modifiableFilter()
+    {
+        // 데이터 없이: 수정 가능 = 타락 아님 + 복제 아님, 기존 타락/두 번 타락/복제 선택보다 우선
+        ParsedItem it;
+        it.game = Game::Poe1;
+        it.rarityId = QStringLiteral("rare");
+        it.isGear = true;
+        it.top = QStringLiteral("armour");
+        it.corrupted = true;
+        it.mirrored = true;
+        ItemFilterState st;
+        QCOMPARE(defaultFilterState(it).modifiable, false); // 기본 꺼짐
+        st.corrupted = 1;
+        st.twiceCorrupted = 1;
+        st.mirrored = 1;
+        auto misc = [&](Game g) {
+            it.game = g;
+            RequestContext ctx;
+            const QJsonObject f = QueryBuilder::build(makeRequest(it, st, kw, nullptr, ctx), nullptr)
+                                      .value(QStringLiteral("query")).toObject().value(QStringLiteral("filters")).toObject();
+            QJsonObject out;
+            for (const QString& grp : f.keys()) {
+                const QJsonObject gf = f.value(grp).toObject().value(QStringLiteral("filters")).toObject();
+                for (const QString& k : gf.keys())
+                    out.insert(k, gf.value(k));
+            }
+            return out;
+        };
+        QJsonObject m = misc(Game::Poe1);
+        QCOMPARE(m.value(QStringLiteral("corrupted")).toObject().value(QStringLiteral("option")).toString(), QStringLiteral("true"));
+        QCOMPARE(m.value(QStringLiteral("mirrored")).toObject().value(QStringLiteral("option")).toString(), QStringLiteral("true"));
+        st.modifiable = true;
+        for (Game g : {Game::Poe1, Game::Poe2}) {
+            m = misc(g);
+            QCOMPARE(m.value(QStringLiteral("corrupted")).toObject().value(QStringLiteral("option")).toString(), QStringLiteral("false"));
+            QCOMPARE(m.value(QStringLiteral("mirrored")).toObject().value(QStringLiteral("option")).toString(), QStringLiteral("false"));
+            QVERIFY(!m.contains(QStringLiteral("twice_corrupted")));
+        }
+        if (!haveData)
+            return;
+        // 실제 아이템 (PoE1 두 번 타락 고유 / 복제 반지, PoE2 타락 갑옷), DB 필터 그룹으로도 같음
+        struct Fx {
+            const char* fx;
+            Game g;
+            Lang l;
+        };
+        for (const Fx& f : {Fx{"poe1_ko_unique_twice_corrupted.txt", Game::Poe1, Lang::Ko},
+                            Fx{"poe1_ko_rare_ring_mirrored.txt", Game::Poe1, Lang::Ko},
+                            Fx{"poe2_en_rare_armour.txt", Game::Poe2, Lang::En}}) {
+            auto p = parse(QString::fromUtf8(f.fx), f.g);
+            QVERIFY2(p, f.fx);
+            ItemFilterState s = defaultFilterState(*p);
+            s.modifiable = true;
+            RequestContext ctx;
+            ctx.server = f.l;
+            const QJsonObject mf = QueryBuilder::build(makeRequest(*p, s, kw, &dbs[gi(f.g)], ctx), &dbs[gi(f.g)][f.l])
+                                       .value(QStringLiteral("query")).toObject().value(QStringLiteral("filters")).toObject()
+                                       .value(QStringLiteral("misc_filters")).toObject().value(QStringLiteral("filters")).toObject();
+            QCOMPARE(mf.value(QStringLiteral("corrupted")).toObject().value(QStringLiteral("option")).toString(), QStringLiteral("false"));
+            QCOMPARE(mf.value(QStringLiteral("mirrored")).toObject().value(QStringLiteral("option")).toString(), QStringLiteral("false"));
+            QVERIFY2(!mf.contains(QStringLiteral("twice_corrupted")), f.fx);
+        }
+    }
+
     void poe1TransfiguredGemImbued()
     {
         if (!haveData)

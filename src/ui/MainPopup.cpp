@@ -32,12 +32,28 @@
 #include <QPushButton>
 #include <QRegularExpressionValidator>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QTableWidget>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 
 namespace pts {
 
 namespace {
+constexpr int kMaxFilterViewportHeight = 420;
+
+class FilterScrollArea : public QScrollArea {
+public:
+    using QScrollArea::QScrollArea;
+
+    QSize sizeHint() const override
+    {
+        QSize hint = QScrollArea::sizeHint();
+        hint.setHeight(qMin(kMaxFilterViewportHeight, maximumHeight()));
+        return hint;
+    }
+};
+
 QLineEdit* numEdit(QWidget* parent, int w = 34)
 {
     auto* e = new QLineEdit(parent);
@@ -246,7 +262,7 @@ void MainPopup::buildUi()
     auto* p1 = new QVBoxLayout(page1);
     p1->setContentsMargins(0, 2, 0, 2);
 
-    auto* scroll = new QScrollArea(page1);
+    auto* scroll = new FilterScrollArea(page1);
     m_scroll = scroll;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
@@ -348,6 +364,8 @@ void MainPopup::buildUi()
     m_corrupt->addItem(QStringLiteral("타락: 한 번만"), 1 + 2 * 10);
     m_corrupt->addItem(QStringLiteral("타락: 두 번"), 1 + 1 * 10);
     m_corrupt->setToolTip(QStringLiteral("한 번만 = 두 번 타락 제외 / 두 번 = 두 번 타락만"));
+    m_modifiable = new QCheckBox(QStringLiteral("수정 가능"), m_miscBox);
+    m_modifiable->setToolTip(QStringLiteral("타락·복제되지 않은 매물만 (제작 베이스 비교용). 켜면 타락 선택 대신 적용"));
     m_mutated = new QComboBox(m_miscBox); // 이름은 게임별로 renderMisc 에서
     m_mutated->addItem(QString(), 0);
     m_mutated->addItem(QString(), 1);
@@ -369,6 +387,7 @@ void MainPopup::buildUi()
     row2->addWidget(m_infl2);
     row2->addWidget(m_alt);
     row2->addWidget(m_mutated);
+    row2->addWidget(m_modifiable);
     row2->addWidget(m_corrupt);
     g->addLayout(row2, 0, 0, 1, 3);
     p1->addWidget(m_miscBox);
@@ -389,6 +408,12 @@ void MainPopup::buildUi()
     m_prices->setMinimumHeight(170);
     m_prices->setIconSize(QSize(18, 18));
     m_prices->verticalHeader()->setDefaultSectionSize(22);
+    m_prices->viewport()->installEventFilter(this);
+    auto* listingScrollBar = m_prices->verticalScrollBar();
+    connect(listingScrollBar, &QScrollBar::valueChanged, this, [this, listingScrollBar](int value) {
+        if (m_priceMoreAvailable && value == listingScrollBar->maximum() && value > listingScrollBar->minimum())
+            emit moreListingsRequested();
+    });
     {
         auto* d = new IconRightDelegate(m_prices);
         m_prices->setItemDelegateForColumn(0, d);
@@ -425,7 +450,7 @@ void MainPopup::buildUi()
     m_listCount = new QComboBox(this);
     for (int n : {10, 20, 40, 60, 80})
         m_listCount->addItem(QStringLiteral("%1개").arg(n), n);
-    m_listCount->setToolTip(QStringLiteral("목록 수 (많을수록 느림)"));
+    m_listCount->setToolTip(QStringLiteral("첫 조회 매물 수. 목록 끝에서 더 불러올 수 있습니다"));
     pr->addWidget(m_listCount);
     root->addLayout(pr);
     root->addWidget(m_prices, 1);
@@ -439,7 +464,7 @@ void MainPopup::buildUi()
     m_price->installEventFilter(this);
     m_idleText = QStringLiteral("시세를 검색하려면 클릭하세요");
     setPriceText(m_idleText);
-    m_refresh = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), QStringLiteral("시세 새로고침"), this);
+    m_refresh = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), QStringLiteral("새로고침"), this);
     m_refresh->setToolTip(QStringLiteral("지금 조건으로 시세를 다시 조회합니다"));
     m_refresh->setCursor(Qt::PointingHandCursor);
     connect(m_refresh, &QPushButton::clicked, this, &MainPopup::priceCheckRequested);
@@ -477,10 +502,16 @@ void MainPopup::buildUi()
         }
     });
     auto stale = [this]() { markStale(); };
+    connect(m_priceMin, &QLineEdit::textEdited, this, stale);
     for (QComboBox* c : {m_rarity, m_server, m_corrupt, m_mutated, m_infl1, m_infl2, m_alt, m_status, m_currency, m_indexed, m_listCount})
         connect(c, qOverload<int>(&QComboBox::currentIndexChanged), this, stale);
-    for (QCheckBox* c : {m_special1, m_special2, m_collapse})
+    for (QCheckBox* c : {m_special1, m_special2, m_collapse, m_modifiable})
         connect(c, &QCheckBox::toggled, this, stale);
+    // 수정 가능은 타락 아님 + 복제 아님이라 켜져 있는 동안 타락 콤보 / 복제 줄은 잠금
+    connect(m_modifiable, &QCheckBox::toggled, this, [this](bool on) {
+        m_corrupt->setEnabled(!on);
+        m_mirrorRow->setEnabled(!on);
+    });
     for (PropRow* r : {m_rarityRow, m_lvRow, m_qRow, m_sockRow, m_linkRow, m_mirrorRow, m_notFracRow})
         connect(r, &PropRow::changed, this, stale);
     // 레어도 콤보를 고르면 레어도 줄도 켬 ("모두"면 끔)
@@ -533,6 +564,12 @@ void MainPopup::installActivator(QWidget* w)
 
 bool MainPopup::eventFilter(QObject* o, QEvent* e)
 {
+    if (e->type() == QEvent::Wheel && m_priceMoreAvailable && o == m_prices->viewport()) {
+        const auto* wheel = static_cast<const QWheelEvent*>(e);
+        const auto* bar = m_prices->verticalScrollBar();
+        if ((wheel->angleDelta().y() < 0 || wheel->pixelDelta().y() < 0) && bar->value() == bar->maximum())
+            emit moreListingsRequested();
+    }
     if (e->type() == QEvent::Resize && o == m_scroll->viewport()) {
         const int right = m_scroll->width() - m_scroll->viewport()->geometry().right() - 1;
         m_filterHeader->setContentsMargins(0, 0, m_rowsLayout->contentsMargins().right() + right, 0);
@@ -562,6 +599,8 @@ void MainPopup::clearRows()
 
 void MainPopup::markStale()
 {
+    m_priceMoreAvailable = false;
+    emit priceFiltersChanged();
     // 조건을 바꿨으면 지금 시세는 옛 조건 결과라 색으로 표시
     if (m_priceText != m_idleText && !m_priceText.endsWith(QStringLiteral("...")))
         setPriceText(m_priceText, QStringLiteral("#e75480"));
@@ -752,7 +791,8 @@ void MainPopup::fitToAvailableHeight(int height)
 {
     m_prices->setMinimumHeight(qBound(64, height / 5, 170));
     setMaximumHeight(height);
-    adjustSize();
+    // adjustSize()는 최상위 창을 화면의 2/3로 줄여 옵션이 잘릴 수 있음
+    resize(width(), qMin(height, sizeHint().height()));
 }
 
 void MainPopup::applyPresetAndRender()
@@ -801,7 +841,7 @@ void MainPopup::fitRowsArea()
     const bool hasRows = h > 0;
     m_filterHeader->parentWidget()->setVisible(hasRows);
     m_scroll->setVisible(hasRows);
-    const int wanted = qMin(420, h + 6);
+    const int wanted = qMin(kMaxFilterViewportHeight, h + 6);
     m_scroll->setMinimumHeight(qMin(34, wanted));
     m_scroll->setMaximumHeight(wanted);
 }
@@ -810,9 +850,10 @@ void MainPopup::renderRows()
 {
     clearRows();
     bool canSelectAll = false;
+    const bool cluster = m_item.category == QStringLiteral("jewel.cluster");
     for (int i = 0; i < m_item.mods.size(); ++i) {
         auto* r = new FilterRow(m_rowsBox);
-        r->setMod(m_item.mods[i]);
+        r->setMod(m_item.mods[i], cluster);
         canSelectAll |= r->isPlain() && r->isCheckable();
         installActivator(r->minEdit());
         installActivator(r->maxEdit());
@@ -837,7 +878,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     const ParsedItem& it = m_item;
     const TradeDb* db = m_gdb ? &(*m_gdb)[it.lang] : nullptr;
     const bool poe1 = it.game == Game::Poe1;
-    QSignalBlocker b4(m_special1), b5(m_special2), b6(m_corrupt), b6b(m_mutated), b7(m_infl1), b8(m_infl2), b9(m_alt),
+    QSignalBlocker b4(m_special1), b5(m_special2), b6(m_corrupt), b6b(m_mutated), b6c(m_modifiable), b7(m_infl1), b8(m_infl2), b9(m_alt),
         b10(m_useName), b10b(m_useType), b11(m_rarity);
     const QColor propGray(0xc8, 0xc8, 0xc8), warn(0xe0, 0x66, 0x66);
 
@@ -897,6 +938,11 @@ void MainPopup::renderMisc(const ItemFilterState& st)
         m_corrupt->setCurrentIndex(ci < 0 ? 0 : ci);
     }
     setBold(m_corrupt, it.corrupted, QStringLiteral("#e06666"));
+    // 수정 가능: 제작 대상(장비/주얼/플라스크/지도)만, 기본 꺼짐
+    m_modifiable->setVisible(it.isGear || it.isJewel || it.isFlask || it.isMap);
+    m_modifiable->setChecked(st.modifiable);
+    m_corrupt->setEnabled(!st.modifiable);
+    m_mirrorRow->setEnabled(!st.modifiable);
 
     // 삿된(PoE1) / 함양된 바알 고유(PoE2): 같은 거래소 필터(mutated), 고유만
     const QString mu = poe1 ? QStringLiteral("삿된") : QStringLiteral("함양된 바알");
@@ -1006,6 +1052,7 @@ ItemFilterState MainPopup::collectState() const
     if (!m_mirrorRow->isHidden())
         s.mirrored = m_mirrorRow->isChecked() ? 1 : 0;
     s.notFractured = !m_notFracRow->isHidden() && m_notFracRow->isChecked();
+    s.modifiable = !m_modifiable->isHidden() && m_modifiable->isChecked();
     s.byCategory = false;
     s.exact = static_cast<Preset>(m_preset->currentData().toInt()) == Preset::Exact;
     for (PropFilterState& p : s.props) {
@@ -1097,9 +1144,11 @@ void MainPopup::setIcon(const QString& imagePath)
 
 void MainPopup::priceBusy(const QString& msg)
 {
+    m_priceMoreAvailable = false;
     m_prices->setRowCount(0);
     m_lastRowKey.clear();
     m_priceCount->clear();
+    m_priceCount->setToolTip({});
     m_price->setToolTip(QStringLiteral("누르면 시세를 다시 조회합니다"));
     priceStatus(msg);
 }
@@ -1409,6 +1458,14 @@ void MainPopup::priceDone(const QString& summary, const QString& count, const QS
     m_priceCount->setText(count);
     fitPriceColumns();
     m_prices->scrollToTop();
+}
+
+void MainPopup::pricePageStatus(bool hasMore, int loaded, int total, const QString& status)
+{
+    m_priceMoreAvailable = hasMore;
+    const QString count = QStringLiteral("%1/%2 검색").arg(loaded).arg(total);
+    m_priceCount->setText(status.isEmpty() ? count : count + QStringLiteral(" · ") + status);
+    m_priceCount->setToolTip(hasMore ? QStringLiteral("목록 맨 아래에서 더 불러오기") : QString());
 }
 
 void MainPopup::priceIdle(const QString& msg)

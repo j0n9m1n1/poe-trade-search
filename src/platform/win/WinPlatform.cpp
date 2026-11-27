@@ -7,11 +7,14 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <shellapi.h>
 
 #include "platform/KeyNames.h"
 #include "platform/Platform.h"
 
+#include <QDir>
 #include <QWidget>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -243,6 +246,47 @@ bool isAdministrator()
         FreeSid(admins);
     }
     return member != FALSE;
+}
+
+bool gameRunsElevated()
+{
+    const HWND foreground = GetForegroundWindow();
+    const HWND game = isPoeWindow(foreground) ? foreground : FindWindowW(kPoeClass, nullptr);
+    DWORD pid = 0;
+    if (!game || !GetWindowThreadProcessId(game, &pid))
+        return false;
+    const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!process)
+        return false;
+    HANDLE token = nullptr;
+    const BOOL opened = OpenProcessToken(process, TOKEN_QUERY, &token);
+    CloseHandle(process);
+    if (!opened)
+        return false;
+    TOKEN_ELEVATION elevation = {};
+    DWORD size = 0;
+    const BOOL read = GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &size);
+    CloseHandle(token);
+    return read && elevation.TokenIsElevated != 0;
+}
+
+bool startElevated(const QString& executable, const QString& arguments, QString* error)
+{
+    const std::wstring file = QDir::toNativeSeparators(executable).toStdWString();
+    const std::wstring params = arguments.toStdWString();
+    SHELLEXECUTEINFOW info = {};
+    info.cbSize = sizeof(info);
+    info.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+    info.lpVerb = L"runas";
+    info.lpFile = file.c_str();
+    info.lpParameters = params.c_str();
+    info.nShow = SW_SHOWNORMAL;
+    if (ShellExecuteExW(&info))
+        return true;
+    const DWORD code = GetLastError();
+    if (error && code != ERROR_CANCELLED)
+        *error = QString::number(code);
+    return false;
 }
 
 void createInstanceMutex()

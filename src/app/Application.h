@@ -16,6 +16,7 @@
 #include <QTimer>
 #include <functional>
 #include <memory>
+#include <optional>
 
 class QAction;
 class QMenu;
@@ -59,6 +60,9 @@ private:
     void onOutsideClick(platform::GameClickTarget target, quint64 popupSeq);
     void openTrade();
     void priceCheck();
+    void loadMoreListings();
+    void updateListingPageStatus(const QString& status = {});
+    void appendPriceListings(Game game, Lang server, const Rates& rates, const QVector<Listing>& listings);
     void openSettings();
 
     // 프로그램 업데이트 (GitHub Release)
@@ -113,12 +117,24 @@ private:
     Updater::Release m_newRelease; // 찾은 새 버전
     bool m_updateNoticeShown = false; // 마지막 트레이 알림이 새 버전 알림
     QAction* m_updateAction = nullptr; // 트레이 "업데이트 확인/설치"
+    QAction* m_elevatedRestartAction = nullptr;
     // 같은 조건 재조회 캐시 (1분). 키 = 게임/서버/리그/개수/쿼리
     struct CachedPrice {
         qint64 at = 0;
         TradeClient::PriceProgress result;
     };
     QHash<QString, CachedPrice> m_priceCache;
+    struct ListingPages {
+        Game game;
+        Lang server;
+        Rates rates;
+        TradeClient::SearchResult search;
+        int next = 0;
+        int loaded = 0;
+        bool loading = false;
+    };
+    std::optional<ListingPages> m_listingPages;
+    quint64 m_priceFilterRevision = 0;
     QString m_newTag, m_newPage;
     QString m_downloadedZip;
     std::unique_ptr<ItemParser> m_parser;
@@ -136,6 +152,7 @@ private:
     bool m_paused = false;
     bool m_customRun = false;
     bool m_hotkeysOn = false;
+    bool m_warnedGameInputPrivileges = false;
     bool m_unsupportedWarned = false;
     Game m_lastGame = Game::Poe1;
     quint64 m_priceToken = 0;

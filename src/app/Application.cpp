@@ -101,14 +101,29 @@ bool Application::start(QString* error)
     m_hotkeys = new HotkeyManager(this);
     connect(m_hotkeys, &HotkeyManager::activated, this, &Application::onHotkey);
     connect(m_client, &TradeClient::throttled, this, [this](int s) {
-        if (m_popup && m_popup->isVisible())
+        if (m_listingPages && m_listingPages->loading) {
+            updateListingPageStatus(QStringLiteral("요청 제한 · %1초 대기").arg(s));
+        } else if (m_popup && m_popup->isVisible()) {
             m_popup->priceIdle(QStringLiteral("요청 제한 때문에 %1초 대기 중...").arg(s));
+        }
     });
 
     // ---- 팝업
     m_popup = new MainPopup(m_kw);
     connect(m_popup, &MainPopup::openTradeRequested, this, &Application::openTrade);
     connect(m_popup, &MainPopup::priceCheckRequested, this, &Application::priceCheck);
+    connect(m_popup, &MainPopup::moreListingsRequested, this, &Application::loadMoreListings);
+    connect(m_popup, &MainPopup::priceFiltersChanged, this, [this]() {
+        ++m_priceFilterRevision;
+        if (!m_listingPages)
+            return;
+        if (m_listingPages->loading) {
+            m_client->cancel(m_priceToken);
+            m_priceToken = 0;
+        }
+        m_popup->pricePageStatus(false, m_listingPages->loaded, m_listingPages->search.total);
+        m_listingPages.reset();
+    });
     connect(m_popup, &MainPopup::settingsRequested, this, &Application::openSettings);
     connect(m_popup, &MainPopup::rememberToggled, this, &Application::onRemember);
     connect(m_popup, &MainPopup::popupHidden, this, [this]() {
@@ -117,6 +132,11 @@ bool Application::start(QString* error)
         platform::stopWatchingOutsideMousePress();
         m_clickTimer.stop();
         m_client->cancel(m_priceToken);
+        m_priceToken = 0;
+        if (m_listingPages && m_listingPages->loading) {
+            m_listingPages->loading = false;
+            updateListingPageStatus();
+        }
         m_client->cancel(m_openTradeToken);
         m_openTradeToken = 0;
         if (m_hotkeys->has(kEscId))
@@ -138,6 +158,19 @@ bool Application::start(QString* error)
     // 마지막 창 다시 열기는 트레이 아이콘 왼쪽 클릭 / {Last} 단축키로
     m_menu = new QMenu;
     m_menu->addAction(QStringLiteral("설정"), this, &Application::openSettings);
+    m_elevatedRestartAction = m_menu->addAction(QStringLiteral("관리자 권한으로 다시 실행"), this, [this]() {
+        m_elevatedRestartAction->setEnabled(false);
+        const QString args = QStringLiteral("--wait-shutdown --restart-data-dir \"%1\"").arg(QDir(m_dataDir).absolutePath());
+        QString error;
+        if (platform::startElevated(QCoreApplication::applicationFilePath(), args, &error)) {
+            qApp->quit();
+            return;
+        }
+        m_elevatedRestartAction->setEnabled(true);
+        if (!error.isEmpty())
+            notify(QStringLiteral("관리자 권한 재실행 실패 (Windows 오류 %1)").arg(error), QSystemTrayIcon::Warning);
+    });
+    m_elevatedRestartAction->setVisible(false);
     // 업데이트: 새 버전을 모르면 확인(있으면 바로 설치), 알면 설치
     m_updateAction = m_menu->addAction(QStringLiteral("업데이트 확인 (현재 %1)").arg(Updater::currentVersion()));
     connect(m_updateAction, &QAction::triggered, this, [this]() {
@@ -193,10 +226,7 @@ bool Application::start(QString* error)
         return true;
     }
 
-    QString hint = QStringLiteral("프로그램을 시작합니다.\n사용법: 게임에서 아이템에 마우스를 올리고 Ctrl + C\n종료: 트레이 아이콘 우클릭 → 종료");
-    if (!platform::isAdministrator())
-        hint += QStringLiteral("\n(PoE를 관리자 권한으로 실행했다면 이 프로그램도 관리자 권한으로 실행해야 단축키가 동작합니다)");
-    notify(hint);
+    notify(QStringLiteral("프로그램을 시작합니다.\n사용법: 게임에서 아이템에 마우스를 올리고 Ctrl + C\n종료: 트레이 아이콘 우클릭 → 종료"));
     return true;
 }
 
@@ -303,8 +333,17 @@ void Application::onForegroundTick()
     if (w.found)
         m_lastGame = w.game;
     if (w.foreground) {
-        if (!m_hotkeysOn)
+        if (!m_hotkeysOn) {
             registerHotkeys();
+            const bool needsElevation = !platform::isAdministrator() && platform::gameRunsElevated();
+            m_elevatedRestartAction->setVisible(needsElevation);
+            if (needsElevation && !m_warnedGameInputPrivileges) {
+                m_warnedGameInputPrivileges = true;
+                notify(QStringLiteral("게임은 관리자 권한, PoeTradeSearch는 일반 권한으로 실행 중\n"
+                                      "게임 화면 클릭 닫기와 단축키를 쓰려면 트레이 메뉴에서 ‘관리자 권한으로 다시 실행’ 선택"),
+                       QSystemTrayIcon::Warning);
+            }
+        }
     } else if (m_hotkeysOn) {
         unregisterHotkeys();
     }
@@ -453,6 +492,8 @@ void Application::handleItemText(const QString& text)
     }
 
     m_client->cancel(m_priceToken); // 앞 아이템 시세 조회 중이면 끊음
+    m_priceToken = 0;
+    m_listingPages.reset();
     m_client->cancel(m_openTradeToken);
     m_openTradeToken = 0;
     // 화폐 콤보/가격 칸 아이콘 (받아둔 파일이면 바로 붙음)
@@ -835,8 +876,10 @@ void Application::priceCheck()
     if (!m_popup->hasItem())
         return;
     m_client->cancel(m_priceToken);
+    m_listingPages.reset();
     m_priceToken = m_client->newToken();
     const quint64 token = m_priceToken;
+    const quint64 filterRevision = m_priceFilterRevision;
 
     const ParsedItem it = m_popup->collectItem();
     const Game g = it.game;
@@ -847,7 +890,7 @@ void Application::priceCheck()
                                   QStringLiteral("mirror")});
 
     // 환율 먼저 (30분에 한 번, 일괄 교환 요청 2개)
-    ensureRates(g, server, league, [this, token, it, g, league, server]() {
+    ensureRates(g, server, league, [this, token, filterRevision, it, g, league, server]() {
         if (token != m_priceToken)
             return;
         const Rates rates = ratesFor(g, league);
@@ -934,48 +977,37 @@ void Application::priceCheck()
                               hidden);
         m_popup->priceStatus(QStringLiteral("시세 확인중..."));
         auto onProgress = [this, token, g, lang, rates](const TradeClient::PriceProgress& p) {
-                if (token != m_priceToken)
-                    return;
-                const QDateTime now = QDateTime::currentDateTimeUtc();
-                QStringList curs;
-                for (const Listing& l : p.listings) {
-                    if (!curs.contains(l.currency))
-                        curs << l.currency;
-                }
-                loadCurrencyIcons(g, lang, curs); // 처음 보는 화폐면 받아서 나중에 칸에 붙음
-                for (const Listing& l : p.listings) {
-                    const bool stale = l.indexed.isValid() && l.indexed.daysTo(now) >= 3;
-                    m_popup->priceAddRow({PriceSummary::formatAmount(l.amount) + QLatin1Char(' ') +
-                                              shortCurrencyName(l.currency).replace(QStringLiteral("-"), QStringLiteral(" ")),
-                                          formatConversion(l.amount, l.currency, rates),
-                                          l.ilvl >= 0 ? QString::number(l.ilvl) : QString(),
-                                          l.quality >= 0 ? QString::number(l.quality) : QString(),
-                                          l.dps > 0 ? QString::number(l.dps, 'f', 1) : QString(),
-                                          PriceSummary::ago(l.indexed), l.account},
-                                         stale, l.online, currencyName(g, lang, l.currency));
-                }
-                m_popup->priceStatus(QStringLiteral("시세 확인중... %1/%2").arg(p.fetched).arg(p.requested));
-            };
-        auto onDone = [this, token, g, lang, it, rates](const TradeClient::PriceProgress& all, const QString& error) {
-                if (token != m_priceToken)
-                    return;
-                learnIcon(it, all.listings);
-                if (!error.isEmpty()) {
-                    m_popup->priceIdle(QStringLiteral("시세를 조회하지 못했습니다: %1 (클릭하면 다시 시도합니다)").arg(error));
-                    return;
-                }
-                const QString dist =
-                    PriceSummary::summarize(all.listings, [this, g, lang](const QString& id) { return currencyName(g, lang, id); });
-                QString summary;
-                if (all.listings.isEmpty()) {
-                    summary = all.total == 0 ? QStringLiteral("해당 물품의 거래가 없습니다") : QStringLiteral("가격이 붙은 매물이 없습니다");
-                } else {
-                    const Estimate e = estimatePrice(all.listings, rates);
-                    summary = e.ok ? formatEstimate(e, rates, all.total) : dist;
-                }
-                m_popup->priceDone(summary, QStringLiteral("%1/%2 검색").arg(all.listings.size()).arg(all.total),
-                                   dist.isEmpty() ? QString() : QStringLiteral("분포: ") + dist);
-            };
+            if (token != m_priceToken)
+                return;
+            appendPriceListings(g, lang, rates, p.listings);
+            m_popup->priceStatus(QStringLiteral("시세 확인중... %1/%2").arg(p.fetched).arg(p.requested));
+        };
+        auto onDone = [this, token, filterRevision, g, lang, it, rates](const TradeClient::PriceProgress& all,
+                                                                       const QString& error) {
+            if (token != m_priceToken)
+                return;
+            learnIcon(it, all.listings);
+            if (!error.isEmpty() && all.listings.isEmpty()) {
+                m_popup->priceIdle(QStringLiteral("시세를 조회하지 못했습니다: %1 (클릭하면 다시 시도합니다)").arg(error));
+                return;
+            }
+            const QString dist =
+                PriceSummary::summarize(all.listings, [this, g, lang](const QString& id) { return currencyName(g, lang, id); });
+            QString summary;
+            if (all.listings.isEmpty()) {
+                summary = all.total == 0 ? QStringLiteral("해당 물품의 거래가 없습니다") : QStringLiteral("가격이 붙은 매물이 없습니다");
+            } else {
+                const Estimate e = estimatePrice(all.listings, rates);
+                summary = e.ok ? formatEstimate(e, rates, all.total) : dist;
+            }
+            const int loaded = static_cast<int>(all.listings.size());
+            m_popup->priceDone(summary, QStringLiteral("%1/%2 검색").arg(loaded).arg(all.total),
+                               dist.isEmpty() ? QString() : QStringLiteral("분포: ") + dist);
+            if (filterRevision == m_priceFilterRevision && !all.search.ids.isEmpty() && all.fetched < all.total) {
+                m_listingPages = ListingPages{g, lang, rates, all.search, all.fetched, loaded};
+                updateListingPageStatus(error.isEmpty() ? QString() : QStringLiteral("추가 조회 실패"));
+            }
+        };
 
         // 같은 조건을 1분 안에 다시 조회하면 요청 안 보내고 저장한 결과 (요청 제한 절약, APT 캐시와 같은 취지)
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
@@ -1001,6 +1033,67 @@ void Application::priceCheck()
             },
             token);
     });
+}
+
+void Application::loadMoreListings()
+{
+    if (!m_popup->isVisible() || !m_listingPages || m_listingPages->loading)
+        return;
+    auto& page = *m_listingPages;
+    const QStringList ids = page.search.ids.mid(page.next, 10);
+    if (ids.isEmpty())
+        return;
+    page.loading = true;
+    updateListingPageStatus(QStringLiteral("추가 조회 중..."));
+    m_priceToken = m_client->newToken();
+    const quint64 token = m_priceToken;
+    m_client->fetchListings(page.game, page.server, page.search.id, ids,
+        [this, token, count = static_cast<int>(ids.size())](const QVector<Listing>& listings, const QString& error) {
+            if (token != m_priceToken || !m_listingPages)
+                return;
+            auto& page = *m_listingPages;
+            page.loading = false;
+            if (!error.isEmpty()) {
+                qWarning().noquote() << "listing page fetch failed:" << error;
+                updateListingPageStatus(QStringLiteral("추가 조회 실패"));
+                return;
+            }
+            appendPriceListings(page.game, page.server, page.rates, listings);
+            page.next += count;
+            page.loaded += static_cast<int>(listings.size());
+            updateListingPageStatus();
+        }, token);
+}
+
+void Application::updateListingPageStatus(const QString& status)
+{
+    const auto& page = *m_listingPages;
+    const bool hasMore = !page.loading && page.next < page.search.ids.size();
+    const bool reachedServerLimit = page.next == page.search.ids.size() && page.next < page.search.total;
+    const QString message = status.isEmpty() && reachedServerLimit ? QStringLiteral("거래소 제공 매물 끝") : status;
+    m_popup->pricePageStatus(hasMore, page.loaded, page.search.total, message);
+}
+
+void Application::appendPriceListings(Game game, Lang server, const Rates& rates, const QVector<Listing>& listings)
+{
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    QStringList currencies;
+    for (const Listing& l : listings) {
+        if (!currencies.contains(l.currency))
+            currencies << l.currency;
+    }
+    loadCurrencyIcons(game, server, currencies);
+    for (const Listing& l : listings) {
+        const bool stale = l.indexed.isValid() && l.indexed.daysTo(now) >= 3;
+        m_popup->priceAddRow({PriceSummary::formatAmount(l.amount) + QLatin1Char(' ') +
+                                  shortCurrencyName(l.currency).replace(QLatin1Char('-'), QLatin1Char(' ')),
+                              formatConversion(l.amount, l.currency, rates),
+                              l.ilvl >= 0 ? QString::number(l.ilvl) : QString(),
+                              l.quality >= 0 ? QString::number(l.quality) : QString(),
+                              l.dps > 0 ? QString::number(l.dps, 'f', 1) : QString(),
+                              PriceSummary::ago(l.indexed), l.account},
+                             stale, l.online, currencyName(game, server, l.currency));
+    }
 }
 
 // ------------------------------------------------------------ 아이콘

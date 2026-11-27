@@ -43,6 +43,16 @@ bool isAdministrator()
     return false;
 }
 
+bool gameRunsElevated()
+{
+    return false;
+}
+
+bool startElevated(const QString&, const QString&, QString*)
+{
+    return false;
+}
+
 void createInstanceMutex() {}
 
 GameClickTarget cursorGameClickTarget()

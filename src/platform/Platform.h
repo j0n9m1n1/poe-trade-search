@@ -35,6 +35,8 @@ void setNoActivate(QWidget* w, bool on);
 void activateWindow(QWidget* w);
 
 bool isAdministrator();
+bool gameRunsElevated();
+bool startElevated(const QString& executable, const QString& arguments, QString* error);
 
 // 실행 중 표시용 이름 있는 뮤텍스 (설치 프로그램 AppMutex=PoeTradeSearchQt_Running 이 확인)
 void createInstanceMutex();
