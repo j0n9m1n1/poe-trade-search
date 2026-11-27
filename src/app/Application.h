@@ -106,6 +106,7 @@ private:
     QTimer m_updateTimer;
     Updater::Release m_newRelease; // 찾은 새 버전
     bool m_updateNoticeShown = false; // 마지막 트레이 알림이 새 버전 알림
+    QAction* m_updateAction = nullptr; // 트레이 "업데이트 확인/설치"
     // 같은 조건 재조회 캐시 (1분). 키 = 게임/서버/리그/개수/쿼리
     struct CachedPrice {
         qint64 at = 0;

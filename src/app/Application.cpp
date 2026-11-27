@@ -133,6 +133,14 @@ bool Application::start(QString* error)
     m_menu = new QMenu;
     m_menu->addAction(QStringLiteral("마지막 창 다시 열기"), this, &Application::reopenLast);
     m_menu->addAction(QStringLiteral("설정"), this, &Application::openSettings);
+    // 업데이트: 새 버전을 모르면 확인(있으면 바로 설치), 알면 설치
+    m_updateAction = m_menu->addAction(QStringLiteral("업데이트 확인 (현재 %1)").arg(Updater::currentVersion()));
+    connect(m_updateAction, &QAction::triggered, this, [this]() {
+        if (m_newTag.isEmpty())
+            checkForUpdate(true);
+        else
+            installUpdate();
+    });
     m_menu->addSeparator();
     m_menu->addAction(QStringLiteral("종료"), qApp, &QApplication::quit);
     // 새 버전 알림을 누르면 바로 설치 (설치 못 하는 환경이면 릴리즈 페이지)
@@ -609,12 +617,15 @@ void Application::checkForUpdate(bool manual)
         m_newPage = rel->page;
         QString why;
         const bool canInstall = Updater::canSelfInstall(&why);
+        if (m_updateAction)
+            m_updateAction->setText(canInstall ? QStringLiteral("업데이트 설치 (%1 → %2)").arg(Updater::currentVersion(), rel->tag)
+                                               : QStringLiteral("새 버전 %1 릴리즈 페이지 열기").arg(rel->tag));
         if (canInstall && m_cfg.appUpdate == QStringLiteral("auto") && !manual) {
             installUpdate();
             return;
         }
         if (firstSeen || manual) {
-            notify(canInstall ? QStringLiteral("새 버전(%1)이 있습니다. 이 알림을 누르거나 설정 > 프로그램 업데이트에서 설치하세요.").arg(rel->tag)
+            notify(canInstall ? QStringLiteral("새 버전(%1)이 있습니다. 이 알림을 누르거나 트레이 메뉴 / 설정 > 프로그램 업데이트에서 설치하세요.").arg(rel->tag)
                               : QStringLiteral("새 버전(%1)이 있습니다 (%2). 이 알림을 누르면 릴리즈 페이지를 엽니다.").arg(rel->tag, why));
             m_updateNoticeShown = true;
         }
