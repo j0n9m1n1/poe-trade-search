@@ -311,10 +311,10 @@ ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const Ma
         int sel = -1;
         if (!localChosen && opt.autoSelectPseudo && hasPseudo)
             sel = findGroup(QStringLiteral("pseudo"));
-        // 분열/훼손 옵션은 수정 가능한 아이템이면 일반(explicit) id 로 검색 (APT/EE2).
-        // 전용 id 로 찾으면 같은 옵션이 일반으로 붙은 매물을 다 놓침. 정확 프리셋은 원래 그룹으로 되돌림
-        const bool asExplicit = !it.corrupted && !it.mirrored &&
-                                (mod.modType == QStringLiteral("fractured") || mod.modType == QStringLiteral("desecrated"));
+        // PoE2 훼손 옵션은 수정 가능한 아이템이면 일반(explicit) id 로 검색 (EE2).
+        // 분열 옵션은 분열 id 그대로: 분열 자체가 가치라서 일반 id 로 찾으면 분열 안 된 매물까지 섞임
+        // (카카오 실측: 분열 28개 vs 일반 2152개)
+        const bool asExplicit = !it.corrupted && !it.mirrored && mod.modType == QStringLiteral("desecrated");
         if (sel < 0 && !mod.modType.isEmpty() && !asExplicit)
             sel = findGroup(mod.modType);
         if (sel < 0)
@@ -1015,6 +1015,14 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         }
     }
 
+    // ---- 분열된 아이템: 분열 옵션이 가치의 핵심이라 기본으로 켬
+    if (it.fractured) {
+        for (ParsedMod& m : it.mods) {
+            if (m.modType == QStringLiteral("fractured") && !m.lockedOff && !m.unmatched)
+                m.checked = true;
+        }
+    }
+
     // ---- 지도 속성 (아이템 수량/희귀도/무리 규모/아틀라스 획득물) + 아이템 레벨: 기본 꺼짐, 켜서 최소/최대 조절
     if (it.isMap) {
         for (const char* k : {"map_iiq", "map_iir", "map_packsize", "map_bonus"}) {
@@ -1075,6 +1083,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         const bool pdOn = prop("pdps") && prop("pdps")->use, edOn = prop("edps") && prop("edps")->use,
                    dOn = dps && dps->use;
         for (ParsedMod& m : it.mods) {
+            if (m.modType == QStringLiteral("fractured"))
+                continue; // 분열 옵션은 그 자체가 가치라 속성에 들어가도 그대로 둠
             const QString& k = m.statKey;
             const bool speed = k == m_kw.localAttackSpeed(), physInc = k == m_kw.physicalDamageIncrease();
             if ((defOn && defLocal.contains(k)) || ((pdOn || dOn) && (physLocal.contains(k) || physInc || speed)) ||

@@ -447,7 +447,7 @@ private slots:
             }
             return -1;
         };
-        // 분열 옵션: 수정 가능한 템이면 일반(explicit) id 로, 정확 프리셋은 분열 id 로
+        // 분열 옵션: 분열 id 그대로 + 분열된 아이템이면 기본으로 켬 (일반 id 로 찾으면 분열 안 된 매물까지 섞임)
         const QString gl = fixture(QStringLiteral("poe1_ko_rare_gloves_synthetic.txt"));
         auto g = parseText(gl, Game::Poe1);
         QVERIFY(g);
@@ -457,7 +457,8 @@ private slots:
                 fr = &m;
         }
         QVERIFY(fr && fr->current());
-        QVERIFY2(fr->current()->id.startsWith(QStringLiteral("explicit.")), qPrintable(fr->current()->id));
+        QVERIFY2(fr->current()->id.startsWith(QStringLiteral("fractured.")), qPrintable(fr->current()->id));
+        QVERIFY(fr->checked);
         ItemFilterState st;
         const ParsedItem ex = applyPreset(*g, Preset::Exact, 0, &st);
         for (const ParsedMod& m : ex.mods) {
@@ -479,6 +480,13 @@ private slots:
         // 방어 종류가 둘(회피+에보)이면 속성 자동 체크 안 함
         QCOMPARE(propUse(*g, "ev"), 0);
         QCOMPARE(propUse(*g, "es"), 0);
+        // 실제 분열 갑옷 (마법, 분열 "방어도 및 회피 % 증가"): 분열 id + 기본 켬
+        auto fa = parse(QStringLiteral("poe1_ko_magic_armour_fractured.txt"), Game::Poe1);
+        QVERIFY(fa && fa->fractured);
+        const ParsedMod* fam = findMod(*fa, QStringLiteral("stat_2451402625"));
+        QVERIFY(fam && fam->checked);
+        QCOMPARE(fam->current()->id, QStringLiteral("fractured.stat_2451402625"));
+
         // 하나뿐이면 켜고, 그 속성에 들어간 로컬 옵션은 체크 해제
         QString evOnly = gl;
         evOnly.remove(QStringLiteral("에너지 보호막: 25 (augmented)\n"));
