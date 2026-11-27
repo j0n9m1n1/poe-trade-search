@@ -37,6 +37,8 @@ public:
     explicit MainPopup(const Keywords& kw, QWidget* parent = nullptr);
 
     void showItem(const ParsedItem& parsed, const GameDb* gdb, const Config& cfg, Lang server);
+    // 설정 변경(서버/판매방식/가격화폐)을 열려 있는 팝업에 반영. 바뀐 값이 있으면 true
+    bool syncConfig(const Config& cfg, Lang server);
     void fitToAvailableHeight(int height);
     bool hasItem() const { return m_hasItem; }
     const ParsedItem& parsedItem() const { return m_parsed; }
@@ -212,6 +214,7 @@ private:
     QString m_lastRowKey; // 같은 판매자·같은 가격 묶기
     int m_lastRowCount = 0;
     QString m_priceText, m_priceColor;
+    bool m_priceStale = false;
     double m_estimateAmount = 0;
     QString m_estimateCurrency;
     QTimer m_copyFeedbackTimer;
