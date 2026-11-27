@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(PoeTradeSearch VERSION 0.0.20 LANGUAGES CXX)
+project(PoeTradeSearch VERSION 0.0.21 LANGUAGES CXX)
 
 # 앱 버전 = project() 버전. CI 는 태그 버전을 PTS_VERSION_OVERRIDE 로 넘김
 # (캐시 변수를 버전 자체로 쓰면 project 버전을 올려도 기존 빌드 폴더에선 옛 값이 남음)
