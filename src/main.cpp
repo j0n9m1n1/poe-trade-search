@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFont>
 #include <QLockFile>
 #include <QMessageBox>
 #include <QStandardPaths>
@@ -108,6 +109,14 @@ int main(int argc, char** argv)
     QApplication::setQuitOnLastWindowClosed(false);
     Q_INIT_RESOURCE(resources);
     applyDarkTheme(app);
+    {
+        // 앱 전체 글꼴: 맑은 고딕 (Windows 기본 Segoe UI 는 한글이 없어 영문/한글 글꼴이 섞여 보임)
+        // 없으면 나눔고딕 -> Noto Sans KR. 크기는 시스템 기본 그대로
+        QFont f = QApplication::font();
+        f.setFamilies({QStringLiteral("Malgun Gothic"), QStringLiteral("맑은 고딕"), QStringLiteral("NanumGothic"),
+                       QStringLiteral("나눔고딕"), QStringLiteral("Noto Sans KR"), QStringLiteral("Noto Sans CJK KR")});
+        QApplication::setFont(f);
+    }
 
     const QString dataDir = pickDataDir();
 

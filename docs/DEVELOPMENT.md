@@ -74,8 +74,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.38
-git push origin v0.0.38
+git tag v0.0.39
+git push origin v0.0.39
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -97,6 +97,14 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.38
+
+- 앱 전체 글꼴을 맑은 고딕으로 지정했습니다 (사용자 요청). 지정하지 않으면 Qt 6 Windows 기본(Segoe UI)이라 영문·숫자는 Segoe UI, 한글은 맑은 고딕으로 섞여 보였습니다. 맑은 고딕이 없으면 나눔고딕 → Noto Sans KR 순으로 씁니다. 크기는 시스템 기본 그대로입니다. [main](../src/main.cpp)
+
+**검증.** 코어 테스트 74개, UI 테스트 7개가 통과했습니다. 리눅스(맑은 고딕 없음)에서는 나눔고딕으로 그려지는 것을 오프스크린으로 확인했습니다.
+
+**남은 확인.** Windows 에서 맑은 고딕으로 표시되는지.
 
 ### v0.0.37
 
