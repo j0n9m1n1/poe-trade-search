@@ -5,6 +5,7 @@
 #include "core/Types.h"
 #include "net/RateLimiter.h"
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
 #include <QPointer>
@@ -61,6 +62,8 @@ public:
                     std::function<void(const PriceProgress& all, const QString& error)> done, quint64 token);
     void fetchListings(Game g, Lang server, const QString& searchId, const QStringList& ids,
                        std::function<void(const QVector<Listing>&, const QString&)> done, quint64 token);
+    // fetch 응답의 result 배열 -> Listing 목록 (툴팁용 아이템 요약 포함)
+    static QVector<Listing> parseFetchListings(const QJsonArray& res);
 
     struct ExchangeResult {
         QString id;

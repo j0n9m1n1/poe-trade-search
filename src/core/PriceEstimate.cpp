@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QtMath>
 #include <algorithm>
+#include <cmath>
 
 namespace pts {
 
@@ -89,14 +90,23 @@ QString shortCurrencyName(const QString& id)
     return id;
 }
 
-QString formatValue(double v, const Rates& rates)
+PriceTag displayPrice(double v, const Rates& rates)
 {
+    if (!rates.valid() || !std::isfinite(v) || v <= 0)
+        return {};
     const double div = rates.divine();
     if (div > 0 && v >= div)
-        return PriceSummary::formatAmount(std::round(v / div * 10.0) / 10.0) + QLatin1Char(' ') +
-               shortCurrencyName(QStringLiteral("divine"));
+        return {std::round(v / div * 10.0) / 10.0, QStringLiteral("divine")};
     const double r = v < 10 ? std::round(v * 10.0) / 10.0 : std::round(v);
-    return PriceSummary::formatAmount(r) + QLatin1Char(' ') + shortCurrencyName(rates.base);
+    return {r > 0 ? r : v, rates.base};
+}
+
+QString formatValue(double v, const Rates& rates)
+{
+    const PriceTag p = displayPrice(v, rates);
+    if (!p.valid())
+        return {};
+    return PriceSummary::formatAmount(p.amount) + QLatin1Char(' ') + shortCurrencyName(p.currency);
 }
 
 QString formatEstimate(const Estimate& e, const Rates& rates, int total)

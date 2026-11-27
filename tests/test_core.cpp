@@ -16,6 +16,7 @@
 #include "net/DataManager.h"
 #include "net/Endpoints.h"
 #include "net/RateLimiter.h"
+#include "net/TradeClient.h"
 #include "net/Updater.h"
 
 #include <QFile>
@@ -23,6 +24,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QtTest>
+#include <limits>
 
 using namespace pts;
 
@@ -189,6 +191,132 @@ private slots:
         QCOMPARE(PriceSummary::ago(now.addSecs(-300), now), QStringLiteral("5분 전"));
         QCOMPARE(PriceSummary::ago(QDateTime::fromString(QStringLiteral("2026-11-26T09:00:00+00:00"), Qt::ISODate), now),
                  QStringLiteral("3시간 전"));
+    }
+
+    void priceNoteAndDisplayPrice()
+    {
+        QCOMPARE(PriceSummary::formatAmount(13.0), QStringLiteral("13"));
+        QCOMPARE(PriceSummary::formatAmount(1.5), QStringLiteral("1.5"));
+        QCOMPARE(PriceSummary::formatAmount(10.04), QStringLiteral("10"));
+        QCOMPARE(PriceSummary::formatAmount(0.25), QStringLiteral("0.25"));
+
+        QCOMPARE(PriceSummary::priceNote(13, QStringLiteral("divine")), QStringLiteral("~b/o 13 divine"));
+        QCOMPARE(PriceSummary::priceNote(1.5, QStringLiteral("chaos")), QStringLiteral("~b/o 1.5 chaos"));
+        QCOMPARE(PriceSummary::priceNote(10.04, QStringLiteral("chaos")), QStringLiteral("~b/o 10 chaos"));
+        QCOMPARE(PriceSummary::priceNote(0.25, QStringLiteral("exalted")), QStringLiteral("~b/o 0.25 exalted"));
+        QCOMPARE(PriceSummary::priceNote(12, QStringLiteral(" divine ")), QStringLiteral("~b/o 12 divine"));
+        QVERIFY(PriceSummary::priceNote(0, QStringLiteral("chaos")).isEmpty());
+        QVERIFY(PriceSummary::priceNote(-3, QStringLiteral("chaos")).isEmpty());
+        QVERIFY(PriceSummary::priceNote(5, QString()).isEmpty());
+        QVERIFY(PriceSummary::priceNote(5, QStringLiteral("   ")).isEmpty());
+        QVERIFY(PriceSummary::priceNote(std::numeric_limits<double>::quiet_NaN(), QStringLiteral("chaos")).isEmpty());
+
+        Rates r;
+        r.base = QStringLiteral("chaos");
+        r.toBase.insert(QStringLiteral("divine"), 200);
+        const PriceTag pDiv = displayPrice(260, r);
+        QVERIFY(pDiv.valid());
+        QCOMPARE(pDiv.currency, QStringLiteral("divine"));
+        QCOMPARE(PriceSummary::priceNote(pDiv.amount, pDiv.currency), QStringLiteral("~b/o 1.3 divine"));
+        const PriceTag pChaos = displayPrice(34.6, r);
+        QCOMPARE(PriceSummary::priceNote(pChaos.amount, pChaos.currency), QStringLiteral("~b/o 35 chaos"));
+        const PriceTag pSmall = displayPrice(3.46, r);
+        QCOMPARE(PriceSummary::priceNote(pSmall.amount, pSmall.currency), QStringLiteral("~b/o 3.5 chaos"));
+        QVERIFY(!displayPrice(0, r).valid());
+        QVERIFY(!displayPrice(10, Rates{}).valid());
+
+        Rates poe2;
+        poe2.base = QStringLiteral("exalted");
+        poe2.toBase.insert(QStringLiteral("divine"), 150);
+        const PriceTag pEx = displayPrice(45, poe2);
+        QCOMPARE(PriceSummary::priceNote(pEx.amount, pEx.currency), QStringLiteral("~b/o 45 exalted"));
+    }
+
+    void listingFetchAndTooltip()
+    {
+        const QByteArray raw = R"JSON([
+            {
+                "listing": {
+                    "indexed": "2026-11-26T10:00:00Z",
+                    "account": { "name": "sellerA", "online": { "status": "afk" } },
+                    "price": { "amount": 13, "currency": "divine" }
+                },
+                "item": {
+                    "name": "<<set:MS>>공포의 손아귀",
+                    "typeLine": "거미줄 장갑",
+                    "baseType": "거미줄 장갑",
+                    "frameType": 2,
+                    "ilvl": 85,
+                    "corrupted": true,
+                    "fractured": true,
+                    "properties": [
+                        { "name": "퀄리티", "type": 6, "values": [["+30%", 1]] }
+                    ],
+                    "enchantMods": ["명중 시 칙령 발동"],
+                    "implicitMods": ["총주교 고정 옵션"],
+                    "fracturedMods": ["생명력 최대치 +119"],
+                    "explicitMods": ["냉기 저항 +42%", "공격 속도 14% 증가"],
+                    "craftedMods": ["화염 및 번개 저항 +15%"]
+                }
+            },
+            {
+                "listing": {
+                    "indexed": "2026-11-26T11:00:00Z",
+                    "account": { "name": "sellerB" },
+                    "price": { "amount": 1.5, "currency": "chaos" }
+                },
+                "item": {
+                    "typeLine": "Two-Stone Ring",
+                    "baseType": "Two-Stone Ring",
+                    "frameType": 1,
+                    "ilvl": 78,
+                    "duplicated": true,
+                    "identified": false,
+                    "explicitMods": ["+10 <Test> & Fire"]
+                }
+            }
+        ])JSON";
+        const QJsonArray arr = QJsonDocument::fromJson(raw).array();
+        const QVector<Listing> ls = TradeClient::parseFetchListings(arr);
+        QCOMPARE(ls.size(), 2);
+
+        const Listing& a = ls[0];
+        QCOMPARE(a.amount, 13.0);
+        QCOMPARE(a.currency, QStringLiteral("divine"));
+        QCOMPARE(a.ilvl, 85);
+        QCOMPARE(a.quality, 30);
+        QCOMPARE(a.online, 2);
+        QCOMPARE(a.frameType, 2);
+        QVERIFY(a.corrupted && a.fractured && a.identified);
+        QCOMPARE(a.enchantMods, QStringList{QStringLiteral("명중 시 칙령 발동")});
+        QCOMPARE(a.implicitMods, QStringList{QStringLiteral("총주교 고정 옵션")});
+        QCOMPARE(a.fracturedMods, QStringList{QStringLiteral("생명력 최대치 +119")});
+        QCOMPARE(a.explicitMods.size(), 2);
+        QCOMPARE(a.craftedMods, QStringList{QStringLiteral("화염 및 번개 저항 +15%")});
+
+        const QString tipA = PriceSummary::listingTooltip(a);
+        QVERIFY(tipA.startsWith(QStringLiteral("<div>")));
+        QVERIFY(!tipA.contains(QStringLiteral("<<set:")));
+        QVERIFY(tipA.contains(QStringLiteral("공포의 손아귀")));
+        QVERIFY(tipA.contains(QStringLiteral("거미줄 장갑")));
+        QVERIFY(tipA.contains(QStringLiteral("아이템 레벨: 85")));
+        QVERIFY(tipA.contains(QStringLiteral("퀄리티: +30%")));
+        QVERIFY(tipA.contains(QStringLiteral("타락")));
+        QVERIFY(tipA.contains(QStringLiteral("분열")));
+        QVERIFY(tipA.contains(QStringLiteral("#a29162"))); // 분열 색
+        QVERIFY(tipA.contains(QStringLiteral("#b4b4ff"))); // 제작/인챈트 색
+        QVERIFY(tipA.contains(QStringLiteral("#8888ff"))); // 일반/고정 색
+        QVERIFY(tipA.contains(QStringLiteral("생명력 최대치 +119")));
+        QVERIFY(tipA.contains(QStringLiteral("화염 및 번개 저항 +15%")));
+
+        const Listing& b = ls[1];
+        QVERIFY(b.mirrored && !b.identified);
+        const QString tipB = PriceSummary::listingTooltip(b);
+        QVERIFY(tipB.contains(QStringLiteral("복제")));
+        QVERIFY(tipB.contains(QStringLiteral("미확인")));
+        QVERIFY(tipB.contains(QStringLiteral("&lt;Test&gt; &amp; Fire")));
+
+        QVERIFY(PriceSummary::listingTooltip(Listing{}).isEmpty());
     }
 
     void queryBuilderNoDb()

@@ -7,6 +7,7 @@
 
 #include <QHash>
 #include <QPoint>
+#include <QTimer>
 #include <QWidget>
 
 class QCheckBox;
@@ -60,10 +61,13 @@ public:
     void priceBusy(const QString& msg);   // 새 조회 시작 (표 비움)
     void priceStatus(const QString& msg); // 진행 문구만 바꿈
     void priceColumns(const QStringList& headers, const QVector<int>& hidden = {});
-    void priceAddRow(const QStringList& cells, bool dim, int online, const QString& tooltip = QString());
-    void priceDone(const QString& summary, const QString& count, const QString& tooltip = QString());
+    void priceAddRow(const QStringList& cells, bool dim, int online, const QString& tooltip = QString(),
+                     double priceAmount = 0, const QString& priceCurrency = QString());
+    void priceDone(const QString& summary, const QString& count, const QString& tooltip = QString(),
+                   double noteAmount = 0, const QString& noteCurrency = QString());
     void pricePageStatus(bool hasMore, int loaded, int total, const QString& status = {});
     void priceIdle(const QString& msg);
+    void showCopyFeedback(const QString& note);
     void clearPrices() { priceBusy(m_idleText); }
     void setSearchBusy(bool busy);
 
@@ -83,6 +87,7 @@ signals:
     void priceFiltersChanged();
     void settingsRequested();
     void rememberToggled(const QString& statKey, const QString& top, bool on);
+    void copyPriceNoteRequested(const QString& note);
     void popupHidden();
 
 protected:
@@ -109,6 +114,8 @@ private:
     void setPriceText(const QString& plain, const QString& color = QString());
     QString withUnitIcons(const QString& plain) const;
     void applyUnitIcon(QTableWidgetItem* item) const;
+    void copyRowPriceNote(int row);
+    void showPriceContextMenu(const QPoint& pos);
     void fitPriceColumns();
     void refreshCurrencyCombo(); // 화폐 콤보를 아이콘으로 (폭 줄이기)
     void fitRowsArea(); // 속성 줄 + 옵션 줄 높이에 맞춰 영역 크기
@@ -205,6 +212,9 @@ private:
     QString m_lastRowKey; // 같은 판매자·같은 가격 묶기
     int m_lastRowCount = 0;
     QString m_priceText, m_priceColor;
+    double m_estimateAmount = 0;
+    QString m_estimateCurrency;
+    QTimer m_copyFeedbackTimer;
     QHash<QString, QString> m_unitIcons; // 화폐 이름 -> 아이콘 파일
     QTableWidget* m_prices;
     bool m_priceMoreAvailable = false;
