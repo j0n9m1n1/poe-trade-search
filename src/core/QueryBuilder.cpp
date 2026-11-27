@@ -22,6 +22,7 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("ilvl"), QStringLiteral("misc_filters")},
         {QStringLiteral("gem_level"), QStringLiteral("misc_filters")},
         {QStringLiteral("gem_transfigured"), QStringLiteral("misc_filters")},
+        {QStringLiteral("gem_imbued"), QStringLiteral("misc_filters")},
         {QStringLiteral("corrupted"), QStringLiteral("misc_filters")},
         {QStringLiteral("twice_corrupted"), QStringLiteral("misc_filters")},
         {QStringLiteral("mutated"), QStringLiteral("misc_filters")},
@@ -245,6 +246,8 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
     yesNo(QStringLiteral("twice_corrupted"), r.twiceCorrupted);
     yesNo(QStringLiteral("mutated"), r.mutated);
     yesNo(QStringLiteral("mirrored"), r.mirrored);
+    if (r.game == Game::Poe1)
+        yesNo(QStringLiteral("gem_imbued"), r.gemImbued);
     if (r.notSplit && r.game == Game::Poe1)
         fs.add(QStringLiteral("split"), option(QStringLiteral("false")));
     if (r.notFractured)

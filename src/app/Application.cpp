@@ -52,6 +52,7 @@ QWidget* Application::popupWidget() const
 
 Application::~Application()
 {
+    platform::stopWatchingOutsideMousePress();
     if (m_hotkeys)
         m_hotkeys->clear();
     delete m_popup;
@@ -111,7 +112,9 @@ bool Application::start(QString* error)
     connect(m_popup, &MainPopup::settingsRequested, this, &Application::openSettings);
     connect(m_popup, &MainPopup::rememberToggled, this, &Application::onRemember);
     connect(m_popup, &MainPopup::popupHidden, this, [this]() {
+        ++m_popupSeq;
         m_popupPos = m_popup->pos();
+        platform::stopWatchingOutsideMousePress();
         m_clickTimer.stop();
         m_client->cancel(m_priceToken);
         m_client->cancel(m_openTradeToken);
@@ -516,7 +519,6 @@ void Application::showPopup()
     const int x = qBound(area.left(), position.x(), qMax(area.left(), area.right() + 1 - size.width()));
     const int y = qBound(area.top(), position.y(), qMax(area.top(), area.bottom() + 1 - size.height()));
     m_popup->move(x, y);
-    ++m_popupSeq;
     const bool gameFg = platform::foregroundGame().foreground;
     if (gameFg) {
         platform::setNoActivate(m_popup, true);
@@ -529,9 +531,7 @@ void Application::showPopup()
         m_popup->raise();
     }
     updateEscHotkey(gameFg);
-    m_shownAt.restart();
-    m_mouseWasDown = platform::mouseButtonDown();
-    m_clickTimer.start();
+    watchPopupClicks();
 }
 
 void Application::reopenLast()
@@ -543,47 +543,48 @@ void Application::reopenLast()
     showPopup();
 }
 
+void Application::watchPopupClicks()
+{
+    const quint64 seq = ++m_popupSeq;
+    platform::stopWatchingOutsideMousePress();
+    m_clickTimer.stop();
+    if (!m_cfg.closeOnOutsideClick)
+        return;
+    if (!platform::watchOutsideMousePress(m_popup, [this, seq](platform::GameClickTarget target) {
+            if (QApplication::activePopupWidget() || QApplication::activeModalWidget())
+                return;
+            QMetaObject::invokeMethod(this, [this, target, seq]() { onOutsideClick(target, seq); }, Qt::QueuedConnection);
+        })) {
+        m_mouseWasDown = platform::mouseButtonDown();
+        m_clickTimer.start();
+    }
+}
+
 void Application::checkOutsideClick()
 {
-    if (!m_popup->isVisible()) {
-        m_clickTimer.stop();
-        return;
-    }
     const bool down = platform::mouseButtonDown();
-    const bool pressed = down && !m_mouseWasDown; // 누르는 순간만
+    const bool pressed = down && !m_mouseWasDown;
     m_mouseWasDown = down;
-    if (!pressed || !m_cfg.closeOnOutsideClick)
+    if (pressed && !m_popup->frameGeometry().contains(QCursor::pos()))
+        onOutsideClick(platform::cursorGameClickTarget(), m_popupSeq);
+}
+
+void Application::onOutsideClick(platform::GameClickTarget target, quint64 popupSeq)
+{
+    using platform::GameClickTarget;
+    if (popupSeq != m_popupSeq || !m_popup->isVisible() ||
+        QApplication::activePopupWidget() || QApplication::activeModalWidget())
         return;
-    // 게임 화면을 눌렀을 때만 닫음. 창 모드에서 다른 프로그램/바탕화면을 누른 건 무시
-    if (m_popup->frameGeometry().contains(QCursor::pos()))
-        return;
-    if (m_shownAt.elapsed() < 250) {
-        qInfo() << "outside click ignored: just shown" << m_shownAt.elapsed() << "ms";
-        return;
-    }
-    // 콤보 펼침/메시지 상자/설정 창이 떠 있으면 건드리지 않음
-    if (QApplication::activePopupWidget() || QApplication::activeModalWidget()) {
-        qInfo() << "outside click ignored: popup/modal open";
-        return;
-    }
-    QString why;
-    if (platform::cursorOverGame(&why)) {
-        qInfo().noquote() << "outside click -> close (" << why << ")";
+    if (target == GameClickTarget::Game) {
+        qInfo() << "outside game click -> close";
         m_popup->hide();
-        return;
+    } else if (target == GameClickTarget::GameArea) {
+        // 게임과 겹치는 창은 클릭 뒤 게임이 활성화됐을 때만 닫음
+        QTimer::singleShot(150, this, [this, popupSeq]() {
+            if (platform::foregroundGame().foreground)
+                onOutsideClick(platform::GameClickTarget::Game, popupSeq);
+        });
     }
-    // 그래도 아니면: 잠깐 뒤 활성 창이 PoE 면 게임을 누른 것 (다른 프로그램을 눌렀으면 그 프로그램이 활성)
-    // (underMouse 는 활성화 안 되는 창에서 안 풀릴 때가 있어서 커서 좌표로 확인)
-    const quint64 seq = m_popupSeq;
-    QTimer::singleShot(150, this, [this, why, seq]() {
-        if (seq != m_popupSeq || !m_popup->isVisible())
-            return;
-        const bool fg = platform::foregroundGame().foreground;
-        const bool outside = !m_popup->frameGeometry().contains(QCursor::pos());
-        qInfo().noquote() << "outside click (" << why << ") foregroundPoe=" << fg << " outside=" << outside;
-        if (fg && outside)
-            m_popup->hide();
-    });
 }
 
 void Application::showPopupMessage(const QString& title, const QString& msg)
@@ -1116,6 +1117,8 @@ void Application::applyConfig()
         unregisterHotkeys();
         registerHotkeys();
     }
+    if (m_popup->isVisible())
+        watchPopupClicks();
 }
 
 void Application::saveConfig()

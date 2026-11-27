@@ -49,6 +49,7 @@
         "unidentified": ["미확인", "Unidentified"],
         "mirrored": [["복제됨", "복제된", "복제"], "Mirrored"],
         "split": [["분할됨", "분할된"], "Split"],
+        "imbued": ["부여된", "Imbued"],
         "fractured_item": [["분열된 아이템", "분열된"], ["Fractured Item", "Fractured"]],
         "synthesised_item": ["결합된 아이템", "Synthesised Item"],
         "searing_item": ["작열의 총주교 아이템", "Searing Exarch Item"],

@@ -88,6 +88,7 @@ struct ParsedItem {
     bool blightRavaged = false;
     bool vaalGem = false;
     bool transfigured = false;
+    bool imbued = false; // 부여된 젬 (보조 젬 내장, "부여된"/"Imbued" 한 줄)
     QVector<int> influences; // Keywords::influences() 인덱스
 
     int quality = -1;

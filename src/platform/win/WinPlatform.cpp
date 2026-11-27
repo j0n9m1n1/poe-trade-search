@@ -12,6 +12,7 @@
 #include "platform/Platform.h"
 
 #include <QWidget>
+#include <utility>
 #include <vector>
 
 namespace pts::platform {
@@ -54,6 +55,40 @@ void pushKey(std::vector<INPUT>& v, WORD vk, bool up)
 bool isDown(int vk)
 {
     return (GetAsyncKeyState(vk) & 0x8000) != 0;
+}
+
+GameClickTarget gameClickTarget(POINT point, HWND hitWindow)
+{
+    if (isPoeWindow(hitWindow))
+        return GameClickTarget::Game;
+
+    const HWND foreground = GetForegroundWindow();
+    const HWND game = isPoeWindow(foreground) ? foreground : FindWindowW(kPoeClass, nullptr);
+    RECT bounds = {};
+    if (!game || !GetWindowRect(game, &bounds) || !PtInRect(&bounds, point))
+        return GameClickTarget::OutsideGame;
+    if (hitWindow && (GetWindowLongPtrW(hitWindow, GWL_EXSTYLE) & WS_EX_TOPMOST))
+        return GameClickTarget::Game; // 게임 영역 위의 항상 위 오버레이
+    return GameClickTarget::GameArea;
+}
+
+HHOOK outsideMouseHook = nullptr;
+HWND watchedPopup = nullptr;
+std::function<void(GameClickTarget)> outsideMousePress;
+
+LRESULT CALLBACK onMouseInput(int code, WPARAM message, LPARAM data)
+{
+    if (code == HC_ACTION && outsideMousePress &&
+        (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN || message == WM_MBUTTONDOWN)) {
+        const POINT point = reinterpret_cast<const MSLLHOOKSTRUCT*>(data)->pt;
+        const HWND hitWindow = GetAncestor(WindowFromPoint(point), GA_ROOT);
+        if (hitWindow != watchedPopup) {
+            const auto target = gameClickTarget(point, hitWindow);
+            if (target != GameClickTarget::OutsideGame)
+                outsideMousePress(target);
+        }
+    }
+    return CallNextHookEx(nullptr, code, message, data);
 }
 
 } // namespace
@@ -222,36 +257,31 @@ bool mouseButtonDown()
     return isDown(VK_LBUTTON) || isDown(VK_RBUTTON) || isDown(VK_MBUTTON);
 }
 
-bool cursorOverGame(QString* detail)
+GameClickTarget cursorGameClickTarget()
 {
-    POINT p;
-    if (!GetCursorPos(&p))
+    POINT point;
+    if (!GetCursorPos(&point))
+        return GameClickTarget::OutsideGame;
+    return gameClickTarget(point, GetAncestor(WindowFromPoint(point), GA_ROOT));
+}
+
+bool watchOutsideMousePress(QWidget* popup, std::function<void(GameClickTarget)> onPress)
+{
+    watchedPopup = reinterpret_cast<HWND>(popup->winId());
+    outsideMouseHook = SetWindowsHookExW(WH_MOUSE_LL, onMouseInput, GetModuleHandleW(nullptr), 0);
+    if (!outsideMouseHook)
         return false;
-    HWND fg = GetForegroundWindow();
-    HWND game = isPoeWindow(fg) ? fg : FindWindowW(kPoeClass, nullptr);
-    HWND h = WindowFromPoint(p);
-    HWND root = h ? GetAncestor(h, GA_ROOT) : nullptr;
-    wchar_t cls[96] = {};
-    if (root)
-        GetClassNameW(root, cls, 95);
-    const LONG_PTR ex = root ? GetWindowLongPtrW(root, GWL_EXSTYLE) : 0;
-    RECT r = {};
-    const bool inGame = game && GetWindowRect(game, &r) && PtInRect(&r, p);
-    bool result = false;
-    if (root && isPoeWindow(root))
-        result = true;
-    else if (inGame && root && (ex & WS_EX_TOPMOST))
-        result = true; // 게임 위 오버레이 (항상 위) -> 게임 화면을 누른 것
-    if (detail) {
-        *detail = QStringLiteral("cursor=%1,%2 game=%3 inGameRect=%4 under=%5 topmost=%6")
-                      .arg(p.x)
-                      .arg(p.y)
-                      .arg(game ? 1 : 0)
-                      .arg(inGame ? 1 : 0)
-                      .arg(QString::fromWCharArray(cls))
-                      .arg((ex & WS_EX_TOPMOST) ? 1 : 0);
-    }
-    return result;
+    outsideMousePress = std::move(onPress);
+    return true;
+}
+
+void stopWatchingOutsideMousePress()
+{
+    if (outsideMouseHook)
+        UnhookWindowsHookEx(outsideMouseHook);
+    outsideMouseHook = nullptr;
+    watchedPopup = nullptr;
+    outsideMousePress = {};
 }
 
 int qtKeyToVk(int qtKey)

@@ -10,7 +10,6 @@
 #include "net/TradeClient.h"
 #include "net/Updater.h"
 
-#include <QElapsedTimer>
 #include <QObject>
 #include <QPointer>
 #include <QSystemTrayIcon>
@@ -28,6 +27,10 @@ class HotkeyManager;
 class IconCache;
 class MainPopup;
 class TradeClient;
+
+namespace platform {
+enum class GameClickTarget;
+}
 
 class Application : public QObject {
     Q_OBJECT
@@ -51,7 +54,9 @@ private:
     void handleItemText(const QString& text);
     void showPopup();  // 커서 근처(설정)에 띄우고 바깥 클릭 감시 시작
     void reopenLast(); // 실수로 닫았을 때
+    void watchPopupClicks();
     void checkOutsideClick();
+    void onOutsideClick(platform::GameClickTarget target, quint64 popupSeq);
     void openTrade();
     void priceCheck();
     void openSettings();
@@ -124,8 +129,7 @@ private:
 
     QTimer m_fgTimer;
     QTimer m_expectTimer;
-    QTimer m_clickTimer;     // 팝업 떠 있는 동안 바깥 클릭 감시 (30ms)
-    QElapsedTimer m_shownAt; // 뜨자마자 닫히는 것 방지
+    QTimer m_clickTimer; // Windows 이벤트 등록 실패 시 폴링
     bool m_mouseWasDown = false;
     enum class Expect { None, Search };
     Expect m_expect = Expect::None;

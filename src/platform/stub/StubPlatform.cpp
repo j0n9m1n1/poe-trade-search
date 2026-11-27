@@ -45,12 +45,13 @@ bool isAdministrator()
 
 void createInstanceMutex() {}
 
-bool cursorOverGame(QString* detail)
+GameClickTarget cursorGameClickTarget()
 {
-    if (detail)
-        *detail = QStringLiteral("stub");
-    return true; // 게임 창을 모름 -> 예전처럼 바깥 클릭이면 닫음
+    return GameClickTarget::Game;
 }
+
+bool watchOutsideMousePress(QWidget*, std::function<void(GameClickTarget)>) { return false; }
+void stopWatchingOutsideMousePress() {}
 
 bool mouseButtonDown()
 {

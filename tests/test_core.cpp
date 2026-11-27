@@ -960,6 +960,66 @@ private slots:
         QCOMPARE(typeOf(*plain, Lang::Ko).toString(), QStringLiteral("가속"));
     }
 
+    void poe1TransfiguredGemImbued()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        auto query = [&](const ParsedItem& it, Lang server) {
+            RequestContext ctx;
+            ctx.server = server;
+            return QueryBuilder::build(makeRequest(it, defaultFilterState(it), kw, &dbs[0], ctx), &dbs[0][server])
+                .value(QStringLiteral("query")).toObject();
+        };
+        auto filter = [](const QJsonObject& q, const char* key) {
+            const QJsonObject f = q.value(QStringLiteral("filters")).toObject();
+            for (const QString& grp : f.keys()) {
+                const QJsonObject gf = f.value(grp).toObject().value(QStringLiteral("filters")).toObject();
+                if (gf.contains(QLatin1String(key)))
+                    return gf.value(QLatin1String(key)).toObject();
+            }
+            return QJsonObject();
+        };
+        // 사용자 클립보드 (Covens): 변성 + 타락, 부여 안 됨. "부여된" 매물(보조 젬 내장, 1 div)이 섞이지 않게 부여 제외
+        struct Case {
+            const char* fx;
+            Lang lang;
+            bool imbued;
+        };
+        const Case cases[] = {
+            {"poe1_ko_gem_transfigured_massacre.txt", Lang::Ko, false},
+            {"poe1_ko_gem_transfigured_imbued.txt", Lang::Ko, true},
+            {"poe1_en_gem_transfigured_imbued.txt", Lang::En, true},
+        };
+        for (const Case& c : cases) {
+            auto it = parse(QString::fromUtf8(c.fx), Game::Poe1);
+            QVERIFY2(it, c.fx);
+            QVERIFY(it->isGem && it->transfigured && it->corrupted && !it->vaalGem);
+            QCOMPARE(it->imbued, c.imbued);
+            QCOMPARE(it->type, c.lang == Lang::Ko ? QStringLiteral("천상의 단도") : QStringLiteral("Ethereal Knives"));
+            QCOMPARE(it->disc, QStringLiteral("alt_y"));
+            QCOMPARE(it->level, 20);
+            QCOMPARE(it->quality, 20);
+            QVERIFY(it->levelMax && it->checkLevel && it->checkQuality);
+            QCOMPARE(it->corruptDefault, 1);
+            for (Lang server : {Lang::Ko, Lang::En}) {
+                const QJsonObject q = query(*it, server);
+                const QJsonObject type = q.value(QStringLiteral("type")).toObject();
+                QCOMPARE(type.value(QStringLiteral("option")).toString(),
+                         server == Lang::Ko ? QStringLiteral("천상의 단도") : QStringLiteral("Ethereal Knives"));
+                QCOMPARE(type.value(QStringLiteral("discriminator")).toString(), QStringLiteral("alt_y"));
+                QCOMPARE(filter(q, "gem_level").value(QStringLiteral("min")).toDouble(), 20.0);
+                QCOMPARE(filter(q, "quality").value(QStringLiteral("min")).toDouble(), 20.0);
+                QCOMPARE(filter(q, "corrupted").value(QStringLiteral("option")).toString(), QStringLiteral("true"));
+                QCOMPARE(filter(q, "gem_imbued").value(QStringLiteral("option")).toString(),
+                         c.imbued ? QStringLiteral("true") : QStringLiteral("false"));
+            }
+        }
+        // 젬이 아니면 부여 필터 안 넣음
+        auto ring = parse(QStringLiteral("poe1_ko_rare_ring.txt"), Game::Poe1);
+        QVERIFY(ring && !ring->imbued);
+        QVERIFY(filter(query(*ring, Lang::Ko), "gem_imbued").isEmpty());
+    }
+
     void poe1Unique()
     {
         if (!haveData)

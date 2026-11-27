@@ -521,6 +521,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     it.unidentified = flags.contains(QStringLiteral("unidentified"));
     it.mirrored = flags.contains(QStringLiteral("mirrored"));
     it.split = flags.contains(QStringLiteral("split"));
+    it.imbued = flags.contains(QStringLiteral("imbued"));
     it.fractured = flags.contains(QStringLiteral("fractured_item"));
     it.synthesised = flags.contains(QStringLiteral("synthesised_item"));
     it.searing = flags.contains(QStringLiteral("searing_item"));

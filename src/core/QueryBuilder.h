@@ -63,6 +63,7 @@ struct SearchRequest {
     bool blighted = false;
     bool blightRavaged = false;
     bool transfigured = false;
+    int gemImbued = 0; // 부여된 젬 0 any / 1 yes / 2 no (PoE1)
 
     QString heistObjective;
     QString ultimatumReward;

@@ -4,6 +4,7 @@
 #include "core/Types.h"
 
 #include <QString>
+#include <functional>
 
 class QWidget;
 
@@ -41,10 +42,12 @@ void createInstanceMutex();
 // 지금 마우스 버튼(좌/우/가운데)이 눌려 있는지 (전역). 팝업 바깥 클릭 감지용
 bool mouseButtonDown();
 
-// 마우스 커서가 PoE 게임 화면 위인지 (창 모드에서 다른 프로그램을 누른 건 무시하려고)
-//  게임 창 영역 안이고, 그 위에 떠 있는 창이 PoE 거나 "항상 위" 창(오버레이류)이면 게임 화면으로 봄
-//  detail 에는 판정 근거 (로그용)
-bool cursorOverGame(QString* detail = nullptr);
+enum class GameClickTarget { OutsideGame, GameArea, Game };
+GameClickTarget cursorGameClickTarget();
+
+// 팝업 밖 버튼 누름의 위치를 누른 시점에 판정. 등록 실패 시 호출자가 폴링으로 대체.
+bool watchOutsideMousePress(QWidget* popup, std::function<void(GameClickTarget)> onPress);
+void stopWatchingOutsideMousePress();
 
 // Qt 키 -> Windows VK (단축키 입력 상자용). Windows 에선 nativeVirtualKey 를 우선 씀
 int qtKeyToVk(int qtKey);

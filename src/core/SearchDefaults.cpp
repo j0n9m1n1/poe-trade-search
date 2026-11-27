@@ -205,6 +205,9 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
         r.mirrored = st.mirrored == 1 ? 1 : (st.mirrored == 2 || (gear && nonUnique && !it.mirrored) ? 2 : 0);
         r.notSplit = gear && nonUnique && it.game == Game::Poe1 && !it.split && (!permanent || st.exact);
         r.notFractured = !it.fractured && (st.notFractured || (gear && st.exact));
+        // 부여된 젬(보조 젬 내장)은 같은 젬이라도 시세가 따로라 부여 여부를 맞춤 (안 하면 싼 부여된 매물이 섞임)
+        if (it.isGem && it.game == Game::Poe1)
+            r.gemImbued = it.imbued ? 1 : 2;
     }
     r.synthesised = st.synthesised;
     r.blighted = st.blighted;
