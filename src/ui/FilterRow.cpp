@@ -171,6 +171,88 @@ bool FilterRow::isCheckable() const
     return m_text->isCheckable();
 }
 
+PropRow::PropRow(QWidget* parent) : QWidget(parent)
+{
+    auto* lay = new QHBoxLayout(this);
+    lay->setContentsMargins(0, 1, 0, 1);
+    lay->setSpacing(4);
+    lay->addSpacing(84 + 4 + 26); // FilterRow 의 종류 콤보 + 등급 칸
+    m_text = new ToggleLabel(this);
+    m_text->setColor(QColor(0xc8, 0xc8, 0xc8)); // 게임 속성 글씨 (회색)
+    {
+        QFont f = m_text->font();
+        f.setPointSizeF(f.pointSizeF() + 1);
+        m_text->setFont(f);
+    }
+    m_text->setToolTip(QStringLiteral("누르면 검색에 넣거나 뺍니다"));
+    lay->addWidget(m_text);
+    lay->addStretch(1);
+    lay->addSpacing(36); // FilterRow 의 롤 % 칸
+    m_min = new QLineEdit(this);
+    m_max = new QLineEdit(this);
+    auto* v = new QRegularExpressionValidator(QRegularExpression(QStringLiteral("^-?\\d*(\\.\\d*)?$")), this);
+    for (QLineEdit* e : {m_min, m_max}) {
+        e->setFixedWidth(42);
+        e->setValidator(v);
+        e->setAlignment(Qt::AlignRight);
+        lay->addWidget(e);
+        connect(e, &QLineEdit::textEdited, this, &PropRow::changed);
+    }
+    connect(m_text, &ToggleLabel::toggled, this, &PropRow::changed);
+}
+
+void PropRow::setText(const QString& t)
+{
+    m_text->setText(t);
+}
+
+void PropRow::setChecked(bool on)
+{
+    QSignalBlocker b(m_text);
+    m_text->setChecked(on);
+}
+
+bool PropRow::isChecked() const
+{
+    return m_text->isChecked() && m_text->isCheckable();
+}
+
+void PropRow::setCheckable(bool on)
+{
+    m_text->setCheckable(on);
+    m_text->setCursor(on ? Qt::PointingHandCursor : Qt::ArrowCursor);
+}
+
+void PropRow::setColor(const QColor& c)
+{
+    m_text->setColor(c);
+}
+
+void PropRow::setExtra(QWidget* w)
+{
+    m_min->hide();
+    m_max->hide();
+    w->setParent(this);
+    w->setFixedWidth(42 * 2 + 4 + 40); // 최소+최대 칸보다 조금 넓게 (롤 칸 쪽으로)
+    static_cast<QHBoxLayout*>(layout())->insertWidget(layout()->count() - 2, w); // 최소/최대 자리
+}
+
+void PropRow::setValues(const OptDouble& mn, const OptDouble& mx)
+{
+    m_min->setText(mn ? QString::number(*mn) : QString());
+    m_max->setText(mx ? QString::number(*mx) : QString());
+}
+
+OptDouble PropRow::minValue() const
+{
+    return toOpt(m_min->text());
+}
+
+OptDouble PropRow::maxValue() const
+{
+    return toOpt(m_max->text());
+}
+
 QColor FilterRow::modColor(const QString& c)
 {
     // 게임 아이템 설명 글씨 색 (어두운 배경 기준)

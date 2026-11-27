@@ -22,6 +22,7 @@ class QVBoxLayout;
 namespace pts {
 
 class FilterRow;
+class PropRow;
 class ToggleLabel;
 class Keywords;
 struct GameDb;
@@ -92,6 +93,7 @@ private:
     QString withUnitIcons(const QString& plain) const;
     void applyUnitIcon(QTableWidgetItem* item) const;
     void fitPriceColumns();
+    void fitRowsArea(); // 속성 줄 + 옵션 줄 높이에 맞춰 영역 크기
     int rangePct() const;
 
     const Keywords& m_kw;
@@ -116,20 +118,23 @@ private:
     QLabel* m_inflL;        // 영향 표시 (왼쪽/오른쪽)
     QLabel* m_inflR;
     QLabel* m_name;     // 희귀 이름 표시용
-    QLabel* m_sub;
     QLabel* m_info;
     ToggleLabel* m_all;
 
     QScrollArea* m_scroll;
     struct PropWidgets {
         QString key;
-        QWidget* box = nullptr;
-        QCheckBox* use = nullptr;
-        QLineEdit* min = nullptr;
-        QLineEdit* max = nullptr;
+        QString label;
+        PropRow* row = nullptr;
     };
-    QVector<PropWidgets> m_props; // 아이템 속성 필터 (방어도/DPS ...)
-    QWidget* m_propBox;
+    QVector<PropWidgets> m_props; // 아이템 속성 줄 (방어도/DPS/지도 속성 ...)
+    QWidget* m_propRows;          // 옵션 목록 위 속성 줄 묶음
+    QWidget* m_propSep;
+    PropRow* m_rarityRow;
+    PropRow* m_lvRow;
+    PropRow* m_qRow;
+    PropRow* m_sockRow;
+    PropRow* m_linkRow;
     QWidget* m_rowsBox;
     QVBoxLayout* m_rowsLayout;
     QVector<FilterRow*> m_rows;
@@ -140,16 +145,12 @@ private:
     QComboBox* m_want2;
 
     QWidget* m_miscBox;
-    QCheckBox* m_lv;
     QLineEdit* m_lvMin;
     QLineEdit* m_lvMax;
-    QCheckBox* m_q;
     QLineEdit* m_qMin;
     QLineEdit* m_qMax;
-    QCheckBox* m_sock;
     QLineEdit* m_sMin;
     QLineEdit* m_sMax;
-    QLabel* m_linkLabel;
     QLineEdit* m_lMin;
     QLineEdit* m_lMax;
     QCheckBox* m_special1;

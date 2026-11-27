@@ -168,7 +168,6 @@ void MainPopup::buildUi()
     m_server->addItem(QStringLiteral("글로벌 서버"), li(Lang::En));
     m_settings = new QPushButton(QStringLiteral("설정"), this);
     m_settings->setFixedWidth(52);
-    top->addWidget(m_rarity);
     top->addWidget(m_preset);
     top->addWidget(m_range);
     top->addStretch(1);
@@ -215,10 +214,7 @@ void MainPopup::buildUi()
     hh->addWidget(m_inflL, 0, Qt::AlignVCenter);
     hh->addLayout(hl, 1);
     hh->addWidget(m_inflR, 0, Qt::AlignVCenter);
-    m_sub = new QLabel(this);
-    m_sub->setWordWrap(true);
     names->addWidget(m_header);
-    names->addWidget(m_sub);
     head->addWidget(m_icon, 0, Qt::AlignTop);
     head->addLayout(names, 1);
     root->addLayout(head);
@@ -278,90 +274,60 @@ void MainPopup::buildUi()
 
     p1->addWidget(hline(page1));
 
-    // 레벨 / 퀄 / 홈 / 특수 / 타락 / 영향
+    // ---- 아이템 속성 줄 (PoE Overlay 처럼 옵션 목록 위에 한 줄씩, 옵션 줄과 같은 최소/최대 열)
+    //  레어도 / 아이템 레벨(젬 레벨, 지도 등급) / 퀄리티 / 홈 / 링크 / 방어도·DPS·지도 속성
+    m_propRows = new QWidget(m_rowsBox);
+    {
+        auto* prl = new QVBoxLayout(m_propRows);
+        prl->setContentsMargins(0, 0, 0, 0);
+        prl->setSpacing(2);
+        auto addRow = [&]() {
+            auto* r = new PropRow(m_propRows);
+            prl->addWidget(r);
+            return r;
+        };
+        m_rarityRow = addRow();
+        m_rarityRow->setCheckable(false);
+        m_rarityRow->setExtra(m_rarity);
+        m_lvRow = addRow();
+        m_qRow = addRow();
+        m_sockRow = addRow();
+        m_linkRow = addRow();
+        m_lvMin = m_lvRow->minEdit();
+        m_lvMax = m_lvRow->maxEdit();
+        m_qMin = m_qRow->minEdit();
+        m_qMax = m_qRow->maxEdit();
+        m_sMin = m_sockRow->minEdit();
+        m_sMax = m_sockRow->maxEdit();
+        m_lMin = m_linkRow->minEdit();
+        m_lMax = m_linkRow->maxEdit();
+        const QList<QPair<QString, QString>> keys = {
+            {QStringLiteral("ilvl"), QStringLiteral("아이템 레벨")},    {QStringLiteral("map_bonus"), QStringLiteral("아틀라스 획득물")},
+            {QStringLiteral("map_iiq"), QStringLiteral("아이템 수량")}, {QStringLiteral("map_iir"), QStringLiteral("아이템 희귀도")},
+            {QStringLiteral("map_packsize"), QStringLiteral("몬스터 무리 규모")},
+            {QStringLiteral("ar"), QStringLiteral("방어도")},       {QStringLiteral("ev"), QStringLiteral("회피")},
+            {QStringLiteral("es"), QStringLiteral("에너지 보호막")}, {QStringLiteral("ward"), QStringLiteral("수호")},
+            {QStringLiteral("block"), QStringLiteral("막기 확률")},   {QStringLiteral("spirit"), QStringLiteral("정신력")},
+            {QStringLiteral("dps"), QStringLiteral("DPS")},          {QStringLiteral("pdps"), QStringLiteral("물리 DPS")},
+            {QStringLiteral("edps"), QStringLiteral("원소 DPS")}};
+        for (const auto& k : keys) {
+            PropWidgets pw;
+            pw.key = k.first;
+            pw.label = k.second;
+            pw.row = addRow();
+            m_props.push_back(pw);
+        }
+    }
+    m_rowsLayout->insertWidget(0, m_propRows);
+    m_propSep = hline(m_rowsBox);
+    m_rowsLayout->insertWidget(1, m_propSep);
+
+    // 결합 / 역병 / 영향 / 강탈·결전 / 삿된 / 타락
     m_miscBox = new QWidget(page1);
     auto* g = new QGridLayout(m_miscBox);
     g->setContentsMargins(0, 0, 0, 0);
     g->setHorizontalSpacing(6);
     g->setVerticalSpacing(3);
-    m_lv = new QCheckBox(QStringLiteral("레벨"), m_miscBox);
-    m_lvMin = numEdit(m_miscBox);
-    m_lvMax = numEdit(m_miscBox);
-    m_q = new QCheckBox(QStringLiteral("퀄리티"), m_miscBox);
-    m_qMin = numEdit(m_miscBox);
-    m_qMax = numEdit(m_miscBox);
-    m_sock = new QCheckBox(QStringLiteral("홈"), m_miscBox);
-    m_sMin = numEdit(m_miscBox, 26);
-    m_sMax = numEdit(m_miscBox, 26);
-    m_linkLabel = new QLabel(QStringLiteral("링크"), m_miscBox);
-    m_lMin = numEdit(m_miscBox, 26);
-    m_lMax = numEdit(m_miscBox, 26);
-
-    auto pair = [&](QCheckBox* c, QLineEdit* a, QLineEdit* b) {
-        auto* w = new QWidget(m_miscBox);
-        auto* v = new QVBoxLayout(w);
-        v->setContentsMargins(0, 0, 0, 0);
-        v->setSpacing(1);
-        v->addWidget(c);
-        auto* h = new QHBoxLayout;
-        h->setSpacing(2);
-        h->addWidget(a);
-        h->addWidget(b);
-        h->addStretch(1);
-        v->addLayout(h);
-        return w;
-    };
-    g->addWidget(pair(m_lv, m_lvMin, m_lvMax), 0, 0);
-    g->addWidget(pair(m_q, m_qMin, m_qMax), 0, 1);
-    {
-        auto* w = new QWidget(m_miscBox);
-        auto* v = new QVBoxLayout(w);
-        v->setContentsMargins(0, 0, 0, 0);
-        v->setSpacing(1);
-        v->addWidget(m_sock);
-        auto* h = new QHBoxLayout;
-        h->setSpacing(2);
-        h->addWidget(m_sMin);
-        h->addWidget(m_sMax);
-        h->addWidget(m_linkLabel);
-        h->addWidget(m_lMin);
-        h->addWidget(m_lMax);
-        h->addStretch(1);
-        v->addLayout(h);
-        g->addWidget(w, 0, 2);
-    }
-    // 아이템 속성 (방어도/회피/에너지 보호막/DPS ...): 있는 것만 보임
-    m_propBox = new QWidget(m_miscBox);
-    {
-        auto* ph = new QHBoxLayout(m_propBox);
-        ph->setContentsMargins(0, 0, 0, 0);
-        ph->setSpacing(10);
-        const QList<QPair<QString, QString>> keys = {
-            {QStringLiteral("ar"), QStringLiteral("방어도")},       {QStringLiteral("ev"), QStringLiteral("회피")},
-            {QStringLiteral("es"), QStringLiteral("에너지 보호막")}, {QStringLiteral("ward"), QStringLiteral("수호")},
-            {QStringLiteral("block"), QStringLiteral("막기")},       {QStringLiteral("spirit"), QStringLiteral("정신력")},
-            {QStringLiteral("dps"), QStringLiteral("DPS")},          {QStringLiteral("pdps"), QStringLiteral("물리 DPS")},
-            {QStringLiteral("edps"), QStringLiteral("원소 DPS")},     {QStringLiteral("ilvl"), QStringLiteral("아이템 레벨")},
-            {QStringLiteral("map_iiq"), QStringLiteral("아이템 수량")}, {QStringLiteral("map_iir"), QStringLiteral("아이템 희귀도")},
-            {QStringLiteral("map_packsize"), QStringLiteral("무리 규모")}, {QStringLiteral("map_bonus"), QStringLiteral("아틀라스 획득물")}};
-        static const QSet<QString> q20 = {QStringLiteral("ar"), QStringLiteral("ev"), QStringLiteral("es"),
-                                          QStringLiteral("ward"), QStringLiteral("dps"), QStringLiteral("pdps")};
-        for (const auto& k : keys) {
-            PropWidgets pw;
-            pw.key = k.first;
-            pw.use = new QCheckBox(k.second, m_propBox);
-            pw.min = numEdit(m_propBox);
-            pw.max = numEdit(m_propBox);
-            if (q20.contains(k.first))
-                pw.use->setToolTip(QStringLiteral("거래소는 퀄리티 20% 기준 값으로 검색합니다. 최소값도 그 기준입니다"));
-            pw.box = pair(pw.use, pw.min, pw.max);
-            pw.box->setParent(m_propBox);
-            ph->addWidget(pw.box);
-            m_props.push_back(pw);
-        }
-        ph->addStretch(1);
-    }
-    g->addWidget(m_propBox, 1, 0, 1, 3);
     m_special1 = new QCheckBox(QStringLiteral("결합"), m_miscBox);
     m_special2 = new QCheckBox(QStringLiteral("역병 침식"), m_miscBox);
     m_corrupt = new QComboBox(m_miscBox);
@@ -394,7 +360,7 @@ void MainPopup::buildUi()
     row2->addWidget(m_alt);
     row2->addWidget(m_mutated);
     row2->addWidget(m_corrupt);
-    g->addLayout(row2, 2, 0, 1, 3);
+    g->addLayout(row2, 0, 0, 1, 3);
     p1->addWidget(m_miscBox);
 
 
@@ -488,12 +454,6 @@ void MainPopup::buildUi()
 
     setMinimumWidth(660);
 
-    // 다크 테마에서도 보이게: 글자색과 배경색 중간값으로 흐린 글씨
-    {
-        const QString css = QStringLiteral("color:%1;").arg(dimColor(palette()).name());
-        m_sub->setStyleSheet(css);
-    }
-
     // ---- 연결
     connect(m_search, &QPushButton::clicked, this, &MainPopup::openTradeRequested);
     connect(m_close, &QPushButton::clicked, this, &QWidget::hide);
@@ -507,8 +467,10 @@ void MainPopup::buildUi()
     auto stale = [this]() { markStale(); };
     for (QComboBox* c : {m_rarity, m_server, m_corrupt, m_mutated, m_infl1, m_infl2, m_alt, m_status, m_currency, m_indexed, m_listCount})
         connect(c, qOverload<int>(&QComboBox::currentIndexChanged), this, stale);
-    for (QCheckBox* c : {m_lv, m_q, m_sock, m_special1, m_special2, m_collapse})
+    for (QCheckBox* c : {m_special1, m_special2, m_collapse})
         connect(c, &QCheckBox::toggled, this, stale);
+    for (PropRow* r : {m_lvRow, m_qRow, m_sockRow, m_linkRow})
+        connect(r, &PropRow::changed, this, stale);
     for (ToggleLabel* t : {m_useName, m_useType})
         connect(t, &ToggleLabel::toggled, this, stale);
     // 등록일 자동: 판매 방식을 바꾸면 따라감 (등록일을 직접 고르면 그때부터 고정)
@@ -520,11 +482,8 @@ void MainPopup::buildUi()
         m_indexed->setCurrentIndex(i < 0 ? 0 : i);
     });
     connect(m_indexed, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() { m_indexedAuto = false; });
-    for (const PropWidgets& pw : m_props) {
-        connect(pw.use, &QCheckBox::toggled, this, stale);
-        connect(pw.min, &QLineEdit::textEdited, this, stale);
-        connect(pw.max, &QLineEdit::textEdited, this, stale);
-    }
+    for (const PropWidgets& pw : m_props)
+        connect(pw.row, &PropRow::changed, this, stale);
     connect(m_preset, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() {
         applyPresetAndRender();
         markStale();
@@ -613,7 +572,6 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     m_cfgRange = cfg.searchStatRange;
     const ParsedItem& it = m_parsed;
     const TradeDb* db = gdb ? &(*gdb)[it.lang] : nullptr;
-    const bool poe1 = it.game == Game::Poe1;
 
     // 이름 (고유: 이름 체크 + 베이스 체크 / 희귀: 이름 표시 + 베이스 체크 / 그 외: 베이스 체크)
     {
@@ -667,19 +625,6 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     }
     m_icon->clear();
     m_icon->setVisible(false);
-    QStringList sub;
-    sub << (poe1 ? QStringLiteral("PoE1") : QStringLiteral("PoE2")) << it.itemClass;
-    if (!it.rarityText.isEmpty())
-        sub << it.rarityText;
-    if (it.isMap && it.mapTier > 0)
-        sub << QStringLiteral("%1등급").arg(it.mapTier);
-    if (it.itemLevel > 0)
-        sub << QStringLiteral("ilvl %1").arg(it.itemLevel);
-    if (it.corrupted)
-        sub << (it.twiceCorrupted ? QStringLiteral("두 번 타락") : QStringLiteral("타락"));
-    if (it.foulborn)
-        sub << QStringLiteral("삿된");
-    m_sub->setText(sub.join(QStringLiteral(" · ")));
 
     {
         QSignalBlocker b(m_rarity);
@@ -792,6 +737,31 @@ void MainPopup::applyPresetAndRender()
     }
     renderRows();
     renderMisc(st);
+    fitRowsArea();
+}
+
+void MainPopup::fitRowsArea()
+{
+    // 속성 줄 묶음 / 구분선
+    bool anyProp = false;
+    for (PropRow* r : m_propRows->findChildren<PropRow*>())
+        anyProp = anyProp || !r->isHidden();
+    m_propRows->setVisible(anyProp);
+    m_propSep->setVisible(anyProp && !m_rows.isEmpty());
+
+    // 옵션 영역은 내용만큼만 (빈 공간은 매물 목록에). 너무 많으면 스크롤
+    const int w = qMax(m_scroll->viewport()->width(), 600);
+    int h = 0;
+    for (int i = 0; i < m_rowsLayout->count(); ++i) {
+        QWidget* x = m_rowsLayout->itemAt(i)->widget();
+        if (!x || x->isHidden())
+            continue;
+        h += (x->hasHeightForWidth() ? x->heightForWidth(w) : x->sizeHint().height()) + m_rowsLayout->spacing();
+    }
+    // 줄바꿈 라벨은 최소 높이를 넉넉히 잡아서, 그보다 작으면 스크롤바가 생김
+    m_rowsLayout->activate();
+    h = qMax(h, m_rowsBox->minimumSizeHint().height());
+    m_scroll->setMinimumHeight(qBound(60, h + 6, 420));
 }
 
 void MainPopup::renderRows()
@@ -813,18 +783,6 @@ void MainPopup::renderRows()
     }
     QSignalBlocker b(m_all);
     m_all->setChecked(m_item.checkAllUnique);
-    // 옵션 영역은 옵션 수만큼만 (빈 공간은 매물 목록에). 너무 많으면 스크롤
-    // 줄마다 실제 폭 기준 높이를 더함 (긴 옵션은 줄바꿈)
-    const int w = qMax(m_scroll->viewport()->width(), 600);
-    int h = 0;
-    for (FilterRow* r : m_rows)
-        h += (r->hasHeightForWidth() ? r->heightForWidth(w) : r->sizeHint().height()) + m_rowsLayout->spacing();
-    if (!m_detail->isHidden())
-        h += m_detail->heightForWidth(w) + m_rowsLayout->spacing();
-    // 줄바꿈 라벨은 최소 높이를 넉넉히 잡아서, 그보다 작으면 스크롤바가 생김
-    m_rowsLayout->activate();
-    h = qMax(h, m_rowsBox->minimumSizeHint().height());
-    m_scroll->setMinimumHeight(qBound(60, h + 6, 330));
 }
 
 void MainPopup::renderMisc(const ItemFilterState& st)
@@ -832,31 +790,42 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     const ParsedItem& it = m_item;
     const TradeDb* db = m_gdb ? &(*m_gdb)[it.lang] : nullptr;
     const bool poe1 = it.game == Game::Poe1;
-    const auto kind = levelKindFor(it);
-    m_lv->setText(kind == SearchRequest::LevelKind::GemLevel ? QStringLiteral("젬 레벨")
-                  : kind == SearchRequest::LevelKind::MapTier ? QStringLiteral("지도 등급")
-                                                               : QStringLiteral("아이템 레벨"));
-    auto setOpt = [](QLineEdit* e, const OptDouble& v) { e->setText(v ? QString::number(*v) : QString()); };
-    QSignalBlocker b1(m_lv), b2(m_q), b3(m_sock), b4(m_special1), b5(m_special2), b6(m_corrupt), b6b(m_mutated), b7(m_infl1),
-        b8(m_infl2), b9(m_alt), b10(m_useName), b10b(m_useType), b11(m_rarity);
-    m_lv->setChecked(st.useLevel);
-    setOpt(m_lvMin, st.levelMin);
-    setOpt(m_lvMax, st.levelMax);
-    m_q->setChecked(st.useQuality);
-    setOpt(m_qMin, st.qualityMin);
-    setOpt(m_qMax, st.qualityMax);
-    m_sock->setChecked(st.useSockets);
-    setOpt(m_sMin, st.socketsMin);
-    setOpt(m_sMax, st.socketsMax);
-    setOpt(m_lMin, st.linksMin);
-    setOpt(m_lMax, st.linksMax);
-    m_linkLabel->setVisible(poe1);
-    m_lMin->setVisible(poe1);
-    m_lMax->setVisible(poe1);
-    m_sock->setText(poe1 ? QStringLiteral("홈·링크") : QStringLiteral("룬 홈"));
+    QSignalBlocker b4(m_special1), b5(m_special2), b6(m_corrupt), b6b(m_mutated), b7(m_infl1), b8(m_infl2), b9(m_alt),
+        b10(m_useName), b10b(m_useType), b11(m_rarity);
+    const QColor propGray(0xc8, 0xc8, 0xc8), warn(0xe0, 0x66, 0x66);
 
-    setBold(m_lv, it.highlightLevel, QStringLiteral("#e06666"));
-    setBold(m_q, it.highlightQuality, QStringLiteral("#e06666"));
+    // 레어도 줄
+    m_rarityRow->setText(QStringLiteral("아이템 희귀도: %1").arg(it.rarityText));
+    m_rarityRow->setVisible(!it.rarityText.isEmpty() && !it.isCurrency && !it.isCard);
+    // 레벨 줄: 아이템 레벨 / 젬 레벨 / 지도 등급
+    {
+        const auto kind = levelKindFor(it);
+        const int v = kind == SearchRequest::LevelKind::GemLevel  ? it.level
+                      : kind == SearchRequest::LevelKind::MapTier ? it.mapTier
+                                                                   : it.itemLevel;
+        const QString name = kind == SearchRequest::LevelKind::GemLevel  ? QStringLiteral("젬 레벨")
+                             : kind == SearchRequest::LevelKind::MapTier ? QStringLiteral("지도 등급")
+                                                                          : QStringLiteral("아이템 레벨");
+        m_lvRow->setText(QStringLiteral("%1: %2").arg(name).arg(v));
+        m_lvRow->setVisible(v > 0);
+        m_lvRow->setChecked(st.useLevel);
+        m_lvRow->setValues(st.levelMin, st.levelMax);
+        m_lvRow->setColor(it.highlightLevel ? warn : propGray);
+    }
+    // 퀄리티 / 홈 / 링크 줄
+    m_qRow->setText(QStringLiteral("퀄리티: +%1%").arg(it.quality));
+    m_qRow->setVisible(it.quality > 0);
+    m_qRow->setChecked(st.useQuality);
+    m_qRow->setValues(st.qualityMin, st.qualityMax);
+    m_qRow->setColor(it.highlightQuality ? warn : propGray);
+    m_sockRow->setText((poe1 ? QStringLiteral("홈: %1") : QStringLiteral("룬 홈: %1")).arg(it.sockets));
+    m_sockRow->setVisible(it.sockets > 0);
+    m_sockRow->setChecked(st.useSockets);
+    m_sockRow->setValues(st.socketsMin, st.socketsMax);
+    m_linkRow->setText(QStringLiteral("링크: %1").arg(it.links));
+    m_linkRow->setVisible(poe1 && it.links > 1);
+    m_linkRow->setChecked(st.useSockets);
+    m_linkRow->setValues(st.linksMin, st.linksMax);
 
     // 결합 / 역병
     const bool mapP1 = poe1 && it.isMap;
@@ -904,22 +873,38 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     }
     m_alt->setVisible(m_alt->count() > 0);
 
+    // 방어도 / DPS / 지도 속성 줄 (값은 거래소 기준: 방어·물리 DPS 는 퀄리티 20%)
     {
-        bool any = false;
+        static const QSet<QString> q20 = {QStringLiteral("ar"), QStringLiteral("ev"), QStringLiteral("es"),
+                                          QStringLiteral("ward"), QStringLiteral("dps"), QStringLiteral("pdps")};
         for (const PropWidgets& pw : m_props) {
             const PropFilterState* ps = nullptr;
             for (const auto& x : st.props) {
                 if (x.key == pw.key)
                     ps = &x;
             }
-            pw.box->setVisible(ps != nullptr);
-            any = any || ps;
-            QSignalBlocker bb(pw.use);
-            pw.use->setChecked(ps && ps->use);
-            pw.min->setText(ps && ps->min ? QString::number(*ps->min) : QString());
-            pw.max->setText(ps && ps->max ? QString::number(*ps->max) : QString());
+            double v = 0;
+            for (const ItemProp& ip : it.props) {
+                if (ip.key == pw.key)
+                    v = ip.value;
+            }
+            QString val;
+            if (pw.key.startsWith(QStringLiteral("map_")))
+                val = QStringLiteral("+%1%").arg(qRound(v));
+            else if (pw.key == QStringLiteral("block"))
+                val = QStringLiteral("%1%").arg(qRound(v));
+            else if (pw.key.endsWith(QStringLiteral("dps")))
+                val = QString::number(v, 'f', 1);
+            else
+                val = QString::number(qRound(v));
+            const bool atQ20 = q20.contains(pw.key) && it.quality < 20;
+            pw.row->setText(QStringLiteral("%1: %2%3").arg(pw.label, val, atQ20 ? QStringLiteral(" (퀄 20)") : QString()));
+            pw.row->setToolTip(q20.contains(pw.key) ? QStringLiteral("거래소는 퀄리티 20% 기준 값으로 검색합니다")
+                                                    : QStringLiteral("누르면 검색에 넣거나 뺍니다"));
+            pw.row->setVisible(ps != nullptr);
+            pw.row->setChecked(ps && ps->use);
+            pw.row->setValues(ps ? ps->min : OptDouble(), ps ? ps->max : OptDouble());
         }
-        m_propBox->setVisible(any);
     }
     m_useName->setChecked(st.useName && !st.byCategory);
     m_useType->setChecked(st.useType && !st.byCategory);
@@ -940,17 +925,20 @@ ParsedItem MainPopup::collectItem() const
 ItemFilterState MainPopup::collectState() const
 {
     ItemFilterState s = defaultFilterState(m_item);
-    s.useLevel = m_lv->isChecked();
+    s.useLevel = !m_lvRow->isHidden() && m_lvRow->isChecked();
     s.levelMin = toOpt(m_lvMin);
     s.levelMax = toOpt(m_lvMax);
-    s.useQuality = m_q->isChecked();
+    s.useQuality = !m_qRow->isHidden() && m_qRow->isChecked();
     s.qualityMin = toOpt(m_qMin);
     s.qualityMax = toOpt(m_qMax);
-    s.useSockets = m_sock->isChecked();
-    s.socketsMin = toOpt(m_sMin);
-    s.socketsMax = toOpt(m_sMax);
-    s.linksMin = m_item.game == Game::Poe1 ? toOpt(m_lMin) : std::nullopt;
-    s.linksMax = m_item.game == Game::Poe1 ? toOpt(m_lMax) : std::nullopt;
+    // 홈 / 링크는 줄마다 켜고 끔 (꺼진 쪽 값은 안 보냄)
+    const bool sockOn = !m_sockRow->isHidden() && m_sockRow->isChecked();
+    const bool linkOn = !m_linkRow->isHidden() && m_linkRow->isChecked() && m_item.game == Game::Poe1;
+    s.useSockets = sockOn || linkOn;
+    s.socketsMin = sockOn ? toOpt(m_sMin) : std::nullopt;
+    s.socketsMax = sockOn ? toOpt(m_sMax) : std::nullopt;
+    s.linksMin = linkOn ? toOpt(m_lMin) : std::nullopt;
+    s.linksMax = linkOn ? toOpt(m_lMax) : std::nullopt;
     {
         const int v = m_corrupt->currentData().toInt();
         s.corrupted = v % 10;
@@ -962,10 +950,10 @@ ItemFilterState MainPopup::collectState() const
     s.exact = static_cast<Preset>(m_preset->currentData().toInt()) == Preset::Exact;
     for (PropFilterState& p : s.props) {
         for (const PropWidgets& pw : m_props) {
-            if (pw.key == p.key && !pw.box->isHidden()) {
-                p.use = pw.use->isChecked();
-                p.min = toOpt(pw.min);
-                p.max = toOpt(pw.max);
+            if (pw.key == p.key && !pw.row->isHidden()) {
+                p.use = pw.row->isChecked();
+                p.min = pw.row->minValue();
+                p.max = pw.row->maxValue();
             }
         }
     }
