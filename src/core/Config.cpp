@@ -68,6 +68,10 @@ void Config::migrate()
         if (tradeStatus == QStringLiteral("available"))
             tradeStatus = QStringLiteral("securable");
     }
+    if (configVersion < 8) {
+        // v8: 창 위치 기본을 화면 가운데로
+        popupPosition = QStringLiteral("center");
+    }
     if (configVersion < 7) {
         // v7: 옵션 값 기본을 "일치"(0%)로 (예전 기본값 10% 를 그대로 쓰던 경우만)
         if (searchStatRange == 10)
@@ -152,7 +156,9 @@ bool Config::load(const QString& path, QString* error)
     priceCurrencyPoe2 = s("price_currency_poe2", d.priceCurrencyPoe2);
     dataMaxAgeDays = i("data_max_age_days", d.dataMaxAgeDays);
     autoPriceCheck = b("auto_price_check", d.autoPriceCheck);
-    popupNearCursor = b("popup_near_cursor", d.popupNearCursor);
+    popupPosition = s("popup_position", b("popup_near_cursor", true) ? QStringLiteral("cursor") : QStringLiteral("last"));
+    if (popupPosition != QStringLiteral("cursor") && popupPosition != QStringLiteral("last"))
+        popupPosition = QStringLiteral("center");
     closeOnOutsideClick = b("close_on_outside_click", d.closeOnOutsideClick);
     clipboardWatch = b("clipboard_watch", d.clipboardWatch);
     appUpdate = s("app_update", d.appUpdate);
@@ -194,7 +200,7 @@ bool Config::save(const QString& path, QString* error) const
     o.insert(QStringLiteral("price_currency_poe2"), priceCurrencyPoe2);
     o.insert(QStringLiteral("search_auto_delay"), searchAutoDelay);
     o.insert(QStringLiteral("auto_price_check"), autoPriceCheck);
-    o.insert(QStringLiteral("popup_near_cursor"), popupNearCursor);
+    o.insert(QStringLiteral("popup_position"), popupPosition);
     o.insert(QStringLiteral("close_on_outside_click"), closeOnOutsideClick);
     o.insert(QStringLiteral("clipboard_watch"), clipboardWatch);
     o.insert(QStringLiteral("app_update"), appUpdate);

@@ -644,6 +644,40 @@ private slots:
         QVERIFY(!misc(st).contains(QStringLiteral("mirrored")));
     }
 
+    void qualityOverTwentyAndNotFractured()
+    {
+        // 설정 v8: 창 위치 기본 화면 가운데
+        QCOMPARE(Config::defaults().popupPosition, QStringLiteral("center"));
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        // 퀄 30 장갑: 퀄리티 기본 켬(최소 30), 분열 안 된 장비라 분열 매물 제외
+        auto g = parse(QStringLiteral("poe1_ko_rare_gloves_q30.txt"), Game::Poe1);
+        QVERIFY(g);
+        QCOMPARE(g->quality, 30);
+        QVERIFY(g->checkQuality);
+        const ItemFilterState st = defaultFilterState(*g);
+        QVERIFY(st.useQuality);
+        QCOMPARE(*st.qualityMin, 30.0);
+        QVERIFY(st.notFractured);
+        RequestContext ctx;
+        ctx.server = Lang::Ko;
+        const QJsonObject f = QueryBuilder::build(makeRequest(*g, st, kw, &dbs[0], ctx), &dbs[0][Lang::Ko])
+                                  .value(QStringLiteral("query")).toObject().value(QStringLiteral("filters")).toObject();
+        QCOMPARE(f.value(QStringLiteral("misc_filters")).toObject().value(QStringLiteral("filters")).toObject()
+                     .value(QStringLiteral("fractured_item")).toObject().value(QStringLiteral("option")).toString(),
+                 QStringLiteral("false"));
+        QJsonObject qf;
+        for (const QString& grp : f.keys()) {
+            const QJsonObject gf = f.value(grp).toObject().value(QStringLiteral("filters")).toObject();
+            if (gf.contains(QStringLiteral("quality")))
+                qf = gf.value(QStringLiteral("quality")).toObject();
+        }
+        QCOMPARE(qf.value(QStringLiteral("min")).toDouble(), 30.0);
+        // 분열된 아이템엔 분열 제외 안 넣음
+        auto fa = parse(QStringLiteral("poe1_ko_magic_armour_fractured.txt"), Game::Poe1);
+        QVERIFY(fa && !defaultFilterState(*fa).notFractured);
+    }
+
     void runHotkeyMigration()
     {
         // {Run} 키 없던 설정 -> Alt+D + Ctrl+C 감시 켬 / 직접 지정한 설정 -> 그대로 + 감시 끔(예전 동작)

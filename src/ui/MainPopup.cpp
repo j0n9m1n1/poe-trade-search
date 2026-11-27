@@ -319,6 +319,9 @@ void MainPopup::buildUi()
         }
         m_mirrorRow = addRow(); // 복제된 아이템일 때만: 켜면 복제된 매물만, 끄면 무관
         m_mirrorRow->setEditsVisible(false);
+        m_notFracRow = addRow(); // 분열 안 된 장비: 켜면 분열된 매물 제외
+        m_notFracRow->setEditsVisible(false);
+        m_notFracRow->setToolTip(QStringLiteral("켜면 분열된 매물(분열 옵션이 있는 제작 베이스)을 뺍니다"));
     }
     m_rowsLayout->insertWidget(0, m_propRows);
     m_propSep = hline(m_rowsBox);
@@ -472,7 +475,7 @@ void MainPopup::buildUi()
         connect(c, qOverload<int>(&QComboBox::currentIndexChanged), this, stale);
     for (QCheckBox* c : {m_special1, m_special2, m_collapse})
         connect(c, &QCheckBox::toggled, this, stale);
-    for (PropRow* r : {m_rarityRow, m_lvRow, m_qRow, m_sockRow, m_linkRow, m_mirrorRow})
+    for (PropRow* r : {m_rarityRow, m_lvRow, m_qRow, m_sockRow, m_linkRow, m_mirrorRow, m_notFracRow})
         connect(r, &PropRow::changed, this, stale);
     // 레어도 콤보를 고르면 레어도 줄도 켬 ("모두"면 끔)
     connect(m_rarity, qOverload<int>(&QComboBox::currentIndexChanged), this,
@@ -811,6 +814,10 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     m_mirrorRow->setText(QStringLiteral("복제된 아이템"));
     m_mirrorRow->setVisible(it.mirrored);
     m_mirrorRow->setChecked(st.mirrored == 1);
+    // 분열 속성 없음 줄 (분열 안 된 고유 제외 장비만)
+    m_notFracRow->setText(QStringLiteral("분열 속성 없음"));
+    m_notFracRow->setVisible((it.isGear || it.isJewel) && it.rarityId != QStringLiteral("unique") && !it.fractured);
+    m_notFracRow->setChecked(st.notFractured);
     // 레벨 줄: 아이템 레벨 / 젬 레벨 / 지도 등급
     {
         const auto kind = levelKindFor(it);
@@ -963,6 +970,7 @@ ItemFilterState MainPopup::collectState() const
     s.rarity = !m_rarityRow->isHidden() && m_rarityRow->isChecked() ? m_rarity->currentData().toString() : QString();
     if (!m_mirrorRow->isHidden())
         s.mirrored = m_mirrorRow->isChecked() ? 1 : 0;
+    s.notFractured = !m_notFracRow->isHidden() && m_notFracRow->isChecked();
     s.byCategory = false;
     s.exact = static_cast<Preset>(m_preset->currentData().toInt()) == Preset::Exact;
     for (PropFilterState& p : s.props) {
@@ -1207,9 +1215,9 @@ void MainPopup::refreshCurrencyCombo()
         const QString full = m_currency->itemData(i, Qt::ToolTipRole).toString();
         QStringList ids;
         QString shortText;
-        if (id.isEmpty()) {
+        const bool equiv = id.isEmpty(); // 등가물: [기준 화폐][≈] 를 그림 (글자 없이 폭 줄이기)
+        if (equiv) {
             ids << base;
-            shortText = QStringLiteral("등가물");
         } else if (id.endsWith(QStringLiteral("_divine"))) {
             ids << id.section(QLatin1Char('_'), 0, 0) << QStringLiteral("divine");
         } else {
@@ -1232,6 +1240,14 @@ void MainPopup::refreshCurrencyCombo()
             QPainter p(&pm);
             for (int k = 0; k < paths.size(); ++k)
                 p.drawPixmap(k * (one.width() + 2), 0, QPixmap(paths[k]).scaled(one, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+            if (equiv) {
+                QFont f = p.font();
+                f.setBold(true);
+                f.setPixelSize(one.height());
+                p.setFont(f);
+                p.setPen(QColor(0xe0, 0xe0, 0xe0));
+                p.drawText(QRect(one.width() + 2, 0, one.width(), one.height()), Qt::AlignCenter, QStringLiteral("≈"));
+            }
         }
         m_currency->setItemIcon(i, QIcon(pm));
         m_currency->setItemText(i, shortText);

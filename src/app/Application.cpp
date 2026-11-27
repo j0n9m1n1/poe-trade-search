@@ -451,7 +451,17 @@ void Application::handleItemText(const QString& text)
 void Application::showPopup()
 {
     m_popup->adjustSize();
-    if (m_cfg.popupNearCursor) {
+    if (m_cfg.popupPosition == QStringLiteral("center")) {
+        // 커서가 있는 화면(=보통 게임 화면)의 가운데
+        QScreen* scr = QGuiApplication::screenAt(QCursor::pos());
+        if (!scr)
+            scr = QGuiApplication::primaryScreen();
+        const QRect a = scr->availableGeometry();
+        const QSize sz = m_popup->size() + QSize(16, 40); // 창 테두리/제목줄 여유
+        const int x = qBound(a.left(), a.center().x() - sz.width() / 2, qMax(a.left(), a.right() - sz.width()));
+        const int y = qBound(a.top(), a.center().y() - sz.height() / 2, qMax(a.top(), a.bottom() - sz.height()));
+        m_popup->move(x, y);
+    } else if (m_cfg.popupPosition == QStringLiteral("cursor")) {
         // 커서 오른쪽 (모자라면 왼쪽), 세로는 커서가 위쪽 1/3 쯤 오게. 화면 밖으로 안 나가게
         const QPoint c = QCursor::pos();
         QScreen* scr = QGuiApplication::screenAt(c);
@@ -497,14 +507,20 @@ void Application::checkOutsideClick()
     const bool down = platform::mouseButtonDown();
     const bool pressed = down && !m_mouseWasDown; // 누르는 순간만
     m_mouseWasDown = down;
-    if (!pressed || !m_cfg.closeOnOutsideClick || m_shownAt.elapsed() < 250)
-        return;
-    // 콤보 펼침/메시지 상자/설정 창이 떠 있으면 건드리지 않음
-    if (QApplication::activePopupWidget() || QApplication::activeModalWidget())
+    if (!pressed || !m_cfg.closeOnOutsideClick)
         return;
     // 게임 화면을 눌렀을 때만 닫음. 창 모드에서 다른 프로그램/바탕화면을 누른 건 무시
     if (m_popup->frameGeometry().contains(QCursor::pos()))
         return;
+    if (m_shownAt.elapsed() < 250) {
+        qInfo() << "outside click ignored: just shown" << m_shownAt.elapsed() << "ms";
+        return;
+    }
+    // 콤보 펼침/메시지 상자/설정 창이 떠 있으면 건드리지 않음
+    if (QApplication::activePopupWidget() || QApplication::activeModalWidget()) {
+        qInfo() << "outside click ignored: popup/modal open";
+        return;
+    }
     QString why;
     if (platform::cursorOverGame(&why)) {
         qInfo().noquote() << "outside click -> close (" << why << ")";

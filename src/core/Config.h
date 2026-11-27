@@ -44,7 +44,7 @@ struct Config {
     QString priceCurrencyPoe2 = QStringLiteral("exalted_divine"); // PoE2
     int dataMaxAgeDays = 7;
     bool autoPriceCheck = true;  // 창 뜰 때 바로 시세 조회 (원본: search_auto_delay > 0)
-    bool popupNearCursor = true; // 커서 근처에 띄움 (false 면 마지막 위치)
+    QString popupPosition = QStringLiteral("center"); // 창 위치: center(화면 가운데) / cursor(커서 근처) / last(마지막 위치)
     bool closeOnOutsideClick = true; // 팝업 바깥(게임 화면)을 누르면 닫음
     bool clipboardWatch = true;      // 게임에서 Ctrl+C 로 복사해도 창 띄움 ({Run} 단축키와 별개)
     QString appUpdate = QStringLiteral("notify"); // 앱 업데이트: notify(알림만) / auto(자동 설치) / off
@@ -53,7 +53,7 @@ struct Config {
 
     QVector<Shortcut> shortcuts;
 
-    static constexpr int kConfigVersion = 7;
+    static constexpr int kConfigVersion = 8;
     int configVersion = kConfigVersion;
     bool migrated = false; // load 때 마이그레이션 했으면 true -> 저장 필요
 

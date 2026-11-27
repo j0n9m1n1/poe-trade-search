@@ -127,9 +127,12 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_autoPrice = new QCheckBox(QStringLiteral("창이 뜨면 바로 시세 조회"), basic);
     m_autoPrice->setChecked(cfg.autoPriceCheck);
     f->addRow(m_autoPrice);
-    m_nearCursor = new QCheckBox(QStringLiteral("창을 마우스 커서 근처에 띄우기 (끄면 마지막 위치)"), basic);
-    m_nearCursor->setChecked(cfg.popupNearCursor);
-    f->addRow(m_nearCursor);
+    m_popupPos = new QComboBox(basic);
+    m_popupPos->addItem(QStringLiteral("화면 가운데"), QStringLiteral("center"));
+    m_popupPos->addItem(QStringLiteral("마우스 커서 근처"), QStringLiteral("cursor"));
+    m_popupPos->addItem(QStringLiteral("마지막 위치"), QStringLiteral("last"));
+    m_popupPos->setCurrentIndex(qMax(0, m_popupPos->findData(cfg.popupPosition)));
+    f->addRow(QStringLiteral("창 위치:"), m_popupPos);
     m_clipWatch = new QCheckBox(QStringLiteral("게임에서 Ctrl+C 로 복사해도 창 띄우기 ({Run} 단축키와 별개)"), basic);
     m_clipWatch->setChecked(cfg.clipboardWatch);
     f->addRow(m_clipWatch);
@@ -325,7 +328,7 @@ Config SettingsDialog::result() const
     c.searchStatRange = m_statRange->value();
     c.collapseListings = m_collapse->isChecked();
     c.autoPriceCheck = m_autoPrice->isChecked();
-    c.popupNearCursor = m_nearCursor->isChecked();
+    c.popupPosition = m_popupPos->currentData().toString();
     c.closeOnOutsideClick = m_outsideClose->isChecked();
     c.clipboardWatch = m_clipWatch->isChecked();
     c.searchAutoDelay = c.autoPriceCheck ? qMax(c.searchAutoDelay, 1) : 0;

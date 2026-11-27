@@ -41,6 +41,7 @@ struct ItemFilterState {
     QVector<PropFilterState> props;
     bool exact = false; // 정확 프리셋 (분열 아님 필터 등)
     int mirrored = 0;   // 복제된 아이템 0 무관 / 1 복제만 / 2 복제 제외
+    bool notFractured = false; // 분열된 매물 제외 (분열 안 된 고유 제외 장비 기본 켬)
 };
 
 ItemFilterState defaultFilterState(const ParsedItem& it);
