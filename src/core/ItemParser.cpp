@@ -691,6 +691,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
 
     // ---- 옵션 줄
     bool optionStatSeen = false;
+    int prefixes = 0, suffixes = 0;
     if (modStartSection > 0 && !it.detail) {
         static const QRegularExpression suffixRe(QStringLiteral("\\s\\(([a-z]+)\\)$"));
         static const QRegularExpression headerRe(QStringLiteral("^\\{\\s*(.*?)\\s*\\}$"));
@@ -716,21 +717,27 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                     const auto tm = tierRe.match(h);
                     if (tm.hasMatch())
                         hdrTier = tm.captured(1).toInt();
-                    hdrAffix = h.contains(QStringLiteral("Prefix")) || h.contains(QStringLiteral("접두어"))
-                                   ? QStringLiteral("prefix")
-                                   : (h.contains(QStringLiteral("Suffix")) || h.contains(QStringLiteral("접미어"))
-                                          ? QStringLiteral("suffix")
-                                          : QString());
-                    if (h.contains(QStringLiteral("Implicit")) || h.contains(QStringLiteral("고정")))
+                    const QString kind = h.section(QLatin1Char('"'), 0, 0).section(QChar(0x2014), 0, 0);
+                    hdrAffix = kind.contains(QStringLiteral("Prefix")) || kind.contains(QStringLiteral("접두어"))
+                                    ? QStringLiteral("prefix")
+                                    : (kind.contains(QStringLiteral("Suffix")) || kind.contains(QStringLiteral("접미어"))
+                                           ? QStringLiteral("suffix")
+                                           : QString());
+                    if (kind.contains(QStringLiteral("Implicit")) || kind.contains(QStringLiteral("고정")))
                         hdrType = QStringLiteral("implicit");
-                    else if (h.contains(QStringLiteral("Crafted")) || h.contains(QStringLiteral("제작")))
+                    else if (kind.contains(QStringLiteral("Crafted")) || kind.contains(QStringLiteral("제작")))
                         hdrType = QStringLiteral("crafted");
-                    else if (h.contains(QStringLiteral("Enchant")) || h.contains(QStringLiteral("인챈트")))
+                    else if (kind.contains(QStringLiteral("Enchant")) || kind.contains(QStringLiteral("인챈트")))
                         hdrType = QStringLiteral("enchant");
-                    else if (h.contains(QStringLiteral("Fractured")) || h.contains(QStringLiteral("분열")))
+                    else if (kind.contains(QStringLiteral("Fractured")) || kind.contains(QStringLiteral("분열")))
                         hdrType = QStringLiteral("fractured");
                     else
                         hdrType.clear();
+                    // 혼합 옵션이나 검색 불가 옵션도 머리줄 하나당 한 칸
+                    if (hdrType != QStringLiteral("implicit") && hdrType != QStringLiteral("enchant")) {
+                        prefixes += hdrAffix == QStringLiteral("prefix");
+                        suffixes += hdrAffix == QStringLiteral("suffix");
+                    }
                     continue;
                 }
                 if (!m_kw.flagOf(L, l).isEmpty())
@@ -837,6 +844,27 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
             for (const ParsedMod& m : secMods) {
                 if (!m.unmatched || matched > 0)
                     it.mods.push_back(m);
+            }
+        }
+    }
+    if (it.advanced && (it.isGear || it.isJewel) && !it.unidentified && !it.corrupted && !it.mirrored) {
+        int limit = 0;
+        if (it.rarityId == QStringLiteral("magic"))
+            limit = 1;
+        else if (it.rarityId == QStringLiteral("rare"))
+            limit = it.isJewel ? 2 : 3;
+        if (limit > 0) {
+            int prefixLimit = limit, suffixLimit = limit;
+            // 강탈 반지나 PoE2 제작 주얼처럼 개수 상한을 바꾸는 옵션
+            for (const ParsedMod& mod : it.mods) {
+                if (mod.statKey == QStringLiteral("stat_3182714256") && mod.value)
+                    prefixLimit += qRound(*mod.value);
+                else if (mod.statKey == QStringLiteral("stat_718638445") && mod.value)
+                    suffixLimit += qRound(*mod.value);
+            }
+            if (prefixes <= qMax(0, prefixLimit) && suffixes <= qMax(0, suffixLimit)) {
+                it.emptyPrefixes = qMax(0, prefixLimit) - prefixes;
+                it.emptySuffixes = qMax(0, suffixLimit) - suffixes;
             }
         }
     }

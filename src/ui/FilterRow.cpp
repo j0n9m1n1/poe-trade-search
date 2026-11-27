@@ -261,14 +261,14 @@ void PropRow::setExtra(QWidget* w)
     static_cast<QHBoxLayout*>(layout())->insertWidget(layout()->count() - 2, w); // 최소/최대 자리
 }
 
-void PropRow::setEditsVisible(bool on)
+void PropRow::setEditsVisible(bool min, bool max)
 {
     // 자리는 유지 (다른 줄과 열 맞춤), 칸만 안 보이게
     for (QLineEdit* e : {m_min, m_max}) {
         QSizePolicy sp = e->sizePolicy();
         sp.setRetainSizeWhenHidden(true);
         e->setSizePolicy(sp);
-        e->setVisible(on);
+        e->setVisible(e == m_min ? min : max);
     }
 }
 

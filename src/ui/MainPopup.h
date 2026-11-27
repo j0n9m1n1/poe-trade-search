@@ -170,6 +170,8 @@ private:
     PropRow* m_linkRow;
     PropRow* m_mirrorRow; // 복제된 아이템
     PropRow* m_notFracRow; // 분열 속성 없음
+    PropRow* m_emptyPrefixRow;
+    PropRow* m_emptySuffixRow;
     QWidget* m_rowsBox;
     QVBoxLayout* m_rowsLayout;
     QVector<FilterRow*> m_rows;

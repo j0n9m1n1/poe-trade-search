@@ -67,7 +67,7 @@ public:
     void setCheckable(bool on);
     void setColor(const QColor& c);
     void setExtra(QWidget* w); // 최소/최대 대신 (레어도 콤보 등)
-    void setEditsVisible(bool on); // 켜고 끄기만 하는 줄 (복제된 아이템 등)
+    void setEditsVisible(bool min, bool max);
     void setValues(const OptDouble& mn, const OptDouble& mx);
     OptDouble minValue() const;
     OptDouble maxValue() const;

@@ -63,6 +63,10 @@ ItemFilterState defaultFilterState(const ParsedItem& it)
     s.ultimatumOutput = it.ultimatumOutput;
     for (const ItemProp& p : it.props)
         s.props.push_back({p.key, p.use, std::floor(p.value), std::nullopt});
+    if (it.emptyPrefixes > 0)
+        s.emptyPrefixes.min = it.emptyPrefixes;
+    if (it.emptySuffixes > 0)
+        s.emptySuffixes.min = it.emptySuffixes;
     return s;
 }
 
@@ -263,6 +267,10 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
         q.min = resSum;
         r.stats.prepend(q);
     }
+    if (it.emptyPrefixes > 0 && st.emptyPrefixes.use && st.emptyPrefixes.min > 0)
+        r.stats.push_back({QStringLiteral("pseudo.pseudo_number_of_empty_prefix_mods"), st.emptyPrefixes.min, std::nullopt, {}});
+    if (it.emptySuffixes > 0 && st.emptySuffixes.use && st.emptySuffixes.min > 0)
+        r.stats.push_back({QStringLiteral("pseudo.pseudo_number_of_empty_suffix_mods"), st.emptySuffixes.min, std::nullopt, {}});
     return r;
 }
 

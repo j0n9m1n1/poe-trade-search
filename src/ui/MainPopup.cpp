@@ -353,10 +353,16 @@ void MainPopup::buildUi()
             m_props.push_back(pw);
         }
         m_mirrorRow = addRow(); // 복제된 아이템일 때만: 켜면 복제된 매물만, 끄면 무관
-        m_mirrorRow->setEditsVisible(false);
+        m_mirrorRow->setEditsVisible(false, false);
         m_notFracRow = addRow(); // 분열 안 된 장비: 켜면 분열된 매물 제외
-        m_notFracRow->setEditsVisible(false);
+        m_notFracRow->setEditsVisible(false, false);
         m_notFracRow->setToolTip(QStringLiteral("켜면 분열된 매물(분열 옵션이 있는 제작 베이스)을 뺍니다"));
+        m_emptyPrefixRow = addRow();
+        m_emptySuffixRow = addRow();
+        for (PropRow* r : {m_emptyPrefixRow, m_emptySuffixRow}) {
+            r->setEditsVisible(true, false);
+            r->minEdit()->setValidator(new QRegularExpressionValidator(QRegularExpression(QStringLiteral("[1-9][0-9]*")), r));
+        }
     }
     m_rowsLayout->insertWidget(0, m_propRows);
     m_propSep = hline(m_rowsBox);
@@ -526,7 +532,8 @@ void MainPopup::buildUi()
         m_corrupt->setEnabled(!on);
         m_mirrorRow->setEnabled(!on);
     });
-    for (PropRow* r : {m_rarityRow, m_lvRow, m_qRow, m_sockRow, m_linkRow, m_mirrorRow, m_notFracRow})
+    for (PropRow* r : {m_rarityRow, m_lvRow, m_qRow, m_sockRow, m_linkRow, m_mirrorRow, m_notFracRow,
+                       m_emptyPrefixRow, m_emptySuffixRow})
         connect(r, &PropRow::changed, this, stale);
     // 레어도 콤보를 고르면 레어도 줄도 켬 ("모두"면 끔)
     connect(m_rarity, qOverload<int>(&QComboBox::currentIndexChanged), this,
@@ -927,6 +934,14 @@ void MainPopup::renderMisc(const ItemFilterState& st)
     m_notFracRow->setLabel(QStringLiteral("분열"), QStringLiteral("분열 속성 없음"));
     m_notFracRow->setVisible((it.isGear || it.isJewel) && it.rarityId != QStringLiteral("unique") && !it.fractured);
     m_notFracRow->setChecked(st.notFractured);
+    auto renderEmptyAffix = [](PropRow* row, const QString& label, int count, const MinFilterState& filter) {
+        row->setLabel(label, QString::number(count));
+        row->setVisible(count > 0);
+        row->setChecked(filter.use);
+        row->setValues(filter.min, std::nullopt);
+    };
+    renderEmptyAffix(m_emptyPrefixRow, QStringLiteral("빈 접두어"), it.emptyPrefixes, st.emptyPrefixes);
+    renderEmptyAffix(m_emptySuffixRow, QStringLiteral("빈 접미어"), it.emptySuffixes, st.emptySuffixes);
     // 레벨 줄: 아이템 레벨 / 젬 레벨 / 지도 등급
     {
         const auto kind = levelKindFor(it);
@@ -1085,6 +1100,8 @@ ItemFilterState MainPopup::collectState() const
     if (!m_mirrorRow->isHidden())
         s.mirrored = m_mirrorRow->isChecked() ? 1 : 0;
     s.notFractured = !m_notFracRow->isHidden() && m_notFracRow->isChecked();
+    s.emptyPrefixes = {!m_emptyPrefixRow->isHidden() && m_emptyPrefixRow->isChecked(), m_emptyPrefixRow->minValue()};
+    s.emptySuffixes = {!m_emptySuffixRow->isHidden() && m_emptySuffixRow->isChecked(), m_emptySuffixRow->minValue()};
     s.modifiable = !m_modifiable->isHidden() && m_modifiable->isChecked();
     s.byCategory = false;
     s.exact = static_cast<Preset>(m_preset->currentData().toInt()) == Preset::Exact;

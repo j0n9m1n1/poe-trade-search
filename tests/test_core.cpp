@@ -558,6 +558,104 @@ private slots:
         QVERIFY(findMod(*gull, QStringLiteral("stat_1999113824"))->checked); // 범위 있는 건 체크
     }
 
+    void emptyAffixes_data()
+    {
+        QTest::addColumn<QString>("itemText");
+        QTest::addColumn<bool>("poe2");
+        QTest::addColumn<int>("prefixes");
+        QTest::addColumn<int>("suffixes");
+
+        const QString armour = fixture(QStringLiteral("poe1_ko_magic_armour_fractured.txt"));
+        const QString boots = fixture(QStringLiteral("poe1_en_advanced.txt"));
+        QTest::newRow("rare-ko") << fixture(QStringLiteral("poe1_ko_rare_gloves_q30.txt")) << false << 1 << 0;
+        QTest::newRow("magic-ko-full") << armour << false << 0 << 0;
+        QTest::newRow("magic-ko-open-suffix") << QString(armour).remove(QRegularExpression(
+            QStringLiteral("\\{ 접미어[^\\n]*\\n[^\\n]*\\n"))) << false << 0 << 1;
+        QTest::newRow("rare-en") << boots << false << 1 << 2;
+        QTest::newRow("rare-en-hybrid-unmatched") << QString(boots).replace(
+            QStringLiteral("+64(60-69) to maximum Life"), QStringLiteral("Unknown modifier line\nSecond modifier line"))
+                                                << false << 1 << 2;
+        QTest::newRow("crafted-ko") << fixture(QStringLiteral("poe1_ko_rare_gloves_synthetic.txt")) << false << 0 << 1;
+        QTest::newRow("abyss-jewel-ko") << fixture(QStringLiteral("poe1_ko_abyss_jewel_fractured.txt")) << false << 0 << 0;
+        QTest::newRow("helical-ring-ko") << QStringLiteral(
+            "아이템 종류: 반지\n아이템 희귀도: 희귀\n시험 반지\n나선형 반지\n--------\n아이템 레벨: 85\n--------\n"
+            "{ 고정 속성 부여 }\n접두어 속성 부여의 최대 개수 -2개 (implicit)\n접미어 속성 부여의 최대 개수 +1개 (implicit)\n"
+            "--------\n{ 접두어 속성 부여 }\n생명력 최대치 +40\n") << false << 0 << 4;
+        QTest::newRow("map-ko") << fixture(QStringLiteral("poe1_ko_rare_map_t16.txt")) << false << -1 << -1;
+        QTest::newRow("basic-en") << QString(boots).remove(QRegularExpression(QStringLiteral("\\{[^\\n]*\\n")))
+                                 << false << -1 << -1;
+        QTest::newRow("corrupted-en") << boots + QStringLiteral("\n--------\nCorrupted") << false << -1 << -1;
+        QTest::newRow("unidentified-en") << boots + QStringLiteral("\n--------\nUnidentified") << false << -1 << -1;
+        QTest::newRow("mirrored-ko") << fixture(QStringLiteral("poe1_ko_rare_ring_mirrored.txt")) << false << -1 << -1;
+
+        QString poe2Armour = fixture(QStringLiteral("poe2_en_rare_armour.txt"));
+        poe2Armour.remove(QStringLiteral("--------\nCorrupted"));
+        poe2Armour.replace(QStringLiteral("+85 to maximum Life"), QStringLiteral("{ Prefix Modifier }\n+85 to maximum Life"));
+        poe2Armour.replace(QStringLiteral("+35% to Fire Resistance"), QStringLiteral("{ Suffix Modifier }\n+35% to Fire Resistance"));
+        poe2Armour.replace(QStringLiteral("42% increased Armour"), QStringLiteral("{ Prefix Modifier }\n42% increased Armour"));
+        QTest::newRow("poe2-rare-en") << poe2Armour << true << 1 << 2;
+        QTest::newRow("poe2-jewel-en") << QStringLiteral(
+            "Item Class: Jewels\nRarity: Rare\nTest Jewel\nRuby\n--------\nItem Level: 80\n--------\n"
+            "{ Prefix Modifier }\nUnknown modifier line\n{ Suffix Modifier }\nSecond modifier line\n") << true << 1 << 1;
+        QTest::newRow("poe2-crafted-jewel-en") << QStringLiteral(
+            "Item Class: Jewels\nRarity: Rare\nTest Jewel\nRuby\n--------\nItem Level: 80\n--------\n"
+            "{ Crafted Prefix Modifier }\n+1 Suffix Modifier allowed (crafted)\n") << true << 1 << 3;
+    }
+
+    void emptyAffixes()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        QFETCH(QString, itemText);
+        QFETCH(bool, poe2);
+        QFETCH(int, prefixes);
+        QFETCH(int, suffixes);
+        const auto it = parseText(itemText, poe2 ? Game::Poe2 : Game::Poe1);
+        QVERIFY(it);
+        QCOMPARE(it->emptyPrefixes, prefixes);
+        QCOMPARE(it->emptySuffixes, suffixes);
+
+        ItemFilterState st;
+        applyPreset(*it, Preset::Default, 10, &st);
+        QVERIFY(!st.emptyPrefixes.use && !st.emptySuffixes.use);
+        QCOMPARE(st.emptyPrefixes.min.value_or(-1), static_cast<double>(prefixes > 0 ? prefixes : -1));
+        QCOMPARE(st.emptySuffixes.min.value_or(-1), static_cast<double>(suffixes > 0 ? suffixes : -1));
+
+        const QString prefixId = QStringLiteral("pseudo.pseudo_number_of_empty_prefix_mods");
+        const QString suffixId = QStringLiteral("pseudo.pseudo_number_of_empty_suffix_mods");
+        const GameDb* gdb = &dbs[gi(it->game)];
+        const TradeDb* db = &(*gdb)[it->lang];
+        QVERIFY(db->findStat(prefixId) >= 0 && db->findStat(suffixId) >= 0);
+        RequestContext ctx;
+        ctx.server = it->lang;
+        auto queryStat = [&](const QString& id) {
+            const SearchRequest req = makeRequest(*it, st, kw, gdb, ctx);
+            const QJsonArray group = QueryBuilder::build(req, db).value(QStringLiteral("query")).toObject()
+                                         .value(QStringLiteral("stats")).toArray();
+            const QJsonArray filters = group.first().toObject().value(QStringLiteral("filters")).toArray();
+            for (const QJsonValue& filter : filters) {
+                if (filter.toObject().value(QStringLiteral("id")).toString() == id)
+                    return filter.toObject();
+            }
+            return QJsonObject{};
+        };
+        QVERIFY(queryStat(prefixId).isEmpty());
+        QVERIFY(queryStat(suffixId).isEmpty());
+
+        // 최소칸을 수정해 켰을 때 빈 칸이 있는 쪽만 활성 stat 으로 전송
+        st.emptyPrefixes = {true, 2};
+        st.emptySuffixes = {true, 1};
+        for (bool browser : {false, true}) {
+            ctx.forBrowser = browser;
+            const QJsonObject prefixBound{{QStringLiteral("min"), 2}};
+            const QJsonObject suffixBound{{QStringLiteral("min"), 1}};
+            QCOMPARE(queryStat(prefixId), prefixes > 0 ? QJsonObject({
+                {QStringLiteral("id"), prefixId}, {QStringLiteral("value"), prefixBound}}) : QJsonObject());
+            QCOMPARE(queryStat(suffixId), suffixes > 0 ? QJsonObject({
+                {QStringLiteral("id"), suffixId}, {QStringLiteral("value"), suffixBound}}) : QJsonObject());
+        }
+    }
+
     void estimatePerSellerCap()
     {
         // 한 판매자가 8카오스로 7개 도배 + 다른 판매자들 10카오스 6개.

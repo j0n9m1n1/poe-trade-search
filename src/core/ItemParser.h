@@ -114,6 +114,7 @@ struct ParsedItem {
 
     bool hasDps = false;
     double pdps = 0, edps = 0, cdps = 0;
+    int emptyPrefixes = -1, emptySuffixes = -1; // -1 = 개수를 모르거나 제작 대상 아님
 
     QVector<ItemProp> props;  // 방어도/회피/에너지 보호막/DPS ... (있는 것만)
     QVector<ParsedMod> mods; // 매칭 못 한 옵션 줄도 unmatched=true 로 순서대로 들어감
