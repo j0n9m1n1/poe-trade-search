@@ -664,9 +664,9 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     else
         m_info->setText(QStringLiteral("옵션"));
 
-    m_detail->setVisible(it.detail || it.mods.isEmpty());
-    m_detail->setText(it.detail ? it.detailText
-                                : (it.mods.isEmpty() ? QStringLiteral("검색할 수 있는 옵션이 없습니다") : QString()));
+    // 젬/화폐/카드 설명 문단은 안 보여 줌 (게임에서 보면 됨)
+    m_detail->clear();
+    m_detail->setVisible(false);
 
     // 일괄 교환: 교환 가능한 템이면 기본으로 기준 화폐 교환 시세 (R6)
     const bool exchange = !it.exchangeId.isEmpty() && db;
@@ -808,7 +808,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
 
     // 레어도 줄: 켜면 콤보 값으로 검색, 끄면 레어도 조건 없음
     m_rarityRow->setText(QStringLiteral("아이템 희귀도: %1").arg(it.rarityText));
-    m_rarityRow->setVisible(!it.rarityText.isEmpty() && !it.isCurrency && !it.isCard);
+    m_rarityRow->setVisible(!it.rarityText.isEmpty() && !it.isCurrency && !it.isCard && !it.isGem);
     m_rarityRow->setChecked(!st.rarity.isEmpty());
     // 복제된 아이템 줄
     m_mirrorRow->setText(QStringLiteral("복제된 아이템"));
