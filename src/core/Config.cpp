@@ -12,7 +12,7 @@ Config Config::defaults()
 {
     Config c;
     c.shortcuts = {
-        {0, 0, QStringLiteral("{Run} 작동 (기본값: Ctrl+C)")},
+        {0x44, 1, QStringLiteral("{Run} 아이템 검색 (Ctrl+Alt+C 를 대신 눌러서 가져옴)")}, // Alt+D
         {0, 0, QStringLiteral("{Last} 마지막 창 다시 열기")},
         {113, 0, QStringLiteral("{Enter}/hideout{Enter}")}, // F2 은신처
         {115, 0, QStringLiteral("{Enter}/exit{Enter}")},    // F4 로그아웃 (캐릭터 선택)
@@ -67,6 +67,26 @@ void Config::migrate()
         // v4: 기본 판매 방식을 즉시 구입만으로 (예전 기본값 그대로 쓰던 경우만)
         if (tradeStatus == QStringLiteral("available"))
             tradeStatus = QStringLiteral("securable");
+    }
+    if (configVersion < 6) {
+        // v6: {Run} 기본 단축키 Alt+D. Ctrl+C 감시는 별도 설정으로 분리
+        //  - {Run} 에 키가 없던 설정 -> Alt+D (다른 단축키가 Alt+D 를 쓰면 그대로), Ctrl+C 감시 켬
+        //  - {Run} 에 직접 키를 지정했던 설정 -> 예전처럼 Ctrl+C 감시 끔
+        bool altDUsed = false;
+        for (const Shortcut& s : shortcuts)
+            altDUsed = altDUsed || (s.keycode == 0x44 && s.modifiers == 1);
+        bool runHadKey = false;
+        for (Shortcut& s : shortcuts) {
+            if (!s.value.trimmed().toLower().startsWith(QStringLiteral("{run}")))
+                continue;
+            if (s.keycode > 0) {
+                runHadKey = true;
+            } else if (!altDUsed) {
+                s.keycode = 0x44;
+                s.modifiers = 1;
+            }
+        }
+        clipboardWatch = !runHadKey;
     }
     if (configVersion < 5) {
         // v5: 등록일 제한 기본값을 자동으로 (예전 기본값 7일을 그대로 쓰던 경우만)
@@ -129,6 +149,7 @@ bool Config::load(const QString& path, QString* error)
     autoPriceCheck = b("auto_price_check", d.autoPriceCheck);
     popupNearCursor = b("popup_near_cursor", d.popupNearCursor);
     closeOnOutsideClick = b("close_on_outside_click", d.closeOnOutsideClick);
+    clipboardWatch = b("clipboard_watch", d.clipboardWatch);
     appUpdate = s("app_update", d.appUpdate);
     if (appUpdate != QStringLiteral("auto") && appUpdate != QStringLiteral("off"))
         appUpdate = QStringLiteral("notify");
@@ -170,6 +191,7 @@ bool Config::save(const QString& path, QString* error) const
     o.insert(QStringLiteral("auto_price_check"), autoPriceCheck);
     o.insert(QStringLiteral("popup_near_cursor"), popupNearCursor);
     o.insert(QStringLiteral("close_on_outside_click"), closeOnOutsideClick);
+    o.insert(QStringLiteral("clipboard_watch"), clipboardWatch);
     o.insert(QStringLiteral("app_update"), appUpdate);
     o.insert(QStringLiteral("search_list_count"), searchListCount);
     o.insert(QStringLiteral("search_stat_range"), searchStatRange);

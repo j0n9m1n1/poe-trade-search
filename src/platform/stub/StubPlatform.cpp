@@ -45,6 +45,11 @@ bool isAdministrator()
 
 void createInstanceMutex() {}
 
+bool cursorOverGame()
+{
+    return true; // 게임 창을 모름 -> 예전처럼 바깥 클릭이면 닫음
+}
+
 bool mouseButtonDown()
 {
     // 전역 마우스 상태를 못 읽음 -> 우리 창 위 클릭만 앎

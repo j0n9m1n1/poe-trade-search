@@ -47,6 +47,10 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("dps"), QStringLiteral("weapon_filters")},
         {QStringLiteral("pdps"), QStringLiteral("weapon_filters")},
         {QStringLiteral("edps"), QStringLiteral("weapon_filters")},
+        {QStringLiteral("map_iiq"), QStringLiteral("map_filters")},
+        {QStringLiteral("map_iir"), QStringLiteral("map_filters")},
+        {QStringLiteral("map_packsize"), QStringLiteral("map_filters")},
+        {QStringLiteral("map_bonus"), QStringLiteral("map_filters")},
     };
     static const QHash<QString, QString> p2 = {
         {QStringLiteral("collapse"), QStringLiteral("trade_filters")},
@@ -64,6 +68,10 @@ QString defaultGroup(Game g, const QString& filter)
         {QStringLiteral("dps"), QStringLiteral("equipment_filters")},
         {QStringLiteral("pdps"), QStringLiteral("equipment_filters")},
         {QStringLiteral("edps"), QStringLiteral("equipment_filters")},
+        {QStringLiteral("map_iiq"), QStringLiteral("map_filters")},
+        {QStringLiteral("map_iir"), QStringLiteral("map_filters")},
+        {QStringLiteral("map_packsize"), QStringLiteral("map_filters")},
+        {QStringLiteral("map_bonus"), QStringLiteral("map_filters")},
         {QStringLiteral("gem_level"), QStringLiteral("misc_filters")},
         {QStringLiteral("corrupted"), QStringLiteral("misc_filters")},
         {QStringLiteral("twice_corrupted"), QStringLiteral("misc_filters")},

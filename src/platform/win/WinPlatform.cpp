@@ -222,6 +222,15 @@ bool mouseButtonDown()
     return isDown(VK_LBUTTON) || isDown(VK_RBUTTON) || isDown(VK_MBUTTON);
 }
 
+bool cursorOverGame()
+{
+    POINT p;
+    if (!GetCursorPos(&p))
+        return false;
+    HWND h = WindowFromPoint(p);
+    return h && isPoeWindow(GetAncestor(h, GA_ROOT));
+}
+
 int qtKeyToVk(int qtKey)
 {
     return keys::qtKeyToVk(qtKey);

@@ -45,14 +45,15 @@ struct Config {
     int dataMaxAgeDays = 7;
     bool autoPriceCheck = true;  // 창 뜰 때 바로 시세 조회 (원본: search_auto_delay > 0)
     bool popupNearCursor = true; // 커서 근처에 띄움 (false 면 마지막 위치)
-    bool closeOnOutsideClick = true; // 팝업 바깥을 누르면 닫음
+    bool closeOnOutsideClick = true; // 팝업 바깥(게임 화면)을 누르면 닫음
+    bool clipboardWatch = true;      // 게임에서 Ctrl+C 로 복사해도 창 띄움 ({Run} 단축키와 별개)
     QString appUpdate = QStringLiteral("notify"); // 앱 업데이트: notify(알림만) / auto(자동 설치) / off
     int searchStatRange = 10;    // 옵션 최소값을 값의 N% 낮춰서 채움 (0 = 정확값)
     bool collapseListings = true; // 시세 조회 시 계정별 묶기
 
     QVector<Shortcut> shortcuts;
 
-    static constexpr int kConfigVersion = 5;
+    static constexpr int kConfigVersion = 6;
     int configVersion = kConfigVersion;
     bool migrated = false; // load 때 마이그레이션 했으면 true -> 저장 필요
 

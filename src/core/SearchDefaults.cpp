@@ -135,7 +135,7 @@ ParsedItem applyPreset(const ParsedItem& parsed, Preset p, int rangePct, ItemFil
     // 아이템 속성(방어도/DPS) 최소값도 옵션처럼 완화 (정확 프리셋은 그대로)
     if (st && p != Preset::Exact && rangePct > 0) {
         for (PropFilterState& pr : st->props) {
-            if (pr.min)
+            if (pr.min && pr.key != QStringLiteral("ilvl")) // 아이템 레벨은 구간이 의미라 그대로
                 pr.min = std::floor(*pr.min * (100 - rangePct) / 100.0);
         }
     }

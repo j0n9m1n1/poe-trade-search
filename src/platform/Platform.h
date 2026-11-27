@@ -41,6 +41,9 @@ void createInstanceMutex();
 // 지금 마우스 버튼(좌/우/가운데)이 눌려 있는지 (전역). 팝업 바깥 클릭 감지용
 bool mouseButtonDown();
 
+// 마우스 커서 아래 창이 PoE 게임 창인지 (창 모드에서 다른 프로그램을 누른 건 무시하려고)
+bool cursorOverGame();
+
 // Qt 키 -> Windows VK (단축키 입력 상자용). Windows 에선 nativeVirtualKey 를 우선 씀
 int qtKeyToVk(int qtKey);
 QString vkName(int vk);

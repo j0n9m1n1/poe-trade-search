@@ -16,6 +16,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHash>
+#include <QStyle>
 #include <QIcon>
 #include <QUrl>
 #include <QRegularExpression>
@@ -340,7 +341,9 @@ void MainPopup::buildUi()
             {QStringLiteral("es"), QStringLiteral("에너지 보호막")}, {QStringLiteral("ward"), QStringLiteral("수호")},
             {QStringLiteral("block"), QStringLiteral("막기")},       {QStringLiteral("spirit"), QStringLiteral("정신력")},
             {QStringLiteral("dps"), QStringLiteral("DPS")},          {QStringLiteral("pdps"), QStringLiteral("물리 DPS")},
-            {QStringLiteral("edps"), QStringLiteral("원소 DPS")}};
+            {QStringLiteral("edps"), QStringLiteral("원소 DPS")},     {QStringLiteral("ilvl"), QStringLiteral("아이템 레벨")},
+            {QStringLiteral("map_iiq"), QStringLiteral("아이템 수량")}, {QStringLiteral("map_iir"), QStringLiteral("아이템 희귀도")},
+            {QStringLiteral("map_packsize"), QStringLiteral("무리 규모")}, {QStringLiteral("map_bonus"), QStringLiteral("아틀라스 획득물")}};
         static const QSet<QString> q20 = {QStringLiteral("ar"), QStringLiteral("ev"), QStringLiteral("es"),
                                           QStringLiteral("ward"), QStringLiteral("dps"), QStringLiteral("pdps")};
         for (const auto& k : keys) {
@@ -459,10 +462,15 @@ void MainPopup::buildUi()
     m_price->installEventFilter(this);
     m_idleText = QStringLiteral("시세를 검색하려면 클릭하세요");
     setPriceText(m_idleText);
+    m_refresh = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), QStringLiteral("다시 검색"), this);
+    m_refresh->setToolTip(QStringLiteral("지금 조건으로 시세를 다시 조회합니다"));
+    m_refresh->setCursor(Qt::PointingHandCursor);
+    connect(m_refresh, &QPushButton::clicked, this, &MainPopup::priceCheckRequested);
     {
         auto* pl = new QHBoxLayout;
         pl->addWidget(m_priceCount);
         pl->addWidget(m_price, 1);
+        pl->addWidget(m_refresh);
         root->addLayout(pl);
     }
 
@@ -663,6 +671,8 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     sub << (poe1 ? QStringLiteral("PoE1") : QStringLiteral("PoE2")) << it.itemClass;
     if (!it.rarityText.isEmpty())
         sub << it.rarityText;
+    if (it.isMap && it.mapTier > 0)
+        sub << QStringLiteral("%1등급").arg(it.mapTier);
     if (it.itemLevel > 0)
         sub << QStringLiteral("ilvl %1").arg(it.itemLevel);
     if (it.corrupted)
@@ -1151,6 +1161,12 @@ QString MainPopup::withUnitIcons(const QString& plain) const
 
 void MainPopup::setPriceText(const QString& plain, const QString& color)
 {
+    // 매물이 없거나 조건이 바뀌어 다시 찾아야 할 때 다시 검색 버튼을 눈에 띄게
+    const bool attention = plain.contains(QStringLiteral("없습니다")) || plain.contains(QStringLiteral("못했습니다")) ||
+                           !color.isEmpty();
+    if (m_refresh)
+        m_refresh->setStyleSheet(attention ? QStringLiteral("QPushButton{border:1px solid #d2a03c; color:#f0c060; padding:2px 8px;}")
+                                           : QString());
     m_priceText = plain;
     m_priceColor = color;
     m_price->setStyleSheet(QStringLiteral("QLabel{padding:2px 4px; %1}")

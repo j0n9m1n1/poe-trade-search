@@ -468,7 +468,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         QStringLiteral("elemental_damage"), QStringLiteral("chaos_damage"),    QStringLiteral("attacks_per_second"),
         QStringLiteral("stack_size"),       QStringLiteral("armour"),          QStringLiteral("evasion"),
         QStringLiteral("energy_shield"),    QStringLiteral("ward"),            QStringLiteral("block"),
-        QStringLiteral("spirit")};
+        QStringLiteral("spirit"),           QStringLiteral("monster_level"),   QStringLiteral("map_iiq"),
+        QStringLiteral("map_iir"),          QStringLiteral("map_packsize"),    QStringLiteral("map_bonus")};
     QHash<QString, QString> keyOf; // 실제 텍스트 -> 키
     for (const QString& k : propKeys) {
         for (const QString& s : m_kw.kw(k).t[li(L)])
@@ -568,6 +569,19 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         it.blighted = true;
     if (it.rarityId == QStringLiteral("unique") && stripPrefix(name, QStringLiteral("foulborn")))
         it.foulborn = true;
+    // 새 지도 체계: 베이스가 "지도 (16등급)" / "Map (Tier 16)" -> 등급은 이름에서, 베이스는 "지도"
+    // (PoE2 경로석처럼 등급별 베이스가 거래소 목록에 따로 있으면 이름은 그대로 둠)
+    {
+        static const QRegularExpression tierInType(
+            QStringLiteral("^(.*?)\\s*\\((?:Tier\\s*(\\d+)|(\\d+)\\s*등급)\\)$"));
+        const auto tm = tierInType.match(type);
+        if (tm.hasMatch()) {
+            if (it.mapTier <= 0)
+                it.mapTier = (tm.captured(2).isEmpty() ? tm.captured(3) : tm.captured(2)).toInt();
+            if (!db.hasType(type) && db.hasType(tm.captured(1)))
+                type = tm.captured(1);
+        }
+    }
 
     if (it.rarityId == QStringLiteral("gem")) {
         // 변형 젬: items 의 text 가 이름, type + disc 로 검색
@@ -593,6 +607,16 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     }
     it.type = type;
     it.name = it.rarityId == QStringLiteral("unique") ? name : QString();
+    // 같은 이름 베이스가 여러 개면 거래소는 구분자가 있어야 찾음 (새 지도 "지도" + map 등)
+    if (it.disc.isEmpty()) {
+        for (int i : db.itemsByType(type)) {
+            const ItemEntry& e = db.item(i);
+            if (!e.disc.isEmpty() && e.text == e.type && e.name.isEmpty() && !e.unique) { // 변형 젬처럼 이름이 따로 있는 건 제외
+                it.disc = e.disc;
+                break;
+            }
+        }
+    }
 
     // ---- 카테고리 / 종류
     if (!props.value(QStringLiteral("monster_genus")).isEmpty() && !props.value(QStringLiteral("monster_group")).isEmpty()) {
@@ -989,6 +1013,21 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
             if (text::firstNumber(props.value(d.first), &v) && v > 0)
                 it.props.push_back({d.second, v});
         }
+    }
+
+    // ---- 지도 속성 (아이템 수량/희귀도/무리 규모/아틀라스 획득물) + 아이템 레벨: 기본 꺼짐, 켜서 최소/최대 조절
+    if (it.isMap) {
+        for (const char* k : {"map_iiq", "map_iir", "map_packsize", "map_bonus"}) {
+            for (const QString& v : multiProps.value(QLatin1String(k))) {
+                double x = 0;
+                if (text::firstNumber(v, &x) && x > 0) {
+                    it.props.push_back({QLatin1String(k), x});
+                    break;
+                }
+            }
+        }
+        if (it.itemLevel > 0)
+            it.props.push_back({QStringLiteral("ilvl"), static_cast<double>(it.itemLevel)});
     }
 
     // ---- 속성 자동 체크 (APT item-property.ts): 고유 아닌 장비만

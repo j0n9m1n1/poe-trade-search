@@ -161,6 +161,7 @@ private:
     QComboBox* m_alt;
 
     QLabel* m_price; // 추정가 줄 (누르면 시세 조회)
+    QPushButton* m_refresh = nullptr; // 다시 검색
     int m_lastPriceCol = -1;
     QString m_lastRowKey; // 같은 판매자·같은 가격 묶기
     int m_lastRowCount = 0;

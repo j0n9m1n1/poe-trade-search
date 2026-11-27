@@ -545,6 +545,79 @@ private slots:
         QVERIFY2(e.value >= 9.9, qPrintable(QString::number(e.value)));
     }
 
+    void newMapSystem()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        // "지도 (16등급)": 베이스 "지도" + 구분자 map, 등급 16. 구분자 없으면 거래소가 0개를 돌려줌
+        auto m = parse(QStringLiteral("poe1_ko_rare_map_t16.txt"), Game::Poe1);
+        QVERIFY(m);
+        QVERIFY(m->isMap);
+        QCOMPARE(m->mapTier, 16);
+        QCOMPARE(m->type, QStringLiteral("지도"));
+        QCOMPARE(m->disc, QStringLiteral("map"));
+        QHash<QString, double> pv;
+        for (const ItemProp& p : m->props)
+            pv.insert(p.key, p.value);
+        QCOMPARE(pv.value(QStringLiteral("map_iir")), 124.0);
+        QCOMPARE(pv.value(QStringLiteral("map_packsize")), 33.0);
+        QCOMPARE(pv.value(QStringLiteral("map_bonus")), 87.0);
+        QCOMPARE(pv.value(QStringLiteral("ilvl")), 84.0);
+        for (const ParsedMod& x : m->mods)
+            QVERIFY2(!x.raw.startsWith(QStringLiteral("몬스터 레벨")), qPrintable(x.raw)); // 속성 줄은 옵션 아님
+
+        ItemFilterState st;
+        const ParsedItem it = applyPreset(*m, Preset::Default, 10, &st);
+        for (PropFilterState& p : st.props) {
+            if (p.key == QStringLiteral("ilvl")) {
+                QCOMPARE(*p.min, 84.0); // 아이템 레벨은 완화 안 함
+                p.use = true;
+            }
+            if (p.key == QStringLiteral("map_iir")) {
+                QCOMPARE(*p.min, 111.0); // 124 -10%
+                p.use = true;
+            }
+        }
+        RequestContext ctx;
+        ctx.server = Lang::Ko;
+        const QJsonObject q = QueryBuilder::build(makeRequest(it, st, kw, &dbs[0], ctx), &dbs[0][Lang::Ko])
+                                  .value(QStringLiteral("query")).toObject();
+        const QJsonObject type = q.value(QStringLiteral("type")).toObject();
+        QCOMPARE(type.value(QStringLiteral("option")).toString(), QStringLiteral("지도"));
+        QCOMPARE(type.value(QStringLiteral("discriminator")).toString(), QStringLiteral("map"));
+        const QJsonObject mf = q.value(QStringLiteral("filters")).toObject().value(QStringLiteral("map_filters")).toObject()
+                                   .value(QStringLiteral("filters")).toObject();
+        QCOMPARE(mf.value(QStringLiteral("map_tier")).toObject().value(QStringLiteral("min")).toDouble(), 16.0);
+        QCOMPARE(mf.value(QStringLiteral("map_iir")).toObject().value(QStringLiteral("min")).toDouble(), 111.0);
+        const QJsonObject misc = q.value(QStringLiteral("filters")).toObject().value(QStringLiteral("misc_filters")).toObject()
+                                     .value(QStringLiteral("filters")).toObject();
+        QCOMPARE(misc.value(QStringLiteral("ilvl")).toObject().value(QStringLiteral("min")).toDouble(), 84.0);
+
+        // 변형 젬 구분자는 그대로, 일반 젬엔 구분자 안 붙음
+        auto gem = parse(QStringLiteral("poe1_en_gem_transfigured.txt"), Game::Poe1);
+        QVERIFY(gem && gem->transfigured && !gem->disc.isEmpty());
+    }
+
+    void runHotkeyMigration()
+    {
+        // {Run} 키 없던 설정 -> Alt+D + Ctrl+C 감시 켬 / 직접 지정한 설정 -> 그대로 + 감시 끔(예전 동작)
+        const QString path = QDir::temp().filePath(QStringLiteral("pts_cfg_v6.txt"));
+        for (int key : {0, 0x77}) {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(QStringLiteral("{\"config_version\":5,\"options\":{},\"shortcuts\":[{\"keycode\":%1,\"modifiers\":0,\"value\":\"{Run}\"}]}")
+                        .arg(key).toUtf8());
+            f.close();
+            Config c;
+            QVERIFY(c.load(path));
+            QCOMPARE(c.shortcuts[0].keycode, key == 0 ? 0x44 : key);
+            QCOMPARE(c.shortcuts[0].modifiers, key == 0 ? 1 : 0);
+            QCOMPARE(c.clipboardWatch, key == 0);
+        }
+        QFile::remove(path);
+        QCOMPARE(Config::defaults().shortcuts[0].keycode, 0x44);
+    }
+
     void queryPriceCurrency()
     {
         auto priceOf = [](const SearchRequest& r) {

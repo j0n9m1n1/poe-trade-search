@@ -494,7 +494,8 @@ void Application::checkOutsideClick()
     // 콤보 펼침/메시지 상자/설정 창이 떠 있으면 건드리지 않음
     if (QApplication::activePopupWidget() || QApplication::activeModalWidget())
         return;
-    if (!m_popup->frameGeometry().contains(QCursor::pos()))
+    // 게임 화면을 눌렀을 때만 닫음. 창 모드에서 다른 프로그램/바탕화면을 누른 건 무시
+    if (!m_popup->frameGeometry().contains(QCursor::pos()) && platform::cursorOverGame())
         m_popup->hide();
 }
 
@@ -985,11 +986,7 @@ void Application::openSettings()
 void Application::applyConfig()
 {
     m_client->setTimeoutSec(m_cfg.serverTimeout);
-    m_customRun = false;
-    for (const Shortcut& s : m_cfg.shortcuts) {
-        if (s.keycode > 0 && s.value.trimmed().toLower().startsWith(kRun))
-            m_customRun = true;
-    }
+    m_customRun = !m_cfg.clipboardWatch; // Ctrl+C 감시 끔 ({Run} 단축키는 그대로 동작)
     if (m_hotkeysOn) {
         unregisterHotkeys();
         registerHotkeys();
