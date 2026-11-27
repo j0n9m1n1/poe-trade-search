@@ -11,6 +11,7 @@
 #include "ui/UiChoices.h"
 
 #include <QAction>
+#include <QApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QComboBox>
@@ -186,6 +187,17 @@ void MainPopup::buildUi()
 
     // ---- 상단: 희귀도 / 프리셋 / 범위 / 서버 / 설정
     auto* top = new QHBoxLayout;
+    m_historyPrevious = new QPushButton(QStringLiteral("◀"), this);
+    m_historyNext = new QPushButton(QStringLiteral("▶"), this);
+    m_historyPrevious->setToolTip(QStringLiteral("이전에 검색한 아이템을 표시합니다."));
+    m_historyNext->setToolTip(QStringLiteral("다음에 검색한 아이템을 표시합니다."));
+    for (auto* button : {m_historyPrevious, m_historyNext}) {
+        button->setFixedWidth(30);
+        top->addWidget(button);
+    }
+    setHistoryAvailability(false, false);
+    connect(m_historyPrevious, &QPushButton::clicked, this, [this]() { emit historyRequested(-1); });
+    connect(m_historyNext, &QPushButton::clicked, this, [this]() { emit historyRequested(1); });
     m_rarity = new QComboBox(this);
     const QList<QPair<QString, QString>> rar = {{QStringLiteral("모두"), QString()},
                                                 {QStringLiteral("일반"), QStringLiteral("normal")},
@@ -219,7 +231,8 @@ void MainPopup::buildUi()
         m_league->setFont(lf);
     }
     m_league->setStyleSheet(QStringLiteral("QLabel{color:#d0c4a8; background:transparent; padding:0 6px;}"));
-    m_league->setToolTip(QStringLiteral("상단을 드래그해 창 이동"));
+    m_league->setCursor(Qt::PointingHandCursor);
+    m_league->setToolTip(QStringLiteral("상단을 드래그하면 창을 옮깁니다."));
     m_league->installEventFilter(this);
 
     m_server = new QComboBox(this);
@@ -617,7 +630,6 @@ void MainPopup::buildUi()
                 other->setCurrentIndex(0);
             }
             markStale();
-            emit priceCheckRequested();
         };
     };
     connect(m_want1, qOverload<int>(&QComboBox::currentIndexChanged), this, exch(m_want2));
@@ -632,6 +644,8 @@ void MainPopup::buildUi()
 void MainPopup::installActivator(QWidget* w)
 {
     w->installEventFilter(this);
+    if (auto* edit = qobject_cast<QLineEdit*>(w))
+        connect(edit, &QLineEdit::returnPressed, this, &MainPopup::priceCheckRequested);
 }
 
 bool MainPopup::eventFilter(QObject* o, QEvent* e)
@@ -695,8 +709,9 @@ void MainPopup::setLeagueTitle(const QString& league)
     if (m_league) {
         updateLeagueLabel();
         m_league->setToolTip(m_leagueText.isEmpty()
-                                 ? QStringLiteral("상단을 드래그해 창 이동")
-                                 : QStringLiteral("현재 리그: %1\n상단을 드래그해 창 이동").arg(m_leagueText));
+                                 ? QStringLiteral("상단을 드래그하면 창을 옮깁니다.")
+                                 : QStringLiteral("현재 리그: %1\n리그 이름을 누르면 검색할 리그를 바꿀 수 있습니다.\n"
+                                                  "상단을 드래그하면 창을 옮깁니다.").arg(m_leagueText));
     }
 }
 
@@ -707,6 +722,31 @@ void MainPopup::updateLeagueLabel()
     const int avail = m_league->contentsRect().width();
     m_league->setText(avail > 0 ? m_league->fontMetrics().elidedText(m_leagueText, Qt::ElideRight, avail)
                                 : m_leagueText);
+}
+
+void MainPopup::showLeagueMenu()
+{
+    if (!m_hasItem || !m_gdb)
+        return;
+    const Game game = m_parsed.game;
+    const auto& english = (*m_gdb)[Lang::En].leagues();
+    const auto& leagues = english.isEmpty() ? (*m_gdb)[Lang::Ko].leagues() : english;
+    auto* menu = new QMenu(this);
+    for (const auto& league : leagues) {
+        QAction* action = menu->addAction(league.id);
+        action->setCheckable(true);
+        action->setChecked(league.id == m_leagueText);
+        action->setData(league.id);
+    }
+    if (leagues.isEmpty())
+        menu->addAction(QStringLiteral("리그 목록을 불러오지 못했습니다."))->setEnabled(false);
+    connect(menu, &QMenu::aboutToHide, menu, &QObject::deleteLater);
+    connect(menu, &QMenu::triggered, this, [this, game](QAction* selected) {
+        emit leagueRequested(game, selected->data().toString());
+    });
+    if (!isActiveWindow())
+        platform::activateWindow(this);
+    menu->popup(m_league->mapToGlobal(QPoint(0, m_league->height())));
 }
 
 int MainPopup::rangePct() const
@@ -1059,7 +1099,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
         row->setLabel(label, QString::number(count));
         row->setVisible(count > 0);
         row->setChecked(filter.use);
-        row->setValues(filter.min, std::nullopt);
+        row->setValues(filter.min, std::nullopt, count);
     };
     renderEmptyAffix(m_emptyPrefixRow, QStringLiteral("빈 접두어"), it.emptyPrefixes, st.emptyPrefixes);
     renderEmptyAffix(m_emptySuffixRow, QStringLiteral("빈 접미어"), it.emptySuffixes, st.emptySuffixes);
@@ -1075,24 +1115,24 @@ void MainPopup::renderMisc(const ItemFilterState& st)
         m_lvRow->setLabel(name, QString::number(v));
         m_lvRow->setVisible(v > 0);
         m_lvRow->setChecked(st.useLevel);
-        m_lvRow->setValues(st.levelMin, st.levelMax);
+        m_lvRow->setValues(st.levelMin, st.levelMax, v);
         m_lvRow->setColor(it.highlightLevel ? warn : propGray);
     }
     // 퀄리티 / 홈 / 링크 줄
     m_qRow->setLabel(QStringLiteral("퀄리티"), QStringLiteral("+%1%").arg(it.quality));
     m_qRow->setVisible(it.quality > 0);
     m_qRow->setChecked(st.useQuality);
-    m_qRow->setValues(st.qualityMin, st.qualityMax);
+    m_qRow->setValues(st.qualityMin, st.qualityMax, it.quality);
     m_qRow->setColor(it.highlightQuality ? warn : propGray);
     m_sockRow->setLabel(poe1 ? QStringLiteral("홈") : it.isGem ? QStringLiteral("보조 홈") : QStringLiteral("룬 홈"),
                         QString::number(it.sockets));
     m_sockRow->setVisible(it.sockets > 0);
     m_sockRow->setChecked(st.useSockets);
-    m_sockRow->setValues(st.socketsMin, st.socketsMax);
+    m_sockRow->setValues(st.socketsMin, st.socketsMax, it.sockets);
     m_linkRow->setLabel(QStringLiteral("링크"), QString::number(it.links));
     m_linkRow->setVisible(poe1 && it.links > 1);
     m_linkRow->setChecked(st.useSockets);
-    m_linkRow->setValues(st.linksMin, st.linksMax);
+    m_linkRow->setValues(st.linksMin, st.linksMax, it.links);
 
     // 결합 / 역병
     const bool mapP1 = poe1 && it.isMap;
@@ -1175,7 +1215,7 @@ void MainPopup::renderMisc(const ItemFilterState& st)
                                                     : QStringLiteral("누르면 검색에 넣거나 뺍니다"));
             pw.row->setVisible(ps != nullptr);
             pw.row->setChecked(ps && ps->use);
-            pw.row->setValues(ps ? ps->min : OptDouble(), ps ? ps->max : OptDouble());
+            pw.row->setValues(ps ? ps->min : OptDouble(), ps ? ps->max : OptDouble(), v);
         }
     }
     m_useName->setChecked(st.useName && !st.byCategory);
@@ -1736,6 +1776,12 @@ void MainPopup::setSearchBusy(bool busy)
     m_search->setText(busy ? QStringLiteral("거래소 여는 중...") : QStringLiteral("거래소에서 찾기"));
 }
 
+void MainPopup::setHistoryAvailability(bool previous, bool next)
+{
+    m_historyPrevious->setEnabled(previous);
+    m_historyNext->setEnabled(next);
+}
+
 void MainPopup::keyPressEvent(QKeyEvent* e)
 {
     if (e->key() == Qt::Key_Escape) {
@@ -1760,7 +1806,10 @@ void MainPopup::mousePressEvent(QMouseEvent* e)
         const bool inPrices = QRect(m_prices->mapTo(this, QPoint(0, 0)), m_prices->size()).contains(pos);
         if (!inScroll && !inPrices) {
             m_dragging = true;
-            m_dragOffset = e->globalPosition().toPoint() - frameGeometry().topLeft();
+            const QPoint global = e->globalPosition().toPoint();
+            m_dragOffset = global - frameGeometry().topLeft();
+            m_leaguePressed = m_league->rect().contains(m_league->mapFrom(this, pos));
+            m_leaguePressPos = global;
             e->accept();
             return;
         }
@@ -1771,7 +1820,11 @@ void MainPopup::mousePressEvent(QMouseEvent* e)
 void MainPopup::mouseMoveEvent(QMouseEvent* e)
 {
     if (m_dragging && (e->buttons() & Qt::LeftButton)) {
-        move(e->globalPosition().toPoint() - m_dragOffset);
+        const QPoint global = e->globalPosition().toPoint();
+        if (!m_leaguePressed || (global - m_leaguePressPos).manhattanLength() >= QApplication::startDragDistance()) {
+            m_leaguePressed = false;
+            move(global - m_dragOffset);
+        }
         e->accept();
         return;
     }
@@ -1782,7 +1835,13 @@ void MainPopup::mouseReleaseEvent(QMouseEvent* e)
 {
     if (m_dragging && e->button() == Qt::LeftButton) {
         m_dragging = false;
+        const QPoint global = e->globalPosition().toPoint();
+        const bool leagueClick = m_leaguePressed && m_league->rect().contains(m_league->mapFromGlobal(global)) &&
+                                 (global - m_leaguePressPos).manhattanLength() < QApplication::startDragDistance();
+        m_leaguePressed = false;
         e->accept();
+        if (leagueClick)
+            showLeagueMenu();
         return;
     }
     QWidget::mouseReleaseEvent(e);
@@ -1805,6 +1864,7 @@ void MainPopup::closeEvent(QCloseEvent* e)
 void MainPopup::hideEvent(QHideEvent* e)
 {
     m_dragging = false;
+    m_leaguePressed = false;
     if (m_copyFeedbackTimer.isActive())
         setPriceText(m_priceText, m_priceColor);
     QWidget::hideEvent(e);

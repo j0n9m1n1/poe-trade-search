@@ -110,17 +110,25 @@ bool Application::start(QString* error)
 
     // ---- 팝업
     m_popup = new MainPopup(m_kw);
+    m_priceRefreshTimer.setSingleShot(true);
+    m_priceRefreshTimer.setTimerType(Qt::PreciseTimer);
+    m_priceRefreshTimer.setInterval(800);
+    connect(&m_priceRefreshTimer, &QTimer::timeout, this, &Application::priceCheck);
     connect(m_popup, &MainPopup::openTradeRequested, this, &Application::openTrade);
     connect(m_popup, &MainPopup::priceCheckRequested, this, &Application::priceCheck);
     connect(m_popup, &MainPopup::moreListingsRequested, this, &Application::loadMoreListings);
     connect(m_popup, &MainPopup::priceFiltersChanged, this, [this]() {
         ++m_priceFilterRevision;
+        // 진행 중 조회는 항상 취소 (예전 조건 결과가 새 조건 결과처럼 덮어쓰지 않게)
         const bool initialLoading = !m_listingPages && m_priceToken != 0;
         if (m_priceToken != 0) {
             m_client->cancel(m_priceToken);
             m_priceToken = 0;
         }
-        if (initialLoading) {
+        // 자동 재검색이 켜져 있으면 0.8초 뒤 다시 조회, 꺼져 있으면 안내만
+        if (m_cfg.autoPriceRefresh && m_popup->isVisible()) {
+            m_priceRefreshTimer.start();
+        } else if (initialLoading) {
             m_popup->priceIdle(QStringLiteral("조건이 변경되었습니다. 클릭하면 다시 조회합니다."));
             return;
         }
@@ -130,9 +138,18 @@ bool Application::start(QString* error)
         m_listingPages.reset();
     });
     connect(m_popup, &MainPopup::settingsRequested, this, &Application::openSettings);
+    connect(m_popup, &MainPopup::historyRequested, this, &Application::navigateHistory);
+    connect(m_popup, &MainPopup::leagueRequested, this, [this](Game game, const QString& league) {
+        if (m_cfg.leagueFor(game) == league)
+            return;
+        m_cfg.setLeague(game, league);
+        saveConfig();
+        syncPopupLeague();
+    });
     connect(m_popup, &MainPopup::rememberToggled, this, &Application::onRemember);
     connect(m_popup, &MainPopup::copyPriceNoteRequested, this, &Application::copyPriceNote);
     connect(m_popup, &MainPopup::popupHidden, this, [this]() {
+        m_priceRefreshTimer.stop();
         ++m_popupSeq;
         m_popupPos = m_popup->pos();
         platform::stopWatchingOutsideMousePress();
@@ -493,7 +510,14 @@ void Application::handleItemText(const QString& text)
         return;
     const Game g = decideGame(text);
     m_lastGame = g;
+    if (auto item = parseItem(text, g)) {
+        m_history.record(g, text.trimmed());
+        showParsedItem(*item, false);
+    }
+}
 
+std::optional<ParsedItem> Application::parseItem(const QString& text, Game g)
+{
     QString err;
     auto it = m_parser->parse(text, g, parseOptions(), &err);
     if (!it) {
@@ -507,22 +531,40 @@ void Application::handleItemText(const QString& text)
         } else {
             qWarning() << "parse failed" << err;
         }
-        return;
     }
+    return it;
+}
 
+void Application::navigateHistory(int offset)
+{
+    const auto* entry = m_history.step(offset);
+    if (!entry)
+        return;
+    if (auto item = parseItem(entry->text, entry->game)) {
+        m_lastGame = item->game;
+        showParsedItem(*item, true);
+    } else {
+        m_history.step(-offset);
+    }
+}
+
+void Application::showParsedItem(const ParsedItem& it, bool fromHistory)
+{
+    const Game g = it.game;
+    m_priceRefreshTimer.stop();
     m_client->cancel(m_priceToken); // 앞 아이템 시세 조회 중이면 끊음
     m_priceToken = 0;
     m_listingPages.reset();
     m_client->cancel(m_openTradeToken);
     m_openTradeToken = 0;
     // 화폐 콤보/가격 칸 아이콘 (받아둔 파일이면 바로 붙음)
-    loadCurrencyIcons(g, it->lang, {QStringLiteral("chaos"), QStringLiteral("divine"), QStringLiteral("exalted")});
-    m_popup->showItem(*it, &m_dbs[gi(g)], m_cfg, serverFor(it->lang));
-    showIconFor(*it);
+    loadCurrencyIcons(g, it.lang, {QStringLiteral("chaos"), QStringLiteral("divine"), QStringLiteral("exalted")});
+    m_popup->showItem(it, &m_dbs[gi(g)], m_cfg, serverFor(it.lang));
+    showIconFor(it);
     // 영향/엘드리치/분열 배지: 게임 이름판 문양 먼저, 못 받으면 오브 아이콘 (영향 엑잘티드 오브, 섬뜩한 불씨/영액, 분열의 오브)
     for (const auto& src : m_popup->badgeIconSources()) {
         const QString symbol = src.first, id = src.second;
-        const StaticEntry* s = m_dbs[gi(g)][it->lang].staticById(id);
+        const StaticEntry* s = m_dbs[gi(g)][it.lang].staticById(id);
         const QString orb = s ? s->image : QString();
         auto fallback = [this, id, orb]() {
             if (!orb.isEmpty())
@@ -542,22 +584,23 @@ void Application::handleItemText(const QString& text)
             m_popup->setBadgeSymbol(symbol, path);
         });
     }
-    showPopup();
+    m_popup->setHistoryAvailability(m_history.canStep(-1), m_history.canStep(1));
+    showPopup(fromHistory);
 
-    if (m_cfg.autoPriceCheck)
+    if (fromHistory || m_cfg.autoPriceCheck)
         priceCheck();
 }
 
-void Application::showPopup()
+void Application::showPopup(bool keepPosition)
 {
-    const bool centered = m_cfg.popupPosition == QStringLiteral("center");
-    const bool nearCursor = m_cfg.popupPosition == QStringLiteral("cursor");
+    const bool centered = !keepPosition && m_cfg.popupPosition == QStringLiteral("center");
+    const bool nearCursor = !keepPosition && m_cfg.popupPosition == QStringLiteral("cursor");
     const QPoint cursor = QCursor::pos();
     QPoint position = m_popup->isVisible() ? m_popup->pos() : m_popupPos;
     QScreen* screen = nullptr;
     if (centered || nearCursor)
         screen = QGuiApplication::screenAt(cursor);
-    else if (!position.isNull())
+    else if (keepPosition || !position.isNull())
         screen = QGuiApplication::screenAt(position);
     if (!screen)
         screen = QGuiApplication::primaryScreen();
@@ -572,7 +615,7 @@ void Application::showPopup()
         if (x + size.width() > area.right() + 1)
             x = cursor.x() - 24 - size.width();
         position = QPoint(x, cursor.y() - size.height() / 3);
-    } else if (position.isNull() || !area.contains(position)) {
+    } else if ((!keepPosition && position.isNull()) || !area.contains(position)) {
         position = area.topLeft() + QPoint(30, 30);
     }
     const int x = qBound(area.left(), position.x(), qMax(area.left(), area.right() + 1 - size.width()));
@@ -936,8 +979,37 @@ void Application::ensureRates(Game g, Lang server, const QString& league, std::f
 
 // ------------------------------------------------------------ 시세
 
+const Application::CachedPrice* Application::cachedPrice(const QString& key)
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    for (auto c = m_priceCache.begin(); c != m_priceCache.end();) {
+        if (now - c->at > 60000)
+            c = m_priceCache.erase(c);
+        else
+            ++c;
+    }
+    const auto c = m_priceCache.constFind(key);
+    return c != m_priceCache.constEnd() ? &c.value() : nullptr;
+}
+
+void Application::checkExchangePrice(Game g, Lang server, const QString& league, const QString& pay, const QString& item,
+                                     std::function<void(const TradeClient::ExchangeResult&)> done, quint64 token)
+{
+    const QString key = QStringLiteral("exchange|%1|%2|%3|%4|%5").arg(gi(g)).arg(li(server)).arg(league, pay, item);
+    if (const auto* c = cachedPrice(key)) {
+        done(std::get<TradeClient::ExchangeResult>(c->result));
+        return;
+    }
+    m_client->exchange(g, server, league, pay, item, [this, key, done](const TradeClient::ExchangeResult& result) {
+        if (result.error.isEmpty())
+            m_priceCache.insert(key, {QDateTime::currentMSecsSinceEpoch(), result});
+        done(result);
+    }, token);
+}
+
 void Application::priceCheck()
 {
+    m_priceRefreshTimer.stop();
     if (!m_popup->hasItem())
         return;
     m_client->cancel(m_priceToken);
@@ -970,7 +1042,7 @@ void Application::priceCheck()
             const QString itemName = currencyName(g, server, it.exchangeId);
             loadCurrencyIcons(g, server, {want});
             m_popup->priceStatus(QStringLiteral("교환 시세 확인중..."));
-            m_client->exchange(
+            checkExchangePrice(
                 g, server, league, want, it.exchangeId,
                 [this, token, filterRevision, payName, itemName, want, rates](const TradeClient::ExchangeResult& r) {
                     if (token != m_priceToken)
@@ -1096,18 +1168,12 @@ void Application::priceCheck()
         };
 
         // 같은 조건을 1분 안에 다시 조회하면 요청 안 보내고 저장한 결과 (요청 제한 절약, APT 캐시와 같은 취지)
-        const qint64 now = QDateTime::currentMSecsSinceEpoch();
         const QString key = QStringLiteral("%1|%2|%3|%4|").arg(gi(g)).arg(static_cast<int>(lang)).arg(league).arg(m_popup->listCount()) +
                             QString::fromUtf8(QJsonDocument(q).toJson(QJsonDocument::Compact));
-        for (auto c = m_priceCache.begin(); c != m_priceCache.end();) {
-            if (now - c->at > 60000)
-                c = m_priceCache.erase(c);
-            else
-                ++c;
-        }
-        if (auto c = m_priceCache.constFind(key); c != m_priceCache.constEnd()) {
-            onProgress(c->result);
-            onDone(c->result, QString());
+        if (const auto* c = cachedPrice(key)) {
+            const auto& result = std::get<TradeClient::PriceProgress>(c->result);
+            onProgress(result);
+            onDone(result, QString());
             return;
         }
         m_client->priceCheck(
@@ -1311,6 +1377,7 @@ void Application::openSettings()
 
 void Application::resetPopupPrices()
 {
+    m_priceRefreshTimer.stop();
     m_client->cancel(m_priceToken);
     m_priceToken = 0;
     m_client->cancel(m_openTradeToken);
@@ -1337,6 +1404,8 @@ bool Application::syncPopupLeague()
 
 void Application::applyConfig()
 {
+    if (!m_cfg.autoPriceRefresh)
+        m_priceRefreshTimer.stop();
     m_client->setTimeoutSec(m_cfg.serverTimeout);
     m_customRun = !m_cfg.clipboardWatch; // Ctrl+C 감시 끔 ({Run} 단축키는 그대로 동작)
     if (m_hotkeysOn) {

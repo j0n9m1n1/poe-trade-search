@@ -129,6 +129,9 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_autoPrice = new QCheckBox(QStringLiteral("창이 뜨면 바로 시세 조회"), basic);
     m_autoPrice->setChecked(cfg.autoPriceCheck);
     f->addRow(m_autoPrice);
+    m_autoPriceRefresh = new QCheckBox(QStringLiteral("검색 조건을 바꾸면 시세를 자동으로 다시 조회합니다."), basic);
+    m_autoPriceRefresh->setChecked(cfg.autoPriceRefresh);
+    f->addRow(m_autoPriceRefresh);
     m_popupPos = new QComboBox(basic);
     m_popupPos->addItem(QStringLiteral("화면 가운데"), QStringLiteral("center"));
     m_popupPos->addItem(QStringLiteral("마우스 커서 근처"), QStringLiteral("cursor"));
@@ -351,6 +354,7 @@ Config SettingsDialog::result() const
     c.searchStatRange = m_statRange->value();
     c.collapseListings = m_collapse->isChecked();
     c.autoPriceCheck = m_autoPrice->isChecked();
+    c.autoPriceRefresh = m_autoPriceRefresh->isChecked();
     c.popupPosition = m_popupPos->currentData().toString();
     c.closeOnOutsideClick = m_outsideClose->isChecked();
     c.clipboardWatch = m_clipWatch->isChecked();

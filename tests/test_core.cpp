@@ -3,6 +3,7 @@
 // 코어 테스트. 파서 테스트는 실제 거래소 데이터가 필요함:
 //   PTS_TEST_DATA=<dir>  (안에 cache/poe1/en/stats.json 등)
 // 없으면 해당 테스트는 SKIP.
+#include "app/ItemHistory.h"
 #include "core/CheckedStore.h"
 #include "core/Config.h"
 #include "core/SearchDefaults.h"
@@ -18,6 +19,7 @@
 #include "net/RateLimiter.h"
 #include "net/TradeClient.h"
 #include "net/Updater.h"
+#include "ui/FilterValueStep.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -122,6 +124,76 @@ private slots:
     }
 
     // ---------------- 데이터 없이 도는 테스트
+    void itemHistory()
+    {
+        ItemHistory history;
+        QVERIFY(!history.step(1));
+        QVERIFY(!history.step(-1));
+        history.record(Game::Poe1, QStringLiteral("0"));
+        QVERIFY(!history.canStep(1));
+        QVERIFY(!history.canStep(-1));
+        for (int i = 1; i < 12; ++i)
+            history.record(Game::Poe1, QString::number(i));
+        for (int i = 10; i >= 2; --i) {
+            const auto* entry = history.step(-1);
+            QVERIFY(entry);
+            QCOMPARE(entry->text, QString::number(i));
+        }
+        QVERIFY(!history.step(-1));
+        const auto* entry = history.step(1);
+        QVERIFY(entry);
+        QCOMPARE(entry->text, QStringLiteral("3"));
+
+        // 같은 게임과 텍스트만 중복을 제거하고 가장 최근으로 보냅니다.
+        history.record(Game::Poe1, QStringLiteral("3"));
+        QVERIFY(!history.canStep(1));
+        entry = history.step(-1);
+        QVERIFY(entry);
+        QCOMPARE(entry->text, QStringLiteral("11"));
+        entry = history.step(1);
+        QVERIFY(entry);
+        QCOMPARE(entry->text, QStringLiteral("3"));
+        history.record(Game::Poe2, QStringLiteral("3"));
+        entry = history.step(-1);
+        QVERIFY(entry);
+        QCOMPARE(entry->game, Game::Poe1);
+        entry = history.step(1);
+        QVERIFY(entry);
+        QCOMPARE(entry->game, Game::Poe2);
+    }
+
+    void filterWheelSteps()
+    {
+        QCOMPARE(filterValueStep(26.0, 40.0, 1, false), 27.0);
+        QCOMPARE(filterValueStep(26.0, 40.0, -2, true), 6.0);
+        QCOMPARE(filterValueStep(std::nullopt, 40.0, -1, false), 39.0);
+        QCOMPARE(filterValueStep(std::nullopt, 1.25, 1, false), 1.35);
+        QCOMPARE(filterValueStep(2.0, 1.25, -1, true), 1.0);
+        QCOMPARE(filterValueStep(1.25, 0.0, 1, true), 2.25);
+        QCOMPARE(filterValueStep(-0.25, std::nullopt, -1, false), -0.35);
+        QCOMPARE(filterValueStep(std::nullopt, std::nullopt, 1, false), 1.0);
+    }
+
+    void configAutoPriceRefresh()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("Config.txt"));
+        QVERIFY(json::writeFile(path, QJsonDocument(QJsonObject{
+                                          {QStringLiteral("config_version"), Config::kConfigVersion}}),
+                                true, false, nullptr));
+        Config config;
+        QVERIFY(config.load(path));
+        QVERIFY(config.autoPriceRefresh);
+        QVERIFY(!config.migrated);
+
+        config.autoPriceRefresh = false;
+        QVERIFY(config.save(path));
+        Config reloaded;
+        QVERIFY(reloaded.load(path));
+        QVERIFY(!reloaded.autoPriceRefresh);
+    }
+
     void normalize()
     {
         QCOMPARE(text::normalizeStat(QStringLiteral("+41 to maximum Life")), QStringLiteral("# to maximum life"));

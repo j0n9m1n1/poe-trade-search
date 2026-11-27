@@ -60,6 +60,7 @@ private:
     QSpinBox* m_timeout;
     QSpinBox* m_dataAge;
     QCheckBox* m_autoPrice;
+    QCheckBox* m_autoPriceRefresh;
     QComboBox* m_popupPos;
     QCheckBox* m_outsideClose;
     QCheckBox* m_clipWatch;

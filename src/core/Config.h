@@ -44,6 +44,7 @@ struct Config {
     QString priceCurrencyPoe2 = QStringLiteral("exalted_divine"); // PoE2
     int dataMaxAgeDays = 7;
     bool autoPriceCheck = true;  // 창 뜰 때 바로 시세 조회 (원본: search_auto_delay > 0)
+    bool autoPriceRefresh = true; // 조건을 바꾸면 시세 재조회
     QString popupPosition = QStringLiteral("center"); // 창 위치: center(화면 가운데) / cursor(커서 근처) / last(마지막 위치)
     bool closeOnOutsideClick = true; // 팝업 바깥(게임 화면)을 누르면 닫음
     bool clipboardWatch = true;      // 게임에서 Ctrl+C 로 복사해도 창 띄움 ({Run} 단축키와 별개)

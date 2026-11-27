@@ -68,7 +68,7 @@ public:
     void setColor(const QColor& c);
     void setExtra(QWidget* w); // 최소/최대 대신 (레어도 콤보 등)
     void setEditsVisible(bool min, bool max);
-    void setValues(const OptDouble& mn, const OptDouble& mx);
+    void setValues(const OptDouble& mn, const OptDouble& mx, double rowValue);
     OptDouble minValue() const;
     OptDouble maxValue() const;
     QLineEdit* minEdit() const { return m_min; }
