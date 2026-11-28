@@ -1139,6 +1139,15 @@ private slots:
         QVERIFY(!ids.isEmpty());
         QCOMPARE(ids.removeDuplicates(), qsizetype(0));
         QVERIFY(ids.contains(QStringLiteral("Standard")));
+
+        // PoE2 는 realm 이 "poe2" -> 전부 남아야 함 (예전엔 "pc" 만 남겨서 비었음)
+        QStringList ids2;
+        for (const auto& l : dbs[1][Lang::En].leagues())
+            ids2 << l.id;
+        QVERIFY(ids2.contains(QStringLiteral("Standard")));
+        QVERIFY(ids2.contains(QStringLiteral("Hardcore")));
+        QVERIFY(ids2.size() >= 4);
+        QCOMPARE(ids2.removeDuplicates(), qsizetype(0));
     }
 
     void mapCitadelOriginator()

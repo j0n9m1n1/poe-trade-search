@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.50
-git push origin v0.0.50
+git tag v0.0.51
+git push origin v0.0.51
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,14 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.50
+
+- PoE2 리그 콤보에 설정된 리그 하나만 나오던 문제를 고쳤습니다 (사용자 제보). v0.0.34 에서 콘솔 중복을 빼려고 realm 이 "pc" 인 리그만 남겼는데, PoE2 거래소는 realm 을 "poe2" 로 줘서 목록이 통째로 비었습니다. 이제 콘솔(xbox/sony)만 빼고 나머지는 남깁니다. [리그 목록](../src/core/TradeDb.cpp)
+
+**검증.** `leaguesPcOnlyNoDuplicates` 에 PoE2 목록 확인(Standard, Hardcore 포함, 4개 이상, 중복 없음)을 넣었습니다. 받아 둔 PoE2 리그 데이터 6개가 모두 realm "poe2" 인 것을 확인했습니다. 코어 테스트 78개, UI 테스트 9개가 통과했습니다.
+
+**남은 확인.** Windows 실기 PoE2 팝업에서 리그 콤보에 Standard 등이 나오는지.
 
 ### v0.0.49
 
