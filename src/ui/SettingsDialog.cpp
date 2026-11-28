@@ -273,7 +273,7 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     auto* keys = new QWidget(tabs);
     auto* kl = new QVBoxLayout(keys);
     auto* help = new QLabel(QStringLiteral("PoE 창이 활성 상태일 때만 동작합니다. 값 예시:\n"
-                                           "  {Run} 아이템 검색 (기본 Alt+D, Ctrl+Alt+C 를 대신 눌러 아이템 정보를 가져옵니다)   {Last} 마지막 창 다시 열기\n"
+                                           "  {Run} 아이템 검색 (기본 Alt+E, Ctrl+Alt+C 를 대신 눌러 아이템 정보를 가져옵니다)   {Last} 마지막 창 다시 열기\n"
                                            "  {Enter}/hideout{Enter} 은신처   {Enter}/exit{Enter} 로그아웃(캐릭터 선택)\n"
                                            "  ^{Enter}감사합니다{Enter} 마지막 귓속말에 답장 (키 한 번에 명령 하나)\n"
                                            "  {Pause} 일시정지   {Restart} 재시작   {Link}URL{Link} 링크 열기"),

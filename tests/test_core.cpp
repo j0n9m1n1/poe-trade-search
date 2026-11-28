@@ -1208,7 +1208,7 @@ private slots:
 
     void runHotkeyMigration()
     {
-        // {Run} 키 없던 설정 -> Alt+D + Ctrl+C 감시 켬 / 직접 지정한 설정 -> 그대로 + 감시 끔(예전 동작)
+        // {Run} 키 없던 설정 -> Alt+D(v6) -> Alt+E(v10) + Ctrl+C 감시 켬 / 직접 지정한 설정 -> 그대로 + 감시 끔(예전 동작)
         const QString path = QDir::temp().filePath(QStringLiteral("pts_cfg_v6.txt"));
         for (int key : {0, 0x77}) {
             QFile f(path);
@@ -1218,12 +1218,35 @@ private slots:
             f.close();
             Config c;
             QVERIFY(c.load(path));
-            QCOMPARE(c.shortcuts[0].keycode, key == 0 ? 0x44 : key);
+            QCOMPARE(c.shortcuts[0].keycode, key == 0 ? 0x45 : key);
             QCOMPARE(c.shortcuts[0].modifiers, key == 0 ? 1 : 0);
             QCOMPARE(c.clipboardWatch, key == 0);
         }
         QFile::remove(path);
-        QCOMPARE(Config::defaults().shortcuts[0].keycode, 0x44);
+        QCOMPARE(Config::defaults().shortcuts[0].keycode, 0x45);
+        QCOMPARE(Config::defaults().shortcuts[0].modifiers, 1);
+
+        // v10: Alt+D 그대로면 Alt+E 로, Alt+E 를 이미 쓰거나 다른 키(Ctrl+C 등)면 그대로
+        struct Case { int key; int mod; QString extra; int expected; };
+        const QVector<Case> cases = {
+            {0x44, 1, QString(), 0x45},
+            {0x44, 1, QStringLiteral(",{\"keycode\":69,\"modifiers\":1,\"value\":\"{Pause}\"}"), 0x44},
+            {0x43, 2, QString(), 0x43},
+        };
+        const QString path10 = QDir::temp().filePath(QStringLiteral("pts_cfg_v10.txt"));
+        for (const Case& t : cases) {
+            QFile f(path10);
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(QStringLiteral("{\"config_version\":9,\"options\":{},\"shortcuts\":["
+                                   "{\"keycode\":%1,\"modifiers\":%2,\"value\":\"{Run}\"}%3]}")
+                        .arg(t.key).arg(t.mod).arg(t.extra).toUtf8());
+            f.close();
+            Config c;
+            QVERIFY(c.load(path10));
+            QCOMPARE(c.shortcuts[0].keycode, t.expected);
+            QCOMPARE(c.shortcuts[0].modifiers, t.mod);
+        }
+        QFile::remove(path10);
     }
 
     void hideoutHotkeyMigration()

@@ -12,7 +12,7 @@ Config Config::defaults()
 {
     Config c;
     c.shortcuts = {
-        {0x44, 1, QStringLiteral("{Run} 아이템 검색 (Ctrl+Alt+C 를 대신 눌러서 가져옴)")}, // Alt+D
+        {0x45, 1, QStringLiteral("{Run} 아이템 검색 (Ctrl+Alt+C 를 대신 눌러서 가져옴)")}, // Alt+E (PoE2 는 D 가 WASD 이동)
         {0, 0, QStringLiteral("{Last} 마지막 창 다시 열기")},
         {116, 0, QStringLiteral("{Enter}/hideout{Enter}")}, // F5 은신처
         {115, 0, QStringLiteral("{Enter}/exit{Enter}")},    // F4 로그아웃 (캐릭터 선택)
@@ -111,6 +111,18 @@ void Config::migrate()
             if (!f5Used && s.keycode == 113 && s.modifiers == 0
                 && s.value.trimmed().compare(QStringLiteral("{Enter}/hideout{Enter}"), Qt::CaseInsensitive) == 0)
                 s.keycode = 116;
+        }
+    }
+    if (configVersion < 10) {
+        // v10: {Run} 기본 단축키 Alt+D -> Alt+E. PoE2 는 WASD 이동이라 D 가 게임에 먹힘.
+        // 예전 기본값(Alt+D) 그대로이고 Alt+E 가 비어 있을 때만 옮김
+        bool altEUsed = false;
+        for (const Shortcut& s : shortcuts)
+            altEUsed = altEUsed || (s.keycode == 0x45 && s.modifiers == 1);
+        for (Shortcut& s : shortcuts) {
+            if (!altEUsed && s.keycode == 0x44 && s.modifiers == 1
+                && s.value.trimmed().toLower().startsWith(QStringLiteral("{run}")))
+                s.keycode = 0x45;
         }
     }
     configVersion = kConfigVersion;

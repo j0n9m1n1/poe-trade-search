@@ -525,7 +525,7 @@ std::optional<ParsedItem> Application::parseItem(const QString& text, Game g)
     if (!it) {
         if (err == QStringLiteral("data not loaded")) {
             if (!m_data->isUpdating(g)) {
-                notify(QStringLiteral("거래소 데이터를 받는 중입니다. 완료되면 다시 검색해 주세요 (Alt+D)."));
+                notify(QStringLiteral("거래소 데이터를 받는 중입니다. 완료되면 다시 검색해 주세요 (Alt+E)."));
                 updateGame(g);
             } else {
                 notify(QStringLiteral("거래소 데이터를 받는 중입니다. 잠시 기다려 주세요."));

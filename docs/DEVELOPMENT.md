@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.49
-git push origin v0.0.49
+git tag v0.0.50
+git push origin v0.0.50
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,15 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.49
+
+- 아이템 검색({Run}) 기본 단축키를 Alt+D 에서 Alt+E 로 바꿨습니다 (사용자 결정). PoE2 는 WASD 로 이동하므로 D 가 게임 입력과 겹칩니다. 설정 버전 10 이전에 예전 기본값(Alt+D) 그대로인 설정은 Alt+E 를 다른 단축키가 쓰지 않을 때만 옮깁니다. 직접 바꾼 키(예: Ctrl+C)는 그대로 둡니다. [설정](../src/core/Config.cpp)
+- 설정 창 안내문, 데이터 준비 중 알림, README 의 단축키 표기를 Alt+E 로 바꿨습니다.
+
+**검증.** `runHotkeyMigration` 에 v10 이전 사례 3가지(Alt+D → Alt+E, Alt+E 가 이미 쓰이면 유지, Ctrl+C 유지)와 기본값 Alt+E 확인을 넣었습니다. 코어 테스트 78개, UI 테스트 9개가 통과했습니다.
+
+**남은 확인.** Windows 실기 PoE2 에서 Alt+E 가 게임에 먹히지 않고 검색되는지.
 
 ### v0.0.48
 

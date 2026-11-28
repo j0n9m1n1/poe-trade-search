@@ -1,6 +1,6 @@
 # Poe Trade Search
 
-Path of Exile 아이템 위에서 Alt+D(또는 Ctrl+C)를 누르면 커서 옆에 팝업을 띄워 시세를 바로 보여 주는 Windows 도구입니다.
+Path of Exile 아이템 위에서 Alt+E(또는 Ctrl+C)를 누르면 커서 옆에 팝업을 띄워 시세를 바로 보여 주는 Windows 도구입니다.
 [phiDelPark/PoeTradeSearch](https://github.com/phiDelPark/PoeTradeSearch)를 C++ / Qt 6로 다시 만들었습니다.
 
 ## 기능
@@ -27,7 +27,7 @@ Path of Exile 아이템 위에서 Alt+D(또는 Ctrl+C)를 누르면 커서 옆�
 ## 사용법
 
 1. 프로그램을 실행하면 트레이에 아이콘이 생깁니다.
-2. 게임에서 아이템에 마우스를 올리고 Alt+D를 누릅니다. 프로그램이 Ctrl+Alt+C(고급 설명 복사)를 대신 눌러 아이템 정보를 가져옵니다. 그냥 Ctrl+C로 복사해도 됩니다.
+2. 게임에서 아이템에 마우스를 올리고 Alt+E를 누릅니다. 프로그램이 Ctrl+Alt+C(고급 설명 복사)를 대신 눌러 아이템 정보를 가져옵니다. 그냥 Ctrl+C로 복사해도 됩니다.
 3. 팝업에서 시세를 확인합니다. 게임 화면을 클릭하면 닫히고(창 모드에서 다른 프로그램을 누르면 닫히지 않습니다), 트레이 아이콘을 누르면 다시 열립니다.
 
 단축키와 옵션은 트레이 아이콘 우클릭 → 설정에서 바꿀 수 있습니다.
