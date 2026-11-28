@@ -1234,6 +1234,21 @@ private slots:
         QVERIFY(it->hasDps);
         QVERIFY(it->pdps > 100 && it->pdps < 200);
         QVERIFY(it->edps > 20 && it->edps < 40);
+        // 물리+원소가 섞이면 전체 DPS 줄도 있음
+        auto hasProp = [](const ParsedItem& x, const char* key) {
+            return std::any_of(x.props.begin(), x.props.end(), [&](const ItemProp& p) { return p.key == QLatin1String(key); });
+        };
+        QVERIFY(hasProp(*it, "dps"));
+        // 물리만 있는 무기는 전체 DPS = 물리 DPS 라 물리 DPS 한 줄만, 그게 자동 체크
+        const auto crossbow = parseText(QStringLiteral(
+            "Item Class: Crossbows\nRarity: Rare\nDoom Bolt\nSiege Crossbow\n--------\n"
+            "Quality: +29% (augmented)\nPhysical Damage: 414-1,043 (augmented)\nAttacks per Second: 2.07 (augmented)\n"
+            "--------\nItem Level: 82\n"), Game::Poe2);
+        QVERIFY(crossbow && crossbow->hasDps);
+        QVERIFY(!hasProp(*crossbow, "dps"));
+        QVERIFY(hasProp(*crossbow, "pdps"));
+        QVERIFY(std::any_of(crossbow->props.begin(), crossbow->props.end(),
+                            [](const ItemProp& p) { return p.key == QLatin1String("pdps") && p.use; }));
     }
 
     void poe1ClusterJewel()

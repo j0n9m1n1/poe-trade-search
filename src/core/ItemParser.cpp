@@ -1075,7 +1075,10 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         it.cdps = chaos / 2.0 * aps;
         it.hasDps = aps > 0 && (phys + ele + chaos) > 0;
         if (it.hasDps) {
-            it.props.push_back({QStringLiteral("dps"), it.pdps + it.edps + it.cdps});
+            // 물리만/원소만이면 전체 DPS 가 물리/원소 DPS 와 같은 값이라 한 줄만 둠 (팝업 높이 절약)
+            const int kinds = (it.pdps > 0) + (it.edps > 0) + (it.cdps > 0);
+            if (kinds > 1 || it.cdps > 0)
+                it.props.push_back({QStringLiteral("dps"), it.pdps + it.edps + it.cdps});
             if (it.pdps > 0)
                 it.props.push_back({QStringLiteral("pdps"), it.pdps});
             if (it.edps > 0)
@@ -1150,14 +1153,15 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
         // 무기: 물리 위주(67% 이상)면 물리 DPS, 원소 위주면 원소 DPS, 섞였으면 전체 DPS. 마법 무기(완드/셉터)는 안 켬
         const bool caster = it.category.contains(QStringLiteral("wand")) || it.category.contains(QStringLiteral("sceptre"));
         ItemProp* dps = prop("dps");
-        if (dps && dps->value > 0 && !caster) {
+        const double totalDps = it.pdps + it.edps + it.cdps;
+        if (it.hasDps && totalDps > 0 && !caster) {
             ItemProp* pd = prop("pdps");
             ItemProp* ed = prop("edps");
-            if (pd && pd->value / dps->value >= 0.67)
+            if (pd && it.pdps / totalDps >= 0.67)
                 pd->use = true;
-            else if (ed && ed->value / dps->value >= 0.67)
+            else if (ed && it.edps / totalDps >= 0.67)
                 ed->use = true;
-            else
+            else if (dps)
                 dps->use = true;
         }
         // 켠 속성에 이미 들어간 로컬 옵션은 체크 해제 (같은 걸 두 번 거는 것 방지)

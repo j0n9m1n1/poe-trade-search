@@ -234,7 +234,6 @@ private:
     QLabel* m_priceCount;
 
     QPushButton* m_search;
-    QPushButton* m_close;
 };
 
 } // namespace pts

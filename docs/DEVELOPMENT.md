@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.45
-git push origin v0.0.45
+git tag v0.0.46
+git push origin v0.0.46
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,17 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.45
+
+- 팝업을 더 작게 만들었습니다 (사용자 요청).
+  - 맨 아래 "거래소에서 찾기 / 닫기" 버튼 줄을 없앴습니다. 거래소 버튼과 새로고침(아이콘만)은 시세 상태 줄 오른쪽으로 옮겼습니다. 닫기 버튼은 뺐습니다. 팝업은 Esc 나 게임 화면 클릭으로 닫힙니다. [팝업](../src/ui/MainPopup.cpp)
+  - DPS 종류가 하나뿐인 무기(물리만, 원소만)는 같은 값을 반복하던 "DPS" 줄을 숨깁니다. 이때 자동 체크는 해당 물리/원소 DPS 줄에 걸립니다. 혼종이나 혼돈 피해가 있으면 전과 같이 "DPS" 줄을 보여 줍니다. [파서](../src/core/ItemParser.cpp)
+- 결합·수정 가능 체크박스를 왼쪽, 영향·삿된·변이·타락 콤보를 오른쪽에 모았습니다 (사용자 요청).
+
+**검증.** 코어 테스트 76개(물리 전용 쇠뇌는 "DPS" 줄 없이 물리 DPS 가 체크되고, 혼합 검은 "DPS" 줄이 남는 검사 추가), UI 테스트 7개가 통과했습니다. 오프스크린에서 고유 갈퀴(물리 전용)와 초대장(일반+교환)을 띄워 버튼 배치와 높이(약 800px)를 확인했습니다.
+
+**남은 확인.** Windows 실기에서 상태 줄 버튼 배치와 새로고침 강조 표시.
 
 ### v0.0.44
 

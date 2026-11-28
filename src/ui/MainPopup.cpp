@@ -419,14 +419,15 @@ void MainPopup::buildUi()
     m_alt = new QComboBox(m_miscBox);
 
     auto* row2 = new QHBoxLayout;
+    // 체크는 왼쪽, 콤보는 오른쪽에 모아 둠
     row2->addWidget(m_special1);
     row2->addWidget(m_special2);
+    row2->addWidget(m_modifiable);
     row2->addStretch(1);
     row2->addWidget(m_infl1);
     row2->addWidget(m_infl2);
     row2->addWidget(m_alt);
     row2->addWidget(m_mutated);
-    row2->addWidget(m_modifiable);
     row2->addWidget(m_corrupt);
     g->addLayout(row2, 0, 0, 1, 3);
     p1->addWidget(m_miscBox);
@@ -523,36 +524,30 @@ void MainPopup::buildUi()
     connect(&m_copyFeedbackTimer, &QTimer::timeout, this, [this]() { setPriceText(m_priceText, m_priceColor); });
     m_idleText = QStringLiteral("시세를 검색하려면 클릭하세요");
     setPriceText(m_idleText);
-    m_refresh = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), QStringLiteral("새로고침"), this);
-    m_refresh->setToolTip(QStringLiteral("지금 조건으로 시세를 다시 조회합니다"));
+    m_refresh = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), QString(), this);
+    m_refresh->setToolTip(QStringLiteral("새로고침: 지금 조건으로 시세를 다시 조회합니다"));
     m_refresh->setCursor(Qt::PointingHandCursor);
     connect(m_refresh, &QPushButton::clicked, this, &MainPopup::priceCheckRequested);
     {
         auto* pl = new QHBoxLayout;
         pl->addWidget(m_priceCount);
         pl->addWidget(m_price, 1);
+        // 거래소 버튼도 이 줄에 둠 (닫기 버튼 줄은 뺌: Esc 나 게임 화면 클릭으로 닫힘, 팝업 높이 절약)
+        m_search = new QPushButton(QStringLiteral("거래소에서 찾기"), this);
+        m_search->setToolTip(QStringLiteral("지금 조건으로 거래소 웹 페이지를 엽니다. 팝업은 Esc 로 닫습니다"));
+        m_search->setCursor(Qt::PointingHandCursor);
+        QFont bf = m_search->font();
+        bf.setBold(true);
+        m_search->setFont(bf);
         pl->addWidget(m_refresh);
+        pl->addWidget(m_search);
         root->addLayout(pl);
     }
-
-    auto* bottom = new QHBoxLayout;
-    m_search = new QPushButton(QStringLiteral("거래소에서 찾기"), this);
-    m_close = new QPushButton(QStringLiteral("닫기"), this);
-    m_close->setToolTip(QStringLiteral("Esc로 닫기"));
-    m_search->setMinimumHeight(34);
-    m_close->setMinimumHeight(34);
-    QFont bf = m_close->font();
-    bf.setBold(true);
-    m_close->setFont(bf);
-    bottom->addWidget(m_search, 3);
-    bottom->addWidget(m_close, 1);
-    root->addLayout(bottom);
 
     setMinimumWidth(660);
 
     // ---- 연결
     connect(m_search, &QPushButton::clicked, this, &MainPopup::openTradeRequested);
-    connect(m_close, &QPushButton::clicked, this, &QWidget::hide);
     connect(m_settings, &QPushButton::clicked, this, &MainPopup::settingsRequested);
     connect(m_all, &ToggleLabel::toggled, this, [this](bool on) {
         for (FilterRow* r : m_rows) {
