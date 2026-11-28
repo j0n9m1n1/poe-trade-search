@@ -986,7 +986,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     }
     // 타락: 원본 auto_select_corrupt 설정이 있으면 그거, 없으면 아이템 상태 그대로 (APT 와 같음)
     //  타락 아님 -> 타락 아닌 매물만 / 한 번 타락 -> 두 번 타락 제외 / 두 번 타락 -> 두 번 타락만
-    if (it.isGear || it.isFlask || it.isGem || it.isMap) {
+    if (it.isGear || it.isJewel || it.isFlask || it.isGem || it.isMap) {
         if (opt.autoSelectCorrupt == QStringLiteral("yes"))
             it.corruptDefault = 1;
         else if (opt.autoSelectCorrupt == QStringLiteral("no"))

@@ -690,6 +690,9 @@ private slots:
         // 유사(pseudo) 후보가 있는 분열 옵션도 분열 그룹으로 (심연 주얼 "에너지 보호막 최대치 +31")
         auto aj = parse(QStringLiteral("poe1_ko_abyss_jewel_fractured.txt"), Game::Poe1);
         QVERIFY(aj && aj->fractured);
+        // 주얼도 타락 아닌 아이템이면 타락 매물 제외 (빠져 있어서 타락된 싼 매물이 시세를 끌어내렸음)
+        QCOMPARE(aj->corruptDefault, 2);
+        QCOMPARE(defaultFilterState(*aj).corrupted, 2);
         const ParsedMod* ajm = findMod(*aj, QStringLiteral("stat_3489782002"));
         if (!ajm) {
             for (const ParsedMod& m : aj->mods) {
