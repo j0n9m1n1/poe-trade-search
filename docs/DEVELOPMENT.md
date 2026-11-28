@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.42
-git push origin v0.0.42
+git tag v0.0.43
+git push origin v0.0.43
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,12 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.42
+
+- 방어구의 Q20 방어 수치(방어도/회피/에너지 보호막)를 기본으로 켜지 않습니다 (사용자 결정). 지금까지는 방어 종류가 하나뿐인 베이스면 그 수치를 켜고, 수치에 들어간 로컬 방어 옵션(방어도 #% 증가 등)은 체크를 껐습니다. Q20 수치는 로컬 % 옵션 수치에 따라 크게 달라져서 비슷한 매물이 많이 빠졌습니다. 이제 방어 수치는 사용자가 켤 때만 걸고, 로컬 방어 옵션도 다른 옵션처럼 그대로 둡니다. 무기 DPS 자동 체크는 그대로입니다. [파서](../src/core/ItemParser.cpp)
+
+**검증.** `aptRules`: 회피만 있는 장갑에서 회피 속성이 꺼져 있는지 확인합니다. `groupedNumbersAndQuality`: 방어 속성이 기본으로 꺼져 있는지, 켜면 Q20 값(648, 1043)이 그대로 들어가는지 확인합니다. 코어 테스트 75개, UI 테스트 7개가 통과했습니다.
 
 ### v0.0.41
 

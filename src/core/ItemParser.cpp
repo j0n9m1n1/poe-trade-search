@@ -1145,14 +1145,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
             }
             return nullptr;
         };
-        // 방어: 방어 종류가 하나뿐인 베이스면 그 속성을 켬
-        QVector<ItemProp*> defs;
-        for (const char* k : {"ar", "ev", "es"}) {
-            if (ItemProp* p = prop(k))
-                defs << p;
-        }
-        if (defs.size() == 1)
-            defs[0]->use = true;
+        // 방어(방어도/회피/에너지 보호막)는 기본으로 켜지 않음: Q20 수치는 로컬 % 옵션에 따라 크게 달라져
+        // 비슷한 매물이 빠지므로, 로컬 옵션을 그대로 두고 필요할 때만 사용자가 켬 (사용자 결정)
         // 무기: 물리 위주(67% 이상)면 물리 DPS, 원소 위주면 원소 DPS, 섞였으면 전체 DPS. 마법 무기(완드/셉터)는 안 켬
         const bool caster = it.category.contains(QStringLiteral("wand")) || it.category.contains(QStringLiteral("sceptre"));
         ItemProp* dps = prop("dps");
@@ -1167,17 +1161,9 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                 dps->use = true;
         }
         // 켠 속성에 이미 들어간 로컬 옵션은 체크 해제 (같은 걸 두 번 거는 것 방지)
-        static const QSet<QString> defLocal = {
-            QStringLiteral("stat_4052037485"), QStringLiteral("stat_124859000"),  QStringLiteral("stat_53045048"),
-            QStringLiteral("stat_1062208444"), QStringLiteral("stat_3484657501"), QStringLiteral("stat_4015621042"),
-            QStringLiteral("stat_1999113824"), QStringLiteral("stat_3321629045"), QStringLiteral("stat_2451402625"),
-            QStringLiteral("stat_3523867985")};
         static const QSet<QString> physLocal = {QStringLiteral("stat_1940865751")}; // 물리 피해 추가 (특정)
         static const QSet<QString> eleLocal = {QStringLiteral("stat_709508406"), QStringLiteral("stat_1037193709"),
                                                QStringLiteral("stat_3336890334")}; // 화염/냉기/번개 피해 추가 (특정)
-        bool defOn = false;
-        for (ItemProp* p : defs)
-            defOn = defOn || p->use;
         const bool pdOn = prop("pdps") && prop("pdps")->use, edOn = prop("edps") && prop("edps")->use,
                    dOn = dps && dps->use;
         for (ParsedMod& m : it.mods) {
@@ -1185,7 +1171,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                 continue; // 분열 옵션은 그 자체가 가치라 속성에 들어가도 그대로 둠
             const QString& k = m.statKey;
             const bool speed = k == m_kw.localAttackSpeed(), physInc = k == m_kw.physicalDamageIncrease();
-            if ((defOn && defLocal.contains(k)) || ((pdOn || dOn) && (physLocal.contains(k) || physInc || speed)) ||
+            if (((pdOn || dOn) && (physLocal.contains(k) || physInc || speed)) ||
                 ((edOn || dOn) && (eleLocal.contains(k) || speed)))
                 m.checked = false;
         }

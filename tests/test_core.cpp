@@ -709,17 +709,19 @@ private slots:
                 QVERIFY2(m.current()->id.startsWith(QStringLiteral("fractured.")), qPrintable(m.current()->id));
         }
 
-        // 하나뿐이면 켜고, 그 속성에 들어간 로컬 옵션은 체크 해제
+        // 하나뿐이어도 Q20 방어 수치는 켜지 않고, 로컬 방어 옵션은 다른 옵션처럼 그대로 둠
         QString evOnly = gl;
         evOnly.remove(QStringLiteral("에너지 보호막: 25 (augmented)\n"));
         evOnly.replace(QStringLiteral("생명력 최대치 +119(100-119)"), QStringLiteral("회피 +40(30-50)"));
         auto e = parseText(evOnly, Game::Poe1);
         QVERIFY(e);
-        QCOMPARE(propUse(*e, "ev"), 1);
+        QCOMPARE(propUse(*e, "ev"), 0);
+        const ParsedMod* evLocal = nullptr;
         for (const ParsedMod& m : e->mods) {
             if (m.statKey == QStringLiteral("stat_53045048"))
-                QVERIFY(!m.checked);
+                evLocal = &m;
         }
+        QVERIFY(evLocal); // 분열 아이템이라 기본 체크는 분열 옵션뿐, 속성 때문에 따로 끄지도 않음
 
         // 클러스터 주얼: 패시브 8개 -> 최대 8 (적을수록 노트 비중이 큼), 주얼 홈 수 해제, ilvl 84 구간
         auto cj = parse(QStringLiteral("poe1_en_cluster.txt"), Game::Poe1);
@@ -1901,6 +1903,11 @@ private slots:
         const auto glove = parseText(clip, Game::Poe1);
         QVERIFY(glove);
         item = applyPreset(*glove, Preset::Default, 10, &st);
+        for (PropFilterState& p : st.props) {
+            QVERIFY(!p.use); // 방어 속성은 기본으로 안 켬
+            if (p.key == QStringLiteral("ar"))
+                p.use = true;
+        }
         props = searchFilters(searchQuery(item, st), "armour_filters");
         QCOMPARE(props.value(QStringLiteral("ar")).toObject().value(QStringLiteral("min")).toDouble(), 648.0);
         const auto nonDefence = parseText(clip + QStringLiteral("--------\n퀄리티가 방어력을 증가시키지 않음 (enchant)\n"), Game::Poe1);
@@ -1912,7 +1919,10 @@ private slots:
         armourClip.replace(QStringLiteral("812"), QStringLiteral("1,043"));
         const auto corrupted = parseText(armourClip, Game::Poe2);
         QVERIFY(corrupted);
-        props = searchFilters(searchQuery(*corrupted, defaultFilterState(*corrupted)), "equipment_filters");
+        st = defaultFilterState(*corrupted);
+        for (PropFilterState& p : st.props)
+            p.use = p.use || p.key == QStringLiteral("ar");
+        props = searchFilters(searchQuery(*corrupted, st), "equipment_filters");
         QCOMPARE(props.value(QStringLiteral("ar")).toObject().value(QStringLiteral("min")).toDouble(), 1043.0);
     }
 
