@@ -232,8 +232,9 @@ void MainPopup::buildUi()
     m_preset->setToolTip(QStringLiteral("기본: pseudo 우선 / 자동 체크\n"
                                         "정확: 원래 옵션, T1~T2 만 체크 (등급 모르면 일반 옵션 전부), 값 일치\n"
                                         "베이스: 옵션을 모두 끄고 아이템 레벨·영향 위주로 검색"));
-    m_range = new QComboBox(this);
+    m_range = new QComboBox(this); // 아래 결합/영향/타락 줄에 둠
     m_range->setToolTip(kRangeTip);
+    m_range->setSizeAdjustPolicy(QComboBox::AdjustToContents);
 
     m_league = new QComboBox(this);
     m_league->setSizeAdjustPolicy(QComboBox::AdjustToContents);
@@ -250,7 +251,6 @@ void MainPopup::buildUi()
     m_settings = new QPushButton(QStringLiteral("설정"), this);
     m_settings->setFixedWidth(52);
     top->addWidget(m_preset);
-    top->addWidget(m_range);
     top->addStretch(1); // 빈 곳을 끌어서 창 이동
     top->addWidget(m_league);
     top->addStretch(1);
@@ -448,6 +448,7 @@ void MainPopup::buildUi()
     row2->addWidget(m_special2);
     row2->addWidget(m_modifiable);
     row2->addStretch(1);
+    row2->addWidget(m_range);
     row2->addWidget(m_infl1);
     row2->addWidget(m_infl2);
     row2->addWidget(m_alt);
@@ -847,7 +848,7 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
             const int base = m_cfgRange > 0 ? m_cfgRange : 10;
             m_range->addItem(QStringLiteral("일치"), 0);
             m_range->addItem(QStringLiteral("-%1%").arg(base), base);
-            m_range->addItem(QStringLiteral("-%1% (넓게)").arg(base * 2), base * 2);
+            m_range->addItem(QStringLiteral("-%1%").arg(base * 2), base * 2);
             m_range->setCurrentIndex(m_cfgRange > 0 ? 1 : 0);
             m_range->setToolTip(kRangeTip);
             m_preset->setVisible(hasMods);

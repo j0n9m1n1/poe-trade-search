@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.56
-git push origin v0.0.56
+git tag v0.0.57
+git push origin v0.0.57
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,12 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.56
+
+- 옵션 값 범위 콤보(일치 / -10% / -20%)를 맨 위 줄에서 결합·수정 가능·영향·타락 줄로 옮겼습니다 (사용자 요청). 콤보 폭은 글자에 맞추고, "(넓게)" 꼬리표를 빼서 줄였습니다. 맨 위 줄에는 프리셋 콤보만 남습니다. 소환장의 등급 콤보도 같은 자리에 나옵니다. [팝업](../src/ui/MainPopup.cpp)
+
+**검증.** 코어 테스트 79개, UI 테스트 11개가 통과했습니다. 콤보가 가장 많은 고유 무기(결합, 수정 가능, 범위, 영향 2개, 삿된, 타락)를 오프스크린으로 찍어 최소 폭 660px 안에 들어가는 것을 확인했습니다.
 
 ### v0.0.55
 
