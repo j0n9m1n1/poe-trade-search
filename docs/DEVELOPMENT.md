@@ -2,6 +2,10 @@
 
 원본 대비 바뀐 점과 뺀 기능은 [FEATURES.md](FEATURES.md), 다른 도구와의 비교는 [REFERENCE.md](REFERENCE.md)를 참고하세요.
 
+## 원칙
+
+이 프로그램의 목표는 **가볍고 빠른 것**입니다 (사용자 결정). 기능을 더할 때는 시작 시간, 팝업이 뜨는 속도, 메모리, 요청 수를 늘리지 않는지 먼저 봅니다. 자주 쓰지 않을 기능이나 화면을 복잡하게 만드는 요소는 넣지 않고, 이미 넣은 것도 쓸모가 적으면 뺍니다 (예: v0.0.37 최근 아이템 ◀/▶ 제거).
+
 ## 빌드 (Windows)
 
 필요: Qt 6.5 이상 (MSVC 2022 64bit 또는 MinGW 64bit), CMake 3.21 이상, Ninja 권장
@@ -74,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.39
-git push origin v0.0.39
+git tag v0.0.40
+git push origin v0.0.40
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -97,6 +101,13 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.39
+
+- 설정 창의 단축키·자동 체크 탭 안내문과 버전 정보 글자가 다크 테마에서 거의 보이지 않던 문제를 고쳤습니다. `palette(mid)` 색이 어두운 배경과 같아졌습니다. 읽히는 보조 회색(#b4b4b4)으로 바꾸고 줄바꿈을 켰습니다. [설정 창](../src/ui/SettingsDialog.cpp)
+- 개발 문서 맨 위에 "가볍고 빠르게" 원칙을 적었습니다.
+
+**검증.** 코어 테스트 74개, UI 테스트 7개가 통과했습니다. 설정 창 세 탭을 오프스크린으로 찍어 안내문 줄바꿈을 확인했습니다 (테스트 환경은 밝은 테마).
 
 ### v0.0.38
 

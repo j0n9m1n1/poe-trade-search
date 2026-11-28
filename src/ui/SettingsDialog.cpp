@@ -220,7 +220,7 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     upd->addWidget(m_dataBtn[1]);
     f->addRow(upd);
     auto* ver = new QLabel(versionInfo, basic);
-    ver->setStyleSheet(QStringLiteral("color:palette(mid);"));
+    ver->setStyleSheet(QStringLiteral("color:#b4b4b4;")); // palette(mid) 는 다크 테마에서 안 보임
     f->addRow(ver);
     basicScroll->setWidget(basic);
     tabs->addTab(basicScroll, QStringLiteral("기본"));
@@ -234,7 +234,8 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
                                            "  ^{Enter}감사합니다{Enter} 마지막 귓속말에 답장 (키 한 번에 명령 하나)\n"
                                            "  {Pause} 일시정지   {Restart} 재시작   {Link}URL{Link} 링크 열기"),
                             keys);
-    help->setStyleSheet(QStringLiteral("color:palette(mid);"));
+    help->setStyleSheet(QStringLiteral("color:#b4b4b4;"));
+    help->setWordWrap(true);
     kl->addWidget(help);
     m_shortcuts = new QTableWidget(0, 2, keys);
     m_shortcuts->setHorizontalHeaderLabels({QStringLiteral("단축키"), QStringLiteral("작업값")});
@@ -266,7 +267,8 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     auto* ch = new QLabel(QStringLiteral("팝업에서 옵션 줄을 우클릭하면 여기에 등록됩니다 (고정 옵션 제외).\n"
                                          "Ctrl+Alt+C 고급 설명으로 복사하면 1~2등급일 때만 자동으로 체크합니다."),
                           chk);
-    ch->setStyleSheet(QStringLiteral("color:palette(mid);"));
+    ch->setStyleSheet(QStringLiteral("color:#b4b4b4;"));
+    ch->setWordWrap(true);
     cl->addWidget(ch);
     m_checkedList = new QListWidget(chk);
     cl->addWidget(m_checkedList, 1);
