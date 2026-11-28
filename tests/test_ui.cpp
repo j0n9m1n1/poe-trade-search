@@ -21,6 +21,7 @@
 #include <QSignalSpy>
 #include <QToolButton>
 #include <QTemporaryDir>
+#include <QLineEdit>
 #include <QTableWidget>
 #include <QWheelEvent>
 #include <QtTest>
@@ -150,6 +151,49 @@ private slots:
     }
 
     // 떠 있는 팝업에 옵션 많은 아이템을 띄우면 창이 커져서 옵션 영역이 최소 높이로 눌리지 않아야 함
+    // 팝업 안 콤보·입력칸·표에 포커스가 있어도 Esc 로 팝업이 닫혀야 함
+    void escClosesPopupFromChildFocus()
+    {
+        MainPopup popup(m_kw);
+        GameDb gdb;
+        Config cfg = Config::defaults();
+        ParsedItem it;
+        it.game = Game::Poe1;
+        it.lang = Lang::Ko;
+        it.rarityId = QStringLiteral("rare");
+        it.rarityText = QStringLiteral("희귀");
+        it.name = QStringLiteral("이름");
+        it.type = QStringLiteral("반지");
+        it.rawType = it.type;
+        ParsedMod m;
+        m.raw = m.text = m.shown = QStringLiteral("옵션");
+        m.cands.push_back({0, QStringLiteral("explicit"), QStringLiteral("명시"), QStringLiteral("explicit.stat_1"), QJsonValue()});
+        m.value = 10;
+        m.min = 10;
+        m.checked = true;
+        it.mods.push_back(m);
+        popup.showItem(it, &gdb, cfg, Lang::Ko);
+        popup.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&popup));
+        QList<QWidget*> targets;
+        for (QComboBox* c : popup.findChildren<QComboBox*>())
+            if (c->isVisible())
+                targets << c;
+        for (QLineEdit* e : popup.findChildren<QLineEdit*>())
+            if (e->isVisible())
+                targets << e;
+        for (QTableWidget* t : popup.findChildren<QTableWidget*>())
+            targets << t;
+        QVERIFY(targets.size() >= 3);
+        for (QWidget* w : targets) {
+            popup.show();
+            QVERIFY(popup.isVisible());
+            w->setFocus();
+            QTest::keyClick(w, Qt::Key_Escape);
+            QVERIFY2(!popup.isVisible(), qPrintable(QString::fromLatin1(w->metaObject()->className())));
+        }
+    }
+
     void popupGrowsForManyRows()
     {
         MainPopup popup(m_kw);

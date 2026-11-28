@@ -228,9 +228,10 @@ void setNoActivate(QWidget* w, bool on)
         return;
     w->setAttribute(Qt::WA_ShowWithoutActivating, on);
     HWND h = reinterpret_cast<HWND>(w->winId());
-    LONG_PTR ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
-    ex = on ? (ex | WS_EX_NOACTIVATE) : (ex & ~static_cast<LONG_PTR>(WS_EX_NOACTIVATE));
-    SetWindowLongPtrW(h, GWL_EXSTYLE, ex);
+    const LONG_PTR old = GetWindowLongPtrW(h, GWL_EXSTYLE);
+    const LONG_PTR ex = on ? (old | WS_EX_NOACTIVATE) : (old & ~static_cast<LONG_PTR>(WS_EX_NOACTIVATE));
+    if (ex != old)
+        SetWindowLongPtrW(h, GWL_EXSTYLE, ex);
 }
 
 void activateWindow(QWidget* w)
@@ -239,7 +240,17 @@ void activateWindow(QWidget* w)
         return;
     setNoActivate(w, false);
     HWND h = reinterpret_cast<HWND>(w->winId());
-    SetForegroundWindow(h);
+    if (!SetForegroundWindow(h) && GetForegroundWindow() != h) {
+        // 트레이 클릭 등 다른 프로세스가 앞에 있을 때는 Windows 가 전환을 막음.
+        // 앞 창의 입력 스레드에 잠깐 붙어서 전환 (붙지 못하면 그대로 둠)
+        const DWORD fgThread = GetWindowThreadProcessId(GetForegroundWindow(), nullptr);
+        const DWORD self = GetCurrentThreadId();
+        if (fgThread && fgThread != self && AttachThreadInput(fgThread, self, TRUE)) {
+            BringWindowToTop(h);
+            SetForegroundWindow(h);
+            AttachThreadInput(fgThread, self, FALSE);
+        }
+    }
     w->activateWindow();
 }
 

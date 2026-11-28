@@ -389,6 +389,10 @@ void Application::onForegroundTick()
     } else if (m_hotkeysOn) {
         unregisterHotkeys();
     }
+    // 게임이 내려가 있으면 팝업을 보통 창처럼 클릭해서 활성화할 수 있게 함 (그래야 Esc 가 팝업에 들어감).
+    // 게임 위에 다시 띄울 때 showPopup 이 포커스 안 뺏는 상태로 되돌림
+    if (!w.foreground && m_popup->isVisible())
+        platform::setNoActivate(m_popup, false);
     updateEscHotkey(w.foreground);
 }
 

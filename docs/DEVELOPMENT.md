@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.55
-git push origin v0.0.55
+git tag v0.0.56
+git push origin v0.0.56
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,15 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.55
+
+- 게임이 내려가 있을 때 팝업이 Esc 로 닫히지 않던 문제를 고쳤습니다 (사용자 제보). 게임 위에 띄운 팝업은 포커스를 뺏지 않는 창(WS_EX_NOACTIVATE)이라, 게임을 내린 뒤 팝업을 눌러도 활성화되지 않아 Esc 가 팝업에 들어가지 않았습니다. 이제 게임이 앞에 없으면 팝업을 보통 창으로 되돌려 클릭하면 활성화됩니다. 트레이로 다시 열 때 Windows 가 창 전환을 막으면 앞 창의 입력 스레드에 잠깐 붙어서 전환합니다. [앱](../src/app/Application.cpp) · [Windows](../src/platform/win/WinPlatform.cpp)
+- 용병 소환장의 `재의 전령` 이 숫자 그룹에 두 번 들어가는 것은 정상입니다. 거래소 데이터에 같은 이름의 기술 id 가 둘(`skill_44334`, `skill_31201`) 있고 아이템 글로는 구분할 수 없어 둘 중 하나를 찾습니다. 실측: 우물의 군목은 `skill_31201` 만 매물이 있고, `skill_44334` 는 다른 빌드에서 1285건 나옵니다.
+
+**검증.** UI 테스트 `escClosesPopupFromChildFocus` 추가: 팝업 안 콤보, 입력칸, 시세 표에 포커스가 있어도 Esc 로 닫히는지 확인합니다. 코어 테스트 79개, UI 테스트 11개가 통과했습니다. Windows 전용 코드는 CI 빌드로 확인합니다.
+
+**남은 확인.** Windows 실기에서 게임을 내린 상태로 팝업을 눌러 Esc, 트레이로 다시 연 뒤 Esc.
 
 ### v0.0.54
 
