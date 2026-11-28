@@ -50,8 +50,16 @@ QByteArray sanitize(const QByteArray& in)
         }
         if (c == ',') {
             int j = i + 1;
-            while (j < in.size() && (in[j] == ' ' || in[j] == '\t' || in[j] == '\r' || in[j] == '\n'))
-                ++j;
+            for (;;) {
+                while (j < in.size() && (in[j] == ' ' || in[j] == '\t' || in[j] == '\r' || in[j] == '\n'))
+                    ++j;
+                if (j + 1 < in.size() && in[j] == '/' && in[j + 1] == '/') { // 끝 콤마 뒤 주석도 건너뜀
+                    while (j < in.size() && in[j] != '\n')
+                        ++j;
+                    continue;
+                }
+                break;
+            }
             if (j < in.size() && (in[j] == ']' || in[j] == '}'))
                 continue; // 끝 콤마 버림
         }

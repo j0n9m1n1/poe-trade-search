@@ -21,6 +21,8 @@
 #include <QSignalSpy>
 #include <QToolButton>
 #include <QTemporaryDir>
+#include <QTableWidget>
+#include <QWheelEvent>
 #include <QtTest>
 
 using namespace pts;
@@ -217,6 +219,85 @@ private slots:
             QVERIFY(c->itemIcon(2).isNull());
         }
         QCOMPARE(combos, 2);
+    }
+
+    // 코드 점검(v0.0.48): 값 완화를 바꿔도 손으로 바꾼 체크는 유지, 일반/교환 줄은 따로, 새 아이템은 "더 불러오기" 상태를 물려받지 않음
+    void auditPopupFixes()
+    {
+        MainPopup popup(m_kw);
+        GameDb gdb;
+        Config cfg = Config::defaults();
+        ParsedItem it;
+        it.game = Game::Poe1;
+        it.lang = Lang::Ko;
+        it.rarityId = QStringLiteral("rare");
+        it.rarityText = QStringLiteral("희귀");
+        it.name = QStringLiteral("점검 반지");
+        it.type = QStringLiteral("반지");
+        it.rawType = it.type;
+        for (int i = 0; i < 2; ++i) {
+            ParsedMod m;
+            m.raw = m.text = m.shown = QStringLiteral("옵션 %1 +50").arg(i);
+            m.statKey = QStringLiteral("stat_%1").arg(900000 + i);
+            ModCandidate c;
+            c.group = QStringLiteral("explicit");
+            c.label = QStringLiteral("일반");
+            c.id = QStringLiteral("explicit.") + m.statKey;
+            m.cands.push_back(c);
+            m.value = 50;
+            m.checked = true;
+            it.mods.push_back(m);
+        }
+        popup.showItem(it, &gdb, cfg, Lang::Ko);
+        auto rows = popup.findChildren<FilterRow*>();
+        QVERIFY(rows.size() >= 2);
+        FilterRow* row = nullptr;
+        for (FilterRow* r : rows) {
+            ParsedMod m;
+            r->apply(m);
+            if (r->isCheckable() && m.checked) {
+                row = r;
+                break;
+            }
+        }
+        QVERIFY(row);
+        row->setChecked(false);
+        QComboBox* range = nullptr;
+        for (QComboBox* c : popup.findChildren<QComboBox*>()) {
+            if (c->findText(QStringLiteral("일치")) >= 0 && c->count() >= 2)
+                range = c;
+        }
+        QVERIFY(range);
+        range->setCurrentIndex(range->currentIndex() == 0 ? 1 : 0);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete); // 지운 이전 줄 정리
+        int checkedRows = 0, uncheckedRows = 0;
+        for (FilterRow* r : popup.findChildren<FilterRow*>()) {
+            ParsedMod m;
+            r->apply(m);
+            if (!r->isCheckable())
+                continue;
+            (m.checked ? checkedRows : uncheckedRows) += 1;
+        }
+        QCOMPARE(uncheckedRows, 1); // 값 완화 변경 전 끈 줄이 다시 켜지면 안 됨
+        QCOMPARE(checkedRows, 1);
+
+        // 가격·판매자가 같아도 일반/교환 줄은 묶지 않음, 완전히 같은 줄은 ×2 로 묶음
+        popup.priceColumns({QStringLiteral("가격"), QStringLiteral("구분"), QStringLiteral("등록"), QStringLiteral("판매자")});
+        popup.priceAddRow({QStringLiteral("10 카오스"), QStringLiteral("일반"), QStringLiteral("1분"), QStringLiteral("seller")}, false, 1, {}, 10, QStringLiteral("chaos"));
+        popup.priceAddRow({QStringLiteral("10 카오스"), QStringLiteral("교환"), QStringLiteral("1분"), QStringLiteral("seller")}, false, 1, {}, 10, QStringLiteral("chaos"));
+        popup.priceAddRow({QStringLiteral("10 카오스"), QStringLiteral("교환"), QStringLiteral("2분"), QStringLiteral("seller")}, false, 1, {}, 10, QStringLiteral("chaos"));
+        QTableWidget* table = popup.findChild<QTableWidget*>();
+        QVERIFY(table);
+        QCOMPARE(table->rowCount(), 2);
+
+        // 더 불러올 매물이 있던 상태에서 새 아이템을 띄우면 휠로 "더 불러오기"가 나가면 안 됨
+        popup.pricePageStatus(true, 20, 100);
+        popup.showItem(it, &gdb, cfg, Lang::Ko);
+        QSignalSpy more(&popup, &MainPopup::moreListingsRequested);
+        QWheelEvent wheel(QPointF(5, 5), QPointF(5, 5), QPoint(0, -120), QPoint(0, -120), Qt::NoButton, Qt::NoModifier,
+                          Qt::NoScrollPhase, false);
+        QCoreApplication::sendEvent(table->viewport(), &wheel);
+        QCOMPARE(more.count(), 0);
     }
 
     // #3, #9, #13, #15: MainPopup onlineleague 유지, syncConfig, 반짝이 콤보 폭, stale 클릭 재조회

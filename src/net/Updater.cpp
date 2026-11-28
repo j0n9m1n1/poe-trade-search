@@ -43,6 +43,7 @@ function Relaunch([string]$Flag) {
     if ($DataDir) { $a += @('--restart-data-dir', ('"{0}"' -f $DataDir)) }
     Start-Process -FilePath $Exe -ArgumentList $a
 }
+$tmp = $null
 try {
     Log "waiting for process $ProcId"
     try { Wait-Process -Id $ProcId -Timeout 30 -ErrorAction Stop } catch {}
@@ -59,6 +60,7 @@ try {
     Relaunch '--updated'
 } catch {
     Log ("failed: " + $_)
+    if ($tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
     Relaunch '--update-failed'
 }
 )PS1";

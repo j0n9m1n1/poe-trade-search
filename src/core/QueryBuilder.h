@@ -37,6 +37,7 @@ struct SearchRequest {
     QString disc;
     bool byCategory = false; // 이름/베이스 무시, 유형으로
     bool useName = true;     // 고유 이름
+    bool uniqueName = false; // 고유 아이템 이름 (희귀도 필터를 꺼도 이름은 보냄)
     bool useType = true;     // 베이스 (끄면 유형으로)
     QString category;
     QString rarity; // "" = 모두

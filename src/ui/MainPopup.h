@@ -116,6 +116,7 @@ private:
     void installActivator(QWidget* w);
     void markStale();
     void applyPresetAndRender();
+    void applyRangeAndRender();
     void renderRows();
     void renderMisc(const ItemFilterState& st);
     void applyRarityColor(const ParsedItem& it);

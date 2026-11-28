@@ -195,7 +195,9 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
     QJsonObject query;
     query.insert(QStringLiteral("status"), option(r.status.isEmpty() ? QStringLiteral("available") : r.status));
 
-    const bool unique = r.rarity == QStringLiteral("unique") || r.rarity == QStringLiteral("uniquefoil");
+    // 희귀도 필터를 끄면(rarity 빈 값) 아이템 자체가 고유인지로 판단 (안 그러면 이름이 빠져 베이스 전체 검색이 됨)
+    const bool unique = r.rarity == QStringLiteral("unique") || r.rarity == QStringLiteral("uniquefoil") ||
+                        (r.rarity.isEmpty() && r.uniqueName);
     const bool useName = !r.byCategory && r.useName;
     // 유형을 모르면 베이스를 꺼도 베이스로 (안 그러면 전체 검색이 됨)
     const bool useType = !r.byCategory && (r.useType || r.category.isEmpty());

@@ -173,7 +173,9 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
     r.name = it.name;
     r.type = it.type;
     r.disc = it.disc;
-    if (ctx.server != it.lang) {
+    // 이름도 베이스도 안 보내는 분류 검색이면 번역이 필요 없음 -> 번역 실패로 서버를 바꾸지 않음
+    const bool sendsText = !st.byCategory && (st.useName || st.useType || it.category.isEmpty());
+    if (ctx.server != it.lang && sendsText) {
         QString t, n;
         if (gdb && gdb->translateItem(it.lang, ctx.server, it.type, it.name, &t, &n)) {
             r.type = t;
@@ -187,6 +189,7 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
     }
     r.byCategory = st.byCategory;
     r.useName = st.useName;
+    r.uniqueName = it.rarityId == QStringLiteral("unique");
     r.useType = st.useType;
     r.category = it.category;
     r.rarity = st.rarity;
@@ -219,7 +222,9 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
         r.notSplit = gear && nonUnique && it.game == Game::Poe1 && !it.split && (!permanent || st.exact);
         // 일반 고유로 검색하면 반짝이 버전(비쌈)이 섞이므로 뺌. 반짝이 버전 템을 "고유"로 바꿔 검색하면 둘 다
         r.notFoil = it.game == Game::Poe1 && !it.foil && st.rarity == QStringLiteral("unique");
-        r.notFractured = !it.fractured && (st.notFractured || (gear && st.exact));
+        // 분열 속성 없음 줄이 보이는 아이템(고유 아닌 장비·주얼)은 그 줄 체크를 그대로 따름 (정확 프리셋에서도 끌 수 있게)
+        const bool notFracRow = (it.isGear || it.isJewel) && nonUnique;
+        r.notFractured = !it.fractured && (st.notFractured || (gear && st.exact && !notFracRow));
         // 부여된 젬(보조 젬 내장)은 같은 젬이라도 시세가 따로라 부여 여부를 맞춤 (안 하면 싼 부여된 매물이 섞임)
         if (it.isGem && it.game == Game::Poe1)
             r.gemImbued = it.imbued ? 1 : 2;

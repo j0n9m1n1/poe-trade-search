@@ -152,6 +152,8 @@ private:
     QTimer m_priceRefreshTimer;
     QString m_newTag, m_newPage;
     QString m_downloadedZip;
+    bool m_updateApplyPending = false;
+    bool m_updateApplying = false;
     std::unique_ptr<ItemParser> m_parser;
     MainPopup* m_popup = nullptr;
     QPointer<SettingsDialog> m_settingsDlg;

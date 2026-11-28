@@ -71,6 +71,7 @@ public:
         int total = 0;
         QString error;
     };
+    static ExchangeResult parseExchangeReply(const QByteArray& data);
     void exchange(Game g, Lang server, const QString& league, const QString& have, const QString& want,
                   std::function<void(const ExchangeResult&)> cb, quint64 token = 0);
 

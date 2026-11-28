@@ -50,8 +50,11 @@ void pushKey(std::vector<INPUT>& v, WORD vk, bool up)
     INPUT in{};
     in.type = INPUT_KEYBOARD;
     in.ki.wVk = vk;
-    in.ki.wScan = static_cast<WORD>(MapVirtualKeyW(vk, MAPVK_VK_TO_VSC));
-    in.ki.dwFlags = up ? KEYEVENTF_KEYUP : 0;
+    // 오른쪽 Alt/Ctrl, Win, 방향키 같은 확장 키는 EXTENDEDKEY 를 붙여야 게임이 왼쪽 키로 착각하지 않음
+    // (안 붙이면 오른쪽 Alt 를 뗀 게 안 먹어서 채팅 Enter 가 Alt+Enter 로 들어감)
+    const UINT sc = MapVirtualKeyW(vk, MAPVK_VK_TO_VSC_EX);
+    in.ki.wScan = static_cast<WORD>(sc & 0xFF);
+    in.ki.dwFlags = (up ? KEYEVENTF_KEYUP : 0) | ((sc & 0xFF00) == 0xE000 ? KEYEVENTF_EXTENDEDKEY : 0);
     v.push_back(in);
 }
 

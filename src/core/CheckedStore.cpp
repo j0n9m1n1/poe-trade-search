@@ -101,15 +101,18 @@ int CheckedStore::baseMinLevel(const QString& baseType, const QStringList& influ
 {
     if (baseType.isEmpty())
         return -1;
-    const QRegularExpression re(QRegularExpression::escape(baseType) + QStringLiteral("\\(([0-9]+)\\)/"));
+    // key 형식: "베이스(레벨)/베이스(레벨)/" -> 항목별로 베이스 이름이 정확히 같을 때만 (부분 문자열 매칭 금지)
+    static const QRegularExpression re(QStringLiteral("^(.*)\\(([0-9]+)\\)$"));
     int best = -1;
     for (const auto& b : m_bases) {
         const bool any = b.id == QStringLiteral("모두") || b.id.compare(QStringLiteral("all"), Qt::CaseInsensitive) == 0;
         if (!any && !influenceNames.contains(b.id))
             continue;
-        const auto m = re.match(b.key);
-        if (m.hasMatch()) {
-            const int lv = m.captured(1).toInt();
+        for (const QString& part : b.key.split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
+            const auto m = re.match(part.trimmed());
+            if (!m.hasMatch() || m.captured(1).trimmed() != baseType)
+                continue;
+            const int lv = m.captured(2).toInt();
             if (best < 0 || lv < best)
                 best = lv;
         }

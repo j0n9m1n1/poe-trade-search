@@ -24,6 +24,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTemporaryDir>
+#include <QUrlQuery>
 #include <QtTest>
 #include <limits>
 
@@ -196,6 +198,118 @@ private slots:
         QCOMPARE(d.object().value(QStringLiteral("b")).toString(), QStringLiteral("x,]"));
     }
 
+    // 코드 점검(v0.0.48)에서 찾은 코어 버그 회귀 테스트
+    void auditCoreFixes()
+    {
+        // 끝 콤마 뒤 주석
+        QString err;
+        const QJsonDocument lj = json::parseLenient("{ \"x\": true, // c\n}", &err);
+        QVERIFY2(!lj.isNull(), qPrintable(err));
+        QVERIFY(lj.object().value(QStringLiteral("x")).toBool());
+
+        // 희귀도를 꺼도 고유 아이템 이름은 보냄
+        SearchRequest u;
+        u.game = Game::Poe1;
+        u.name = QStringLiteral("Headhunter");
+        u.type = QStringLiteral("Leather Belt");
+        u.useName = u.useType = true;
+        u.uniqueName = true;
+        QCOMPARE(QueryBuilder::build(u, nullptr).value(QStringLiteral("query")).toObject()
+                     .value(QStringLiteral("name")).toString(), QStringLiteral("Headhunter"));
+        u.uniqueName = false;
+        QVERIFY(!QueryBuilder::build(u, nullptr).value(QStringLiteral("query")).toObject().contains(QStringLiteral("name")));
+
+        // 베이스 기준 레벨: 부분 문자열(Silk Gloves ⊂ Fingerless Silk Gloves)로 맞추지 않음
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString cp = tmp.filePath(QStringLiteral("checked.json"));
+        {
+            QFile f(cp);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("{\"bases\":[{\"id\":\"all\",\"key\":\"Fingerless Silk Gloves(84)/Silk Slippers(80)/\"}]}");
+        }
+        CheckedStore cs;
+        QVERIFY(cs.load(cp));
+        QCOMPARE(cs.baseMinLevel(QStringLiteral("Silk Gloves"), {}), -1);
+        QCOMPARE(cs.baseMinLevel(QStringLiteral("Fingerless Silk Gloves"), {}), 84);
+        QCOMPARE(cs.baseMinLevel(QStringLiteral("Silk Slippers"), {}), 80);
+
+        // 한국어 경로석은 PoE2
+        const QString way = QStringLiteral("아이템 종류: 경로석\n아이템 희귀도: 일반\n경로석 (15등급)\n--------\n경로석 등급: 15\n--------\n아이템 레벨: 79\n--------\n");
+        ItemParser gp(kw, dbs, &checked);
+        QCOMPARE(gp.guessGame(way, Game::Poe1), Game::Poe2);
+
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        // 분류 검색(이름·베이스 안 보냄)이면 번역 실패로 서버를 바꾸지 않음
+        ParsedItem it;
+        it.game = Game::Poe1;
+        it.lang = Lang::Ko;
+        it.rarityId = QStringLiteral("rare");
+        it.type = QStringLiteral("없는 베이스");
+        it.category = QStringLiteral("armour.gloves");
+        it.isGear = true;
+        ItemFilterState st = defaultFilterState(it);
+        st.byCategory = true;
+        RequestContext ctx;
+        ctx.server = Lang::En;
+        QCOMPARE(makeRequest(it, st, kw, &dbs[0], ctx).lang, Lang::En);
+        st.byCategory = false;
+        st.useType = true;
+        QCOMPARE(makeRequest(it, st, kw, &dbs[0], ctx).lang, Lang::Ko); // 베이스를 보내야 하면 그대로 아이템 언어로
+
+        // 정확 프리셋에서도 분열 속성 없음 줄을 끄면 분열 제외 안 넣음
+        auto gl = parse(QStringLiteral("poe1_ko_rare_gloves_q30.txt"), Game::Poe1);
+        QVERIFY(gl);
+        ItemFilterState es;
+        const ParsedItem ex = applyPreset(*gl, Preset::Exact, 0, &es);
+        QVERIFY(es.exact);
+        ctx.server = Lang::Ko;
+        QVERIFY(makeRequest(ex, es, kw, &dbs[0], ctx).notFractured);
+        es.notFractured = false;
+        QVERIFY(!makeRequest(ex, es, kw, &dbs[0], ctx).notFractured);
+
+        // 경로석: 아이템 레벨 줄이 하나만
+        auto w = parseText(way, Game::Poe2);
+        QVERIFY(w);
+        QVERIFY(w->isWaystone);
+        int ilvlRows = 0;
+        for (const auto& pr : w->props)
+            ilvlRows += pr.key == QStringLiteral("ilvl");
+        QCOMPARE(ilvlRows, 0);
+    }
+
+    // 감사(Neon) 지적: 교환 응답 검증, fetch 이름 태그, 브라우저 리다이렉트 인코딩
+    void auditNetFixes()
+    {
+        const auto html = TradeClient::parseExchangeReply(QByteArray("<html>Cloudflare</html>"));
+        QVERIFY(!html.error.isEmpty());
+        const auto noResult = TradeClient::parseExchangeReply(QByteArray("{\"id\":\"x\"}"));
+        QVERIFY(!noResult.error.isEmpty());
+        const auto ok = TradeClient::parseExchangeReply(QByteArray("{\"id\":\"abc\",\"result\":{},\"total\":0}"));
+        QVERIFY2(ok.error.isEmpty(), qPrintable(ok.error));
+        QCOMPARE(ok.id, QStringLiteral("abc"));
+
+        QJsonObject price{{QStringLiteral("amount"), 1}, {QStringLiteral("currency"), QStringLiteral("chaos")}};
+        QJsonObject listing{{QStringLiteral("price"), price}};
+        QJsonObject item{{QStringLiteral("name"), QStringLiteral("<<set:MS>><<set:M>><<set:S>>공포의 손아귀")},
+                         {QStringLiteral("baseType"), QStringLiteral("<<set:MS>>거미줄 장갑")}};
+        const QJsonArray arr{QJsonObject{{QStringLiteral("listing"), listing}, {QStringLiteral("item"), item}}};
+        const auto ls = TradeClient::parseFetchListings(arr);
+        QCOMPARE(ls.size(), 1);
+        QCOMPARE(ls[0].itemName, QStringLiteral("공포의 손아귀"));
+        QCOMPARE(ls[0].baseType, QStringLiteral("거미줄 장갑"));
+
+        const QUrl u = endpoints::redirectSearch(Game::Poe1, Lang::En, QStringLiteral("Standard"),
+                                                 QByteArray("{\"a\":\"1+1 50%\"}"));
+        const QString q = u.toString(QUrl::FullyEncoded);
+        QVERIFY2(q.contains(QStringLiteral("%2B")), qPrintable(q));
+        QVERIFY2(q.contains(QStringLiteral("%25")), qPrintable(q));
+        QVERIFY2(!q.contains(QLatin1Char('+')), qPrintable(q));
+        QCOMPARE(QUrlQuery(u).queryItemValue(QStringLiteral("q"), QUrl::FullyDecoded),
+                 QStringLiteral("{\"a\":\"1+1 50%\"}"));
+    }
+
     void rateLimiter()
     {
         RateLimiter rl;
@@ -278,7 +392,8 @@ private slots:
 
         QCOMPARE(PriceSummary::priceNote(13, QStringLiteral("divine")), QStringLiteral("~b/o 13 divine"));
         QCOMPARE(PriceSummary::priceNote(1.5, QStringLiteral("chaos")), QStringLiteral("~b/o 1.5 chaos"));
-        QCOMPARE(PriceSummary::priceNote(10.04, QStringLiteral("chaos")), QStringLiteral("~b/o 10 chaos"));
+        QCOMPARE(PriceSummary::priceNote(10.04, QStringLiteral("chaos")), QStringLiteral("~b/o 10.04 chaos"));
+        QCOMPARE(PriceSummary::priceNote(12.25, QStringLiteral("divine")), QStringLiteral("~b/o 12.25 divine")); // 반올림 금지
         QCOMPARE(PriceSummary::priceNote(0.25, QStringLiteral("exalted")), QStringLiteral("~b/o 0.25 exalted"));
         QCOMPARE(PriceSummary::priceNote(12, QStringLiteral(" divine ")), QStringLiteral("~b/o 12 divine"));
         QVERIFY(PriceSummary::priceNote(0, QStringLiteral("chaos")).isEmpty());

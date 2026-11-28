@@ -75,7 +75,12 @@ QString PriceSummary::priceNote(double amount, const QString& currencyId)
     const QString id = currencyId.trimmed();
     if (id.isEmpty())
         return {};
-    const QString amt = formatAmount(amount);
+    // 화면 요약용 반올림(formatAmount)과 달리 매물 가격 그대로 (12.25 -> 12.3 이 되면 안 됨). 소수 넷째 자리까지
+    QString amt = QString::number(amount, 'f', 4);
+    while (amt.endsWith(QLatin1Char('0')))
+        amt.chop(1);
+    if (amt.endsWith(QLatin1Char('.')))
+        amt.chop(1);
     if (amt.isEmpty() || amt == QStringLiteral("0"))
         return {};
     return QStringLiteral("~b/o %1 %2").arg(amt, id);

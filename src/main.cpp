@@ -17,6 +17,7 @@
 #include <QTextStream>
 #include <QPalette>
 #include <QStyleHints>
+#include <QMutex>
 #include <QTimer>
 #include <QWidget>
 #include <memory>
@@ -27,6 +28,9 @@ QFile* g_log = nullptr;
 
 void logHandler(QtMsgType type, const QMessageLogContext&, const QString& msg)
 {
+    // Qt 네트워크 스레드에서도 불림 -> 파일 쓰기는 한 번에 하나만
+    static QMutex mutex;
+    const QMutexLocker locker(&mutex);
     static const char* names[] = {"DEBUG", "WARN", "CRIT", "FATAL", "INFO"};
     const char* n = type <= QtInfoMsg ? names[type] : "?";
     const QString line = QStringLiteral("%1 [%2] %3\n")
@@ -119,6 +123,7 @@ int main(int argc, char** argv)
     }
 
     const QString dataDir = pickDataDir();
+    QDir().mkpath(dataDir); // PTS_DATA_DIR / 재실행 폴더가 아직 없으면 잠금 파일을 못 만들어 "이미 실행 중"으로 오인함
 
     // 중복 실행 방지. --wait-shutdown 이면 이전 프로세스 종료를 10초까지 기다림
     const bool waitShutdown = QCoreApplication::arguments().contains(QStringLiteral("--wait-shutdown"));

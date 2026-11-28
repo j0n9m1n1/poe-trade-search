@@ -612,7 +612,7 @@ void MainPopup::buildUi()
         markStale();
     });
     connect(m_range, qOverload<int>(&QComboBox::currentIndexChanged), this, [this]() {
-        applyPresetAndRender();
+        applyRangeAndRender();
         markStale();
     });
     for (QWidget* w : findChildren<QWidget*>()) {
@@ -848,6 +848,7 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     m_lastRowKey.clear();
     m_prices->setColumnCount(0);
     m_priceCount->clear();
+    m_priceMoreAvailable = false; // 이전 아이템의 "더 불러오기" 상태를 물려받지 않음
     {
         QSignalBlocker b1(m_listCount), b2(m_status), b3(m_collapse), b4(m_currency), b5(m_indexed);
         m_indexedAuto = cfg.searchBeforeDay < 0;
@@ -941,6 +942,36 @@ void MainPopup::applyPresetAndRender()
     }
     renderRows();
     renderMisc(st);
+    fitRowsArea();
+}
+
+// 범위만 바꿈: 옵션 체크/종류/합산과 기타 줄은 사용자가 고친 그대로 두고, 범위로 정해지는 최소/최대만 다시 계산
+void MainPopup::applyRangeAndRender()
+{
+    if (!m_hasItem)
+        return;
+    const Preset p = static_cast<Preset>(m_preset->currentData().toInt());
+    if (p == Preset::Exact) {
+        applyPresetAndRender();
+        return;
+    }
+    ParsedItem base = m_parsed;
+    for (int i = 0; i < m_rows.size() && i < m_item.mods.size() && i < base.mods.size(); ++i) {
+        ParsedMod cur = m_item.mods[i];
+        m_rows[i]->apply(cur);
+        base.mods[i].selected = cur.selected;
+    }
+    ParsedItem next = applyPreset(base, p, rangePct(), nullptr);
+    for (int i = 0; i < m_rows.size() && i < next.mods.size(); ++i) {
+        ParsedMod cur = m_item.mods[i];
+        m_rows[i]->apply(cur);
+        next.mods[i].checked = cur.checked;
+        next.mods[i].totalRes = cur.totalRes;
+        next.mods[i].autoChecked = cur.autoChecked;
+    }
+    next.checkAllUnique = m_all->isChecked();
+    m_item = next;
+    renderRows();
     fitRowsArea();
 }
 
@@ -1334,7 +1365,15 @@ void MainPopup::priceAddRow(const QStringList& cells, bool dim, int online, cons
                             double priceAmount, const QString& priceCurrency)
 {
     // 같은 판매자가 같은 가격으로 연달아 올린 건 한 줄로 묶고 "×N" (APT)
-    const QString key = cells.isEmpty() ? QString() : cells.first() + QLatin1Char('\x1f') + cells.last();
+    // 묶는 기준: 등록 시각(끝에서 두 번째 열)만 빼고 모든 열(구분 일반/교환 포함) + 반올림 전 가격·화폐
+    QString key;
+    if (!cells.isEmpty()) {
+        QStringList k = cells;
+        if (k.size() >= 3)
+            k.removeAt(k.size() - 2);
+        k << QString::number(priceAmount, 'g', 12) << priceCurrency;
+        key = k.join(QLatin1Char('\x1f'));
+    }
     if (!cells.isEmpty() && !cells.last().isEmpty() && key == m_lastRowKey && m_prices->rowCount() > 0) {
         ++m_lastRowCount;
         if (QTableWidgetItem* s = m_prices->item(m_prices->rowCount() - 1, m_prices->columnCount() - 1)) {

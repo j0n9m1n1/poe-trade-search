@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.48
-git push origin v0.0.48
+git tag v0.0.49
+git push origin v0.0.49
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,41 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.48
+
+코드 감사(사용자 요청). 다른 회사 모델 둘에게 읽기 전용으로 나눠 맡겼습니다: Sol 6.2 high(src/core, src/ui), Neon high(src/app, src/net, src/platform, main.cpp, 설치/CI). 리더가 지적마다 재현 테스트를 먼저 만들고, 수정을 빼면 실패하는 것을 확인한 뒤 고쳤습니다.
+
+코어/팝업 (Sol):
+- 희귀도 조건을 끄면 고유 아이템 이름이 검색에서 빠지던 문제. 희귀도를 안 보내도 고유면 이름을 보냅니다. [QueryBuilder](../src/core/QueryBuilder.cpp)
+- 범위(일치/-N%)를 바꾸면 손으로 바꾼 체크가 초기화되던 문제. 지금 체크 상태를 유지하고 최소/최대만 다시 계산합니다. [팝업](../src/ui/MainPopup.cpp)
+- PoE2 경로석에 아이템 레벨 줄이 두 번 나오던 문제. [파서](../src/core/ItemParser.cpp)
+- 일치 프리셋에서 "분열 아님" 조건을 끌 수 없던 문제. [SearchDefaults](../src/core/SearchDefaults.cpp)
+- 이름·베이스를 둘 다 끈 분류 검색인데도 번역 실패로 서버가 바뀌던 문제. 글자를 실제로 보낼 때만 번역합니다.
+- 한국어 경로석이 PoE1으로 판정되던 문제. 분류 이름을 영어로 바꿔 비교합니다. [Keywords](../src/core/Keywords.cpp)
+- 같은 가격·판매자의 일반/교환 줄이 ×N으로 합쳐지던 문제. 등록 시간을 뺀 모든 칸과 가격으로 묶습니다.
+- 가격 메모가 12.25 를 12.3 으로 반올림하던 문제. 소수 넷째 자리까지 그대로 씁니다. [PriceSummary](../src/core/PriceSummary.cpp)
+- 새 아이템을 띄워도 이전 결과의 "더 불러오기" 상태가 남아, 빈 표에서 휠을 굴리면 요청이 나가던 문제.
+- 자동 체크 최소 레벨 규칙이 부분 문자열로 맞춰져 `Fingerless Silk Gloves(84)`가 `Silk Gloves`에도 걸리던 문제. 베이스 이름을 정확히 비교합니다. [CheckedStore](../src/core/CheckedStore.cpp)
+- 설정 JSON에서 끝 쉼표 뒤에 `//` 주석이 있으면 읽지 못하던 문제. [JsonUtil](../src/core/JsonUtil.cpp)
+
+앱/네트워크/Windows (Neon):
+- 교환 응답이 JSON이 아니면(차단 페이지 등) 빈 결과가 캐시되고 오류도 안 보이던 문제. 형식을 검사해 오류로 알립니다. [TradeClient](../src/net/TradeClient.cpp)
+- fetch 결과의 이름에 붙은 `<<set:MS>>` 태그를 떼지 않아 아이콘 학습이 어긋나던 문제.
+- 거래소 웹 열기 주소에서 `+`, `%` 가 인코딩되지 않아 서버가 다른 글자로 읽던 문제. [Endpoints](../src/net/Endpoints.cpp)
+- 업데이트 적용이 겹쳐 두 번 설치될 수 있던 문제, 더 새 버전이 나와도 이전에 받은 zip을 쓰던 문제, 받는 중에 설치를 누르면 엉뚱한 경고가 뜨던 문제. 설치 실패 시 임시 폴더를 지웁니다. [앱](../src/app/Application.cpp) · [Updater](../src/net/Updater.cpp)
+- 데이터 폴더가 없으면 잠금 파일을 못 만들어 "이미 실행 중"이 잘못 뜨던 문제. 시작 시 폴더를 만듭니다. 로그 기록을 잠금으로 보호합니다. [main](../src/main.cpp)
+- 첫 시세 조회 중 팝업을 닫았다 다시 열면 "시세 확인중..."에 멈춰 있던 문제. 취소 안내를 띄우고 클릭하면 다시 조회합니다.
+- 화면 정보를 못 얻으면 팝업 위치 계산에서 죽을 수 있던 문제.
+- 오른쪽 Alt/Ctrl/Win 을 보낼 때 확장 키 플래그가 빠지던 문제. [WinPlatform](../src/platform/win/WinPlatform.cpp)
+
+고치지 않은 지적: 요청 한도 기록 시점(보낸 시각 기준, 의도한 설계), `{Run}`이 클립보드를 비우는 것(의도한 동작), 쓰기 권한 없는 설치 폴더용 zip 대체 경로.
+
+구조 개선 제안(이번엔 적용 안 함, 가볍고 빠르게 원칙에 맞춰 필요할 때만): Application.cpp에서 시세 조회를 PriceController로 분리, 팝업 편집 상태를 ItemFilterState 하나로 통일, ItemParser::parse를 단계별 함수로 분리, 시세 줄을 문자열 목록 대신 작은 값 타입으로.
+
+**검증.** 코어 테스트 `auditCoreFixes`, `auditNetFixes`, UI 테스트 `auditPopupFixes`를 더했습니다. 수정을 하나씩 빼고 돌려 각각 실패하는 것을 확인했습니다. 코어 테스트 78개, UI 테스트 9개가 통과했습니다. 확장 키 수정은 Windows 전용이라 CI 빌드로만 확인합니다.
+
+**남은 확인.** Windows 실기에서 단축키(오른쪽 Alt 조합), 업데이트 한 번만 설치되는지, 범위 바꿀 때 체크 유지.
 
 ### v0.0.47
 

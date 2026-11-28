@@ -70,9 +70,9 @@ QUrl redirectSearch(Game g, Lang server, const QString& league, const QByteArray
 {
     // 원본 server_redirect: 브라우저가 직접 검색 POST 를 대신하도록
     QUrl u(web(g, server) + QStringLiteral("/search/") + realmPath(g) + enc(league));
-    QUrlQuery q;
-    q.addQueryItem(QStringLiteral("q"), QString::fromUtf8(queryJson));
-    u.setQuery(q);
+    // QUrlQuery 는 '+' 와 '%XX' 를 그대로 둬서 서버가 공백/다른 글자로 읽음 -> 값 전체를 직접 인코딩
+    u.setQuery(QStringLiteral("q=") + QString::fromLatin1(QUrl::toPercentEncoding(QString::fromUtf8(queryJson))),
+               QUrl::StrictMode);
     return u;
 }
 

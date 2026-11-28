@@ -162,6 +162,15 @@ QString Keywords::classToCategory(Game g, Lang l, const QString& text) const
     return {};
 }
 
+QStringList Keywords::classTexts(Game g, Lang from, const QString& text, Lang to) const
+{
+    for (const auto& c : m_classes[gi(g)]) {
+        if (c.text.has(from, text))
+            return c.text.t[li(to)];
+    }
+    return {};
+}
+
 int Keywords::resistanceWeight(const QString& statKey) const
 {
     static const QHash<QString, int> weights = {

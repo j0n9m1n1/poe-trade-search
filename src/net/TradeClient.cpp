@@ -7,6 +7,7 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonParseError>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -236,8 +237,9 @@ QVector<Listing> TradeClient::parseFetchListings(const QJsonArray& res)
         x.account = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("name")).toString();
         x.indexed = parseTime(l.value(QStringLiteral("indexed")).toString());
         x.icon = item.value(QStringLiteral("icon")).toString();
-        x.itemName = item.value(QStringLiteral("name")).toString();
-        x.baseType = item.value(QStringLiteral("baseType")).toString();
+        // 이름에 <<set:MS>> 같은 표시 태그가 붙어 올 때가 있음 (파서는 떼므로 같이 떼야 아이콘 학습이 맞음)
+        x.itemName = text::stripSetTags(item.value(QStringLiteral("name")).toString());
+        x.baseType = text::stripSetTags(item.value(QStringLiteral("baseType")).toString());
         x.typeLine = item.value(QStringLiteral("typeLine")).toString();
         x.frameType = item.value(QStringLiteral("frameType")).toInt(-1);
         x.ilvl = item.value(QStringLiteral("ilvl")).toInt(-1);
@@ -312,49 +314,62 @@ void TradeClient::exchange(Game g, Lang server, const QString& league, const QSt
     post(Policy::Exchange, endpoints::exchange(g, server, league), QJsonDocument(body).toJson(QJsonDocument::Compact),
          [cb](int, const QByteArray& data, const QString& error) {
              ExchangeResult r;
-             r.error = error;
-             if (error.isEmpty()) {
-                 const QJsonObject o = QJsonDocument::fromJson(data).object();
-                 r.id = o.value(QStringLiteral("id")).toString();
-                 r.total = o.value(QStringLiteral("total")).toInt();
-                 // 현행 응답: result 가 { id: {listing:{offers:[...]}} } 딕셔너리
-                 QJsonArray rows;
-                 const QJsonValue res = o.value(QStringLiteral("result"));
-                 if (res.isObject()) {
-                     const QJsonObject ro = res.toObject();
-                     for (auto it = ro.begin(); it != ro.end(); ++it)
-                         rows.append(it.value());
-                 } else if (res.isArray()) {
-                     rows = res.toArray();
-                 }
-                 for (const auto& v : rows) {
-                     const QJsonObject l = v.toObject().value(QStringLiteral("listing")).toObject();
-                     const QString account = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("name")).toString();
-                     const QDateTime indexed = parseTime(l.value(QStringLiteral("indexed")).toString());
-                     const QJsonValue on = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("online"));
-                     const int online =
-                         on.isObject() ? (on.toObject().value(QStringLiteral("status")).toString() == QStringLiteral("afk") ? 2 : 1) : 0;
-                     for (const auto& ov : l.value(QStringLiteral("offers")).toArray()) {
-                         const QJsonObject off = ov.toObject();
-                         const QJsonObject pay = off.value(QStringLiteral("exchange")).toObject();
-                         const QJsonObject get = off.value(QStringLiteral("item")).toObject();
-                         Listing x;
-                         x.account = account;
-                         x.indexed = indexed;
-                         x.online = online;
-                         x.payAmount = pay.value(QStringLiteral("amount")).toDouble();
-                         x.getAmount = get.value(QStringLiteral("amount")).toDouble();
-                         x.stock = get.value(QStringLiteral("stock")).toInt();
-                         x.currency = get.value(QStringLiteral("currency")).toString();
-                         x.amount = x.payAmount > 0 ? x.getAmount / x.payAmount : 0; // have 1개당 받는 want
-                         if (x.payAmount > 0 && x.getAmount > 0)
-                             r.listings.push_back(x);
-                     }
-                 }
-             }
+             if (error.isEmpty())
+                 r = parseExchangeReply(data);
+             else
+                 r.error = error;
              cb(r);
          },
          token);
+}
+
+// 교환 응답 파싱. 200 이어도 점검 페이지(HTML)나 잘린 JSON 이면 오류로 돌려줌 (빈 결과를 캐시하지 않게)
+TradeClient::ExchangeResult TradeClient::parseExchangeReply(const QByteArray& data)
+{
+    ExchangeResult r;
+    QJsonParseError pe{};
+    const QJsonDocument doc = QJsonDocument::fromJson(data, &pe);
+    const QJsonObject o = doc.object();
+    r.id = o.value(QStringLiteral("id")).toString();
+    r.total = o.value(QStringLiteral("total")).toInt();
+    // 현행 응답: result 가 { id: {listing:{offers:[...]}} } 딕셔너리
+    QJsonArray rows;
+    const QJsonValue res = o.value(QStringLiteral("result"));
+    if (res.isObject()) {
+        const QJsonObject ro = res.toObject();
+        for (auto it = ro.begin(); it != ro.end(); ++it)
+            rows.append(it.value());
+    } else if (res.isArray()) {
+        rows = res.toArray();
+    }
+    for (const auto& v : rows) {
+        const QJsonObject l = v.toObject().value(QStringLiteral("listing")).toObject();
+        const QString account = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("name")).toString();
+        const QDateTime indexed = parseTime(l.value(QStringLiteral("indexed")).toString());
+        const QJsonValue on = l.value(QStringLiteral("account")).toObject().value(QStringLiteral("online"));
+        const int online =
+            on.isObject() ? (on.toObject().value(QStringLiteral("status")).toString() == QStringLiteral("afk") ? 2 : 1) : 0;
+        for (const auto& ov : l.value(QStringLiteral("offers")).toArray()) {
+            const QJsonObject off = ov.toObject();
+            const QJsonObject pay = off.value(QStringLiteral("exchange")).toObject();
+            const QJsonObject get = off.value(QStringLiteral("item")).toObject();
+            Listing x;
+            x.account = account;
+            x.indexed = indexed;
+            x.online = online;
+            x.payAmount = pay.value(QStringLiteral("amount")).toDouble();
+            x.getAmount = get.value(QStringLiteral("amount")).toDouble();
+            x.stock = get.value(QStringLiteral("stock")).toInt();
+            x.currency = get.value(QStringLiteral("currency")).toString();
+            x.amount = x.payAmount > 0 ? x.getAmount / x.payAmount : 0; // have 1개당 받는 want
+            if (x.payAmount > 0 && x.getAmount > 0)
+                r.listings.push_back(x);
+        }
+    }
+    // 매물이 없어도 result 는 옴. 그것조차 없으면 정상 응답이 아님
+    if (pe.error != QJsonParseError::NoError || !doc.isObject() || !o.contains(QStringLiteral("result")))
+        r.error = QStringLiteral("교환 응답 형식이 올바르지 않습니다");
+    return r;
 }
 
 } // namespace pts

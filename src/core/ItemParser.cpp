@@ -87,8 +87,15 @@ Game ItemParser::guessGame(const QString& text, Game fallback) const
                                             QStringLiteral("Waystones"),   QStringLiteral("Bucklers"),
                                             QStringLiteral("Talismans"),   QStringLiteral("Soul Cores")};
     QString cls;
-    if (m_kw.detectLang(first, nullptr, &cls) && poe2Classes.contains(cls))
-        return Game::Poe2;
+    Lang clsLang = Lang::En;
+    if (m_kw.detectLang(first, &clsLang, &cls)) {
+        // 한국어 종류(경로석 등)는 영어 표기로 바꿔 비교
+        const QStringList en = clsLang == Lang::En ? QStringList{cls} : m_kw.classTexts(Game::Poe2, clsLang, cls, Lang::En);
+        for (const QString& c : en) {
+            if (poe2Classes.contains(c))
+                return Game::Poe2;
+        }
+    }
     return fallback;
 }
 
@@ -1135,7 +1142,8 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
                 }
             }
         }
-        if (it.itemLevel > 0)
+        // 경로석은 레벨 줄이 이미 아이템 레벨이라 따로 넣지 않음 (넣으면 같은 ilvl 필터가 두 번 나가 하나가 덮어씀)
+        if (it.itemLevel > 0 && !it.isWaystone)
             it.props.push_back({QStringLiteral("ilvl"), static_cast<double>(it.itemLevel)});
     }
 

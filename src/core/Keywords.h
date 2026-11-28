@@ -49,6 +49,8 @@ public:
 
     // Item Class 텍스트 -> 거래소 카테고리 id (없으면 빈 문자열)
     QString classToCategory(Game g, Lang l, const QString& text) const;
+    // Item Class 텍스트 -> 같은 종류의 다른 언어 표기들 (없으면 빈 목록)
+    QStringList classTexts(Game g, Lang from, const QString& text, Lang to) const;
 
     const QVector<Influence>& influences() const { return m_influences; }
     QString pseudoFor(const QString& statKey) const { return m_pseudoMap.value(statKey); }

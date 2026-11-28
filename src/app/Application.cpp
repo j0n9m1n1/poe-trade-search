@@ -153,8 +153,12 @@ bool Application::start(QString* error)
         m_popupPos = m_popup->pos();
         platform::stopWatchingOutsideMousePress();
         m_clickTimer.stop();
+        // 첫 시세 조회 중에 닫으면 다시 열었을 때 "시세 확인중..." 에 멈춰 있지 않게
+        const bool initialLoading = !m_listingPages && m_priceToken != 0;
         m_client->cancel(m_priceToken);
         m_priceToken = 0;
+        if (initialLoading)
+            m_popup->priceIdle(QStringLiteral("조회가 취소되었습니다. 클릭하면 다시 조회합니다."));
         if (m_listingPages && m_listingPages->loading) {
             m_listingPages->loading = false;
             updateListingPageStatus();
@@ -594,6 +598,8 @@ void Application::showPopup()
         screen = QGuiApplication::screenAt(position);
     if (!screen)
         screen = QGuiApplication::primaryScreen();
+    if (!screen) // 원격 데스크톱 전환 등으로 화면이 잠깐 없을 때
+        return;
     const QRect area = screen->availableGeometry();
     m_popup->fitToAvailableHeight(qMax(1, area.height()));
     const QSize size = m_popup->size();
@@ -828,6 +834,8 @@ void Application::checkForUpdate(bool manual)
             return;
         }
         const bool firstSeen = m_newTag != rel->tag;
+        if (firstSeen)
+            m_downloadedZip.clear(); // 받아 둔 건 이전 버전 -> 새 버전으로 다시 받음
         m_newRelease = *rel;
         m_newTag = rel->tag;
         m_newPage = rel->page;
@@ -875,6 +883,8 @@ void Application::installUpdate()
         applyDownloadedUpdate();
         return;
     }
+    if (m_updater->busy()) // 이미 받는 중이면 끝나고 알아서 설치함
+        return;
     const Updater::Release rel = m_newRelease;
     m_updater->download(rel, [this](const QString& zip, const QString& error) {
         if (!error.isEmpty()) {
@@ -893,8 +903,17 @@ void Application::installUpdate()
 void Application::applyDownloadedUpdate()
 {
     // 팝업이나 설정 같은 모달 대화상자가 열려 있으면 닫힐 때까지 기다렸다가 교체
+    // 기다리는 타이머는 하나만 (설치를 여러 번 눌러도 설치 프로그램이 두 번 뜨지 않게)
+    if (m_updateApplying)
+        return;
     if (m_popup->isVisible() || QApplication::activeModalWidget()) {
-        QTimer::singleShot(2000, this, &Application::applyDownloadedUpdate);
+        if (!m_updateApplyPending) {
+            m_updateApplyPending = true;
+            QTimer::singleShot(2000, this, [this]() {
+                m_updateApplyPending = false;
+                applyDownloadedUpdate();
+            });
+        }
         return;
     }
     // 받고 나면 알림 없이 바로 설치 후 재실행 (실패할 때만 알림)
@@ -903,6 +922,7 @@ void Application::applyDownloadedUpdate()
         notify(QStringLiteral("업데이트를 설치하지 못했습니다: %1").arg(err), QSystemTrayIcon::Warning);
         return;
     }
+    m_updateApplying = true;
     m_hotkeys->clear();
     qApp->quit();
 }
