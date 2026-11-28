@@ -547,7 +547,13 @@ void Application::showParsedItem(const ParsedItem& it)
     m_popup->showItem(it, &m_dbs[gi(g)], m_cfg, serverFor(it.lang));
     showIconFor(it);
     // 영향/엘드리치/분열 배지: 게임 이름판 문양 먼저, 못 받으면 오브 아이콘 (영향 엑잘티드 오브, 섬뜩한 불씨/영액, 분열의 오브)
-    for (const auto& src : m_popup->badgeIconSources()) {
+    auto badgeSources = m_popup->badgeIconSources();
+    if (g == Game::Poe1 && !m_influenceIconsRequested) {
+        // 영향 콤보 아이콘: 처음 한 번만 요청 (받은 파일은 아이콘 캐시에 남음)
+        m_influenceIconsRequested = true;
+        badgeSources += m_popup->influenceIconSources();
+    }
+    for (const auto& src : badgeSources) {
         const QString symbol = src.first, id = src.second;
         const StaticEntry* s = m_dbs[gi(g)][it.lang].staticById(id);
         const QString orb = s ? s->image : QString();

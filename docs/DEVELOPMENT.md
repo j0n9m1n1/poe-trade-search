@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.46
-git push origin v0.0.46
+git tag v0.0.47
+git push origin v0.0.47
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,15 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.46
+
+- 영향 콤보(쉐이퍼·엘더·십자군·대속자·사냥꾼·전쟁군주) 항목 앞에 이름판 배지와 같은 문양을 붙였습니다 (사용자 요청). 문양을 못 받으면 영향 엑잘티드 오브 아이콘을 씁니다. 아이콘은 PoE1 아이템을 처음 띄울 때 한 번만 요청하고, 받은 파일은 아이콘 캐시(`data/cache/icons`)에 남아 다음 실행부터는 바로 붙습니다. [팝업](../src/ui/MainPopup.cpp) · [앱](../src/app/Application.cpp)
+- 결합 아이템은 게임 이름판에도 문양이 없어 배지를 붙이지 않습니다 (기존 동작 유지).
+
+**검증.** UI 테스트 `influenceComboIcons` 추가: 문양 파일을 넣으면 두 영향 콤보의 해당 항목에만 아이콘이 붙는지 확인합니다. 코어 테스트 76개, UI 테스트 8개가 통과했습니다. 오프스크린에서 쉐이퍼·사냥꾼 반지를 띄워 콤보 문양을 확인했습니다.
+
+**남은 확인.** Windows 실기에서 콤보 펼침 목록의 아이콘 표시.
 
 ### v0.0.45
 

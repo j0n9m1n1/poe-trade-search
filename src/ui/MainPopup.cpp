@@ -181,6 +181,28 @@ MainPopup::MainPopup(const Keywords& kw, QWidget* parent) : QWidget(parent), m_k
     buildUi();
 }
 
+namespace {
+// 영향 문양(게임 이름판) / 오브 아이콘(거래소 정적 id) / 글자 배지 색
+struct InflIcon {
+    const char* symbol;
+    const char* id;
+    const char* color;
+};
+
+InflIcon inflIconFor(const QString& flag)
+{
+    static const QHash<QString, InflIcon> map = {
+        {QStringLiteral("shaper_item"), {"shaper", "shapers-exalted-orb", "#7fa8f0"}},
+        {QStringLiteral("elder_item"), {"elder", "elders-exalted-orb", "#b98be6"}},
+        {QStringLiteral("crusader_item"), {"crusader", "crusaders-exalted-orb", "#e8d27a"}},
+        {QStringLiteral("redeemer_item"), {"redeemer", "redeemers-exalted-orb", "#7fd3e6"}},
+        {QStringLiteral("hunter_item"), {"hunter", "hunters-exalted-orb", "#8fd36b"}},
+        {QStringLiteral("warlord_item"), {"warlord", "warlords-exalted-orb", "#ec7a62"}},
+    };
+    return map.value(flag, {"", "", "#cccccc"});
+}
+} // namespace
+
 void MainPopup::buildUi()
 {
     auto* root = new QVBoxLayout(this);
@@ -763,24 +785,11 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     }
     // 영향/엘드리치/분열 배지: 첫째 왼쪽, 나머지 오른쪽 (게임 헤더 양쪽 아이콘 자리). 아이콘은 Application 이 받아서 붙임
     {
-        struct InflIcon {
-            const char* symbol;
-            const char* id;
-            const char* color;
-        };
-        static const QHash<QString, InflIcon> inflIcon = {
-            {QStringLiteral("shaper_item"), {"shaper", "shapers-exalted-orb", "#7fa8f0"}},
-            {QStringLiteral("elder_item"), {"elder", "elders-exalted-orb", "#b98be6"}},
-            {QStringLiteral("crusader_item"), {"crusader", "crusaders-exalted-orb", "#e8d27a"}},
-            {QStringLiteral("redeemer_item"), {"redeemer", "redeemers-exalted-orb", "#7fd3e6"}},
-            {QStringLiteral("hunter_item"), {"hunter", "hunters-exalted-orb", "#8fd36b"}},
-            {QStringLiteral("warlord_item"), {"warlord", "warlords-exalted-orb", "#ec7a62"}},
-        };
         m_badges.clear();
         for (int i : it.influences) {
             if (i >= 0 && i < m_kw.influences().size()) {
                 const auto& inf = m_kw.influences()[i];
-                const auto ic = inflIcon.value(inf.flag, {"", "", "#cccccc"});
+                const InflIcon ic = inflIconFor(inf.flag);
                 m_badges.push_back({QString::fromLatin1(ic.symbol), QString::fromLatin1(ic.id), inf.name.first(Lang::Ko),
                                     QString::fromLatin1(ic.color)});
             }
@@ -1529,6 +1538,36 @@ void MainPopup::setBadgeIcon(const QString& staticId, const QString& path)
         return;
     m_badgeIcons.insert(staticId, path);
     renderBadges();
+    renderInfluenceIcons();
+}
+
+QVector<QPair<QString, QString>> MainPopup::influenceIconSources() const
+{
+    QVector<QPair<QString, QString>> out;
+    for (const auto& inf : m_kw.influences()) {
+        const InflIcon ic = inflIconFor(inf.flag);
+        if (*ic.symbol)
+            out.push_back({QString::fromLatin1(ic.symbol), QString::fromLatin1(ic.id)});
+    }
+    return out;
+}
+
+void MainPopup::renderInfluenceIcons()
+{
+    // 영향 콤보 항목 앞에 배지와 같은 문양 (없으면 오브 아이콘)
+    for (QComboBox* c : {m_infl1, m_infl2}) {
+        for (int k = 0; k < c->count(); ++k) {
+            const int i = c->itemData(k).toInt();
+            if (i < 0 || i >= m_kw.influences().size())
+                continue;
+            const InflIcon ic = inflIconFor(m_kw.influences()[i].flag);
+            QString path = m_badgeIcons.value(QStringLiteral("symbol:") + QString::fromLatin1(ic.symbol));
+            if (path.isEmpty())
+                path = m_badgeIcons.value(QString::fromLatin1(ic.id));
+            if (!path.isEmpty())
+                c->setItemIcon(k, QIcon(path));
+        }
+    }
 }
 
 void MainPopup::renderBadges()

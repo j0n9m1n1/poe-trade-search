@@ -85,6 +85,7 @@ public:
     QVector<QPair<QString, QString>> badgeIconSources() const;
     void setBadgeSymbol(const QString& symbol, const QString& path);
     void setBadgeIcon(const QString& staticId, const QString& path);
+    QVector<QPair<QString, QString>> influenceIconSources() const; // 영향 콤보 아이콘 (문양, 오브 정적 id)
 
 signals:
     void openTradeRequested();
@@ -162,6 +163,7 @@ private:
     };
     QVector<Badge> m_badges;
     QHash<QString, QString> m_badgeIcons; // 정적 id -> 아이콘 파일
+    void renderInfluenceIcons();
     void renderBadges();
     QLabel* m_name;     // 희귀 이름 표시용
     QLabel* m_info;

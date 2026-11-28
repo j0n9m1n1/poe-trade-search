@@ -120,6 +120,7 @@ private:
 
     TradeClient* m_client = nullptr;
     DataManager* m_data = nullptr;
+    bool m_influenceIconsRequested = false;
     IconCache* m_icons = nullptr;
     Updater* m_updater = nullptr;
     QTimer m_updateTimer;

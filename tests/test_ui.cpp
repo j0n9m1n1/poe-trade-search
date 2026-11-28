@@ -175,6 +175,31 @@ private slots:
                  qPrintable(QStringLiteral("scroll %1 / max %2").arg(scroll->height()).arg(scroll->maximumHeight())));
     }
 
+    // 영향 콤보 항목 앞에 배지와 같은 문양 아이콘이 붙어야 함
+    void influenceComboIcons()
+    {
+        MainPopup popup(m_kw);
+        const auto sources = popup.influenceIconSources();
+        QCOMPARE(sources.size(), 6);
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString png = dir.filePath(QStringLiteral("s.png"));
+        QPixmap pm(27, 27);
+        pm.fill(Qt::red);
+        QVERIFY(pm.save(png));
+        popup.setBadgeIcon(QStringLiteral("symbol:") + sources[0].first, png);
+        int combos = 0;
+        for (QComboBox* c : popup.findChildren<QComboBox*>()) {
+            if (c->count() < 2 || c->itemData(0).toInt() != -1 || c->itemText(0) != QStringLiteral("영향 없음"))
+                continue;
+            ++combos;
+            QVERIFY(c->itemIcon(0).isNull());
+            QVERIFY(!c->itemIcon(1).isNull());
+            QVERIFY(c->itemIcon(2).isNull());
+        }
+        QCOMPARE(combos, 2);
+    }
+
     // #3, #9, #13, #15: MainPopup onlineleague 유지, syncConfig, 반짝이 콤보 폭, stale 클릭 재조회
     void mainPopupFixes()
     {
