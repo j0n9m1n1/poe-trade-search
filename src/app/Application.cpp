@@ -23,6 +23,7 @@
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonDocument>
+#include <QLocale>
 #include <QMenu>
 #include <QMessageBox>
 #include <QProcess>
@@ -144,6 +145,7 @@ bool Application::start(QString* error)
         m_cfg.setLeague(game, league);
         saveConfig();
         syncPopupLeague();
+        prefetchRates();
     });
     connect(m_popup, &MainPopup::rememberToggled, this, &Application::onRemember);
     connect(m_popup, &MainPopup::copyPriceNoteRequested, this, &Application::copyPriceNote);
@@ -265,6 +267,7 @@ void Application::loadGame(Game g)
     if (m_data->load(g, &fresh, m_kw, &err)) {
         m_dbs[gi(g)] = fresh;
         fixLeagues();
+        prefetchRates(); // 데이터(리그 목록)가 준비되면 환율을 미리 받아 둠
     } else {
         qWarning() << "data load failed" << gameKey(g) << err;
     }
@@ -989,6 +992,22 @@ void Application::ensureRates(Game g, Lang server, const QString& league, std::f
     }
 }
 
+void Application::prefetchRates()
+{
+    // 프로그램을 켤 때 / 설정·리그가 바뀔 때 미리 받아 둠 (게임마다 일괄 교환 요청 2개, 30분 안에는 다시 안 받음)
+    // 서버 자동이면 아이템 언어를 아직 모르므로 시스템 언어로 짐작
+    const Lang server = m_cfg.serverType == 1   ? Lang::Ko
+                        : m_cfg.serverType == 2 ? Lang::En
+                        : QLocale::system().language() == QLocale::Korean ? Lang::Ko
+                                                                          : Lang::En;
+    for (Game g : {Game::Poe1, Game::Poe2}) {
+        const QString league = m_cfg.leagueFor(g).trimmed();
+        if (league.isEmpty() || !m_dbs[gi(g)].loaded(server))
+            continue;
+        ensureRates(g, server, league, []() {});
+    }
+}
+
 // ------------------------------------------------------------ 시세
 
 const Application::CachedPrice* Application::cachedPrice(const QString& key)
@@ -1036,8 +1055,7 @@ void Application::priceCheck()
     loadCurrencyIcons(g, server, {QStringLiteral("chaos"), QStringLiteral("divine"), QStringLiteral("exalted"),
                                   QStringLiteral("mirror")});
 
-    // 환율 먼저 (30분에 한 번, 일괄 교환 요청 2개)
-    ensureRates(g, server, league, [this, token, g, league, server]() {
+    auto start = [this, token, g, league, server]() {
         if (token != m_priceToken || !m_popup->hasItem())
             return;
         // 환율 대기 뒤 옵션(collectItem)과 속성(collectState)을 같은 시점에 읽음
@@ -1207,7 +1225,16 @@ void Application::priceCheck()
                 runNormal(summary, med, want, r.total);
             },
             token);
-    });
+    };
+    // 환율은 시작할 때 미리 받아 둠 (prefetchRates). 받아 둔 환율이 있으면 30분이 지났어도 기다리지 않고
+    // 바로 검색하고, 오래된 환율은 뒤에서 새로 받음. 아직 한 번도 못 받았을 때만 환율을 기다림
+    const Rates have = ratesFor(g, server, league);
+    if (have.valid() && !have.toBase.isEmpty()) {
+        ensureRates(g, server, league, []() {});
+        start();
+    } else {
+        ensureRates(g, server, league, start);
+    }
 }
 
 void Application::loadMoreListings()
@@ -1441,6 +1468,7 @@ void Application::applyConfig()
     const bool syncedLeague = syncPopupLeague();
     if (syncedCfg && !syncedLeague)
         resetPopupPrices();
+    prefetchRates();
     if (m_popup && m_popup->isVisible())
         watchPopupClicks();
 }

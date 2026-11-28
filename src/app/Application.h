@@ -80,6 +80,7 @@ private:
     static QString ratesKey(Game g, Lang server, const QString& league);
     void ensureRates(Game g, Lang server, const QString& league, std::function<void()> then);
     Rates ratesFor(Game g, Lang server, const QString& league) const;
+    void prefetchRates();
 
     // 아이콘
     static QString iconKey(const ParsedItem& it);
