@@ -13,6 +13,7 @@ endif()
 message(STATUS "PoeTradeSearch version: ${PTS_VERSION}")
 option(PTS_RELEASE_BUILD "배포 빌드: 자동 업데이트로 스스로 교체 가능" OFF)
 set(PTS_UPDATE_REPO "j0n9m1n1/poe-trade-search" CACHE STRING "업데이트 확인할 GitHub 저장소 owner/repo (비우면 끔)")
+set(PTS_HOMEPAGE_REPO "j0n9m1n1/poe-trade-search" CACHE STRING "설정 창 GitHub 링크 저장소 owner/repo")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -52,6 +53,7 @@ target_link_libraries(pts_core PUBLIC Qt6::Core Qt6::Network)
 target_compile_definitions(pts_core PUBLIC
     PTS_VERSION="${PTS_VERSION}"
     PTS_UPDATE_REPO="${PTS_UPDATE_REPO}"
+    PTS_HOMEPAGE_REPO="${PTS_HOMEPAGE_REPO}"
     QT_NO_CAST_FROM_ASCII
 )
 if(PTS_RELEASE_BUILD)

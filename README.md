@@ -54,6 +54,8 @@ cmake --build build
 
 GPL-3.0입니다. 원본이 GPL-3.0이므로 같은 라이선스를 따릅니다.
 
+Qt 6(LGPL-3.0) 등 함께 쓰는 저작물의 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 있습니다. Path of Exile은 Grinding Gear Games의 상표이며, 이 프로그램은 Grinding Gear Games 및 카카오게임즈와 관계가 없습니다.
+
 - 시세 데이터: GGG / 카카오 공식 거래소 API
 - 옵션 매칭 데이터: [Awakened PoE Trade](https://github.com/SnosMe/awakened-poe-trade), [Exiled Exchange 2](https://github.com/Kvan7/Exiled-Exchange-2) (MIT)
 

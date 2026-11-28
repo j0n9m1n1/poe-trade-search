@@ -5,5 +5,6 @@
     </qresource>
     <qresource prefix="/icons">
         <file alias="app.png">app.png</file>
+        <file alias="github.png">github.png</file>
     </qresource>
 </RCC>

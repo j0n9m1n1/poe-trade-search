@@ -77,7 +77,8 @@ jobs:
           # VC++ 런타임 DLL 같이 넣음 (재배포 패키지 안 깔린 PC 대비)
           $crt = Get-ChildItem -Path "$env:VCToolsRedistDir\x64" -Directory -Filter "Microsoft.VC*.CRT" | Select-Object -First 1
           if ($crt) { Copy-Item "$($crt.FullName)\*.dll" $out/ }
-          Copy-Item LICENSE, README.md $out/
+          Copy-Item LICENSE, README.md, THIRD_PARTY_NOTICES.md $out/
+          Copy-Item packaging/licenses/LGPL-3.0.txt $out/
           Compress-Archive -Path "$out/*" -DestinationPath PoeTradeSearch-win64.zip -Force
           $hash = (Get-FileHash PoeTradeSearch-win64.zip -Algorithm SHA256).Hash.ToLower()
           "$hash  PoeTradeSearch-win64.zip" | Out-File -Encoding ascii PoeTradeSearch-win64.zip.sha256

@@ -19,6 +19,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSignalSpy>
+#include <QToolButton>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -101,6 +102,24 @@ private slots:
         CheckedStore chk;
         SettingsDialog dlg(cfg, dbs, &chk, {}, QStringLiteral("vtest"), QStringLiteral("지금 확인"));
 
+        // 정보: GitHub 아이콘 버튼과 라이선스 고지 링크
+        auto* gh = dlg.findChild<QToolButton*>(QStringLiteral("githubLink"));
+        QVERIFY(gh);
+        QVERIFY(!gh->icon().isNull());
+        auto* about = dlg.findChild<QLabel*>(QStringLiteral("aboutText"));
+        QVERIFY(about);
+        QVERIFY(about->openExternalLinks());
+        QVERIFY(about->text().contains(QStringLiteral("THIRD_PARTY_NOTICES.md")));
+        QVERIFY(about->text().contains(QStringLiteral("GPL-3.0")));
+        if (qEnvironmentVariableIsSet("PTS_SHOT_DIR")) {
+            dlg.resize(660, 900);
+            dlg.show();
+            QTest::qWait(100);
+            for (QScrollArea* a : dlg.findChildren<QScrollArea*>())
+                a->ensureWidgetVisible(about);
+            QTest::qWait(50);
+            dlg.grab().save(qEnvironmentVariable("PTS_SHOT_DIR") + QStringLiteral("/settings_about.png"));
+        }
         // 기본 탭이 QScrollArea 로 감싸여 있어야 함
         QVERIFY(!dlg.findChildren<QScrollArea*>().isEmpty());
 

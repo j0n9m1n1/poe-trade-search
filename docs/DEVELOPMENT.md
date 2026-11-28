@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.47
-git push origin v0.0.47
+git tag v0.0.48
+git push origin v0.0.48
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,19 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.47
+
+- 설정 창 기본 탭 맨 아래에 GitHub 아이콘 버튼을 넣었습니다. 누르면 저장소(`PTS_HOMEPAGE_REPO`, 기본 j0n9m1n1/poe-trade-search)를 엽니다. 아이콘은 Octicons `mark-github`(MIT)를 64px PNG로 한 번 그려 리소스에 넣었습니다. Qt SVG 모듈은 링크하지 않습니다. [설정 창](../src/ui/SettingsDialog.cpp)
+- 라이선스 고지를 정리했습니다 (사용자 요청).
+  - 설정 창: GPL-3.0, 원본 phiDelPark/PoeTradeSearch, Qt 6(LGPL-3.0), 옵션 매칭 데이터(MIT), 오픈소스 고지 링크, Path of Exile 상표·무관 고지.
+  - 새 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md): 원본, Qt 6 LGPL-3.0(동적 링크, 소스 위치, Qt 안의 다른 라이브러리), VC++ 런타임, 내려받는 데이터, 아이콘, 상표.
+  - 배포 zip/설치 파일에 `THIRD_PARTY_NOTICES.md`와 `LGPL-3.0.txt`(packaging/licenses)를 같이 넣습니다. TLS는 Windows schannel 백엔드라 OpenSSL은 배포하지 않습니다(v0.0.46 zip 확인).
+  - README 라이선스 절에 고지 문서 링크를 더했습니다.
+
+**검증.** UI 테스트 `settingsDialog...`에 GitHub 버튼(아이콘 있음)과 고지 링크 확인을 더했습니다. 코어 테스트 76개, UI 테스트 8개가 통과했습니다. 오프스크린으로 설정 창 아래쪽을 찍어 배치를 확인했습니다.
+
+**남은 확인.** Windows 다크 테마에서 GitHub 아이콘과 링크 색이 잘 보이는지, 배포 zip에 고지 파일 2개가 들어갔는지.
 
 ### v0.0.46
 
