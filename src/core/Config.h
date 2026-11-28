@@ -54,7 +54,7 @@ struct Config {
 
     QVector<Shortcut> shortcuts;
 
-    static constexpr int kConfigVersion = 8;
+    static constexpr int kConfigVersion = 9;
     int configVersion = kConfigVersion;
     bool migrated = false; // load 때 마이그레이션 했으면 true -> 저장 필요
 

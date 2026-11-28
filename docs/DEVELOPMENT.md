@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.40
-git push origin v0.0.40
+git tag v0.0.41
+git push origin v0.0.41
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,12 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.40
+
+- 은신처(`/hideout`) 기본 단축키를 F2 에서 F5 로 바꿨습니다 (사용자 요청). 로그아웃(`/exit`)은 원래대로 F4 입니다. 기존 설정은 설정 버전 9 로 올리면서, 은신처가 예전 기본값 F2 그대로이고 F5 가 비어 있을 때만 F5 로 옮깁니다. 직접 다른 키로 바꿨거나 F5 를 이미 쓰는 설정은 건드리지 않습니다. [설정](../src/core/Config.cpp)
+
+**검증.** 코어 테스트 `hideoutHotkeyMigration` 추가 (F2 → F5, F5 사용 중이면 유지, 다른 키면 유지, 기본값 F5/F4). 코어 테스트 75개, UI 테스트 7개가 통과했습니다.
 
 ### v0.0.39
 

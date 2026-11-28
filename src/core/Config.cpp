@@ -14,7 +14,7 @@ Config Config::defaults()
     c.shortcuts = {
         {0x44, 1, QStringLiteral("{Run} 아이템 검색 (Ctrl+Alt+C 를 대신 눌러서 가져옴)")}, // Alt+D
         {0, 0, QStringLiteral("{Last} 마지막 창 다시 열기")},
-        {113, 0, QStringLiteral("{Enter}/hideout{Enter}")}, // F2 은신처
+        {116, 0, QStringLiteral("{Enter}/hideout{Enter}")}, // F5 은신처
         {115, 0, QStringLiteral("{Enter}/exit{Enter}")},    // F4 로그아웃 (캐릭터 선택)
         {122, 0, QStringLiteral("{Restart} 프로그램 재시작")},
     };
@@ -49,7 +49,7 @@ void Config::migrate()
             return false;
         };
         if (!has(QStringLiteral("/hideout")))
-            keep.push_back({keyUsed(113) ? 0 : 113, 0, QStringLiteral("{Enter}/hideout{Enter}")});
+            keep.push_back({keyUsed(116) ? 0 : 116, 0, QStringLiteral("{Enter}/hideout{Enter}")});
         if (!has(QStringLiteral("/exit")))
             keep.push_back({keyUsed(115) ? 0 : 115, 0, QStringLiteral("{Enter}/exit{Enter}")});
         shortcuts = keep;
@@ -101,6 +101,17 @@ void Config::migrate()
         // v5: 등록일 제한 기본값을 자동으로 (예전 기본값 7일을 그대로 쓰던 경우만)
         if (searchBeforeDay == 7)
             searchBeforeDay = -1;
+    }
+    if (configVersion < 9) {
+        // v9: 은신처 기본 단축키 F2 -> F5. 예전 기본값(F2) 그대로이고 F5 가 비어 있을 때만 옮김
+        bool f5Used = false;
+        for (const Shortcut& s : shortcuts)
+            f5Used = f5Used || (s.keycode == 116 && s.modifiers == 0);
+        for (Shortcut& s : shortcuts) {
+            if (!f5Used && s.keycode == 113 && s.modifiers == 0
+                && s.value.trimmed().compare(QStringLiteral("{Enter}/hideout{Enter}"), Qt::CaseInsensitive) == 0)
+                s.keycode = 116;
+        }
     }
     configVersion = kConfigVersion;
     migrated = true;

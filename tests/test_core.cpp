@@ -1093,6 +1093,39 @@ private slots:
         QCOMPARE(Config::defaults().shortcuts[0].keycode, 0x44);
     }
 
+    void hideoutHotkeyMigration()
+    {
+        // v9: 은신처가 예전 기본값 F2 면 F5 로, F5 를 이미 쓰거나 다른 키로 바꾼 설정은 그대로
+        const QString path = QDir::temp().filePath(QStringLiteral("pts_cfg_v9.txt"));
+        struct Case { QString extra; int hideoutKey; int expected; };
+        const QVector<Case> cases = {
+            {QString(), 113, 116},
+            {QStringLiteral(",{\"keycode\":116,\"modifiers\":0,\"value\":\"{Pause}\"}"), 113, 113},
+            {QString(), 120, 120},
+        };
+        for (const Case& t : cases) {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(QStringLiteral("{\"config_version\":8,\"options\":{},\"shortcuts\":["
+                                   "{\"keycode\":%1,\"modifiers\":0,\"value\":\"{Enter}/hideout{Enter}\"},"
+                                   "{\"keycode\":115,\"modifiers\":0,\"value\":\"{Enter}/exit{Enter}\"}%2]}")
+                        .arg(t.hideoutKey).arg(t.extra).toUtf8());
+            f.close();
+            Config c;
+            QVERIFY(c.load(path));
+            QCOMPARE(c.shortcuts[0].keycode, t.expected);
+            QCOMPARE(c.shortcuts[1].keycode, 115);
+        }
+        QFile::remove(path);
+        const Config d = Config::defaults();
+        for (const Shortcut& s : d.shortcuts) {
+            if (s.value.contains(QStringLiteral("/hideout")))
+                QCOMPARE(s.keycode, 116);
+            if (s.value.contains(QStringLiteral("/exit")))
+                QCOMPARE(s.keycode, 115);
+        }
+    }
+
     void queryPriceCurrency()
     {
         auto priceOf = [](const SearchRequest& r) {
@@ -1604,7 +1637,7 @@ private slots:
         QCOMPARE(c.configVersion, Config::kConfigVersion);
         for (const auto& s : c.shortcuts) {
             if (s.value == QStringLiteral("{Enter}/hideout{Enter}"))
-                QCOMPARE(s.keycode, 0); // F2 는 이미 {Restart} 가 써서 비워둠
+                QCOMPARE(s.keycode, 116); // F5
         }
         QVERIFY(c.save(path));
         Config c2;
