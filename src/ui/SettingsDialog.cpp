@@ -231,39 +231,25 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     ver->setStyleSheet(QStringLiteral("color:#b4b4b4;")); // palette(mid) 는 다크 테마에서 안 보임
     f->addRow(ver);
 
-    // 정보: GitHub 저장소 링크와 라이선스 고지
+    // GitHub 저장소 뱃지 (라이선스·고지 문구는 README 에만 둠)
     {
         const QString home = QStringLiteral("https://github.com/%1").arg(QStringLiteral(PTS_HOMEPAGE_REPO));
         auto* row = new QHBoxLayout;
         auto* gh = new QToolButton(basic);
         gh->setObjectName(QStringLiteral("githubLink"));
         gh->setIcon(QIcon(QStringLiteral(":/icons/github.png")));
-        gh->setIconSize(QSize(22, 22));
-        gh->setAutoRaise(true);
+        gh->setIconSize(QSize(16, 16));
+        gh->setText(QStringLiteral("GitHub"));
+        gh->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
         gh->setCursor(Qt::PointingHandCursor);
-        gh->setToolTip(QStringLiteral("GitHub 저장소 열기: %1").arg(home));
+        gh->setToolTip(home);
+        gh->setStyleSheet(QStringLiteral(
+            "QToolButton#githubLink{background:#24292f;color:#f0f0f0;border:1px solid #3d444d;"
+            "border-radius:4px;padding:3px 10px 3px 6px;font-weight:bold;}"
+            "QToolButton#githubLink:hover{background:#32383f;border-color:#8b949e;}"));
         connect(gh, &QToolButton::clicked, this, [home]() { QDesktopServices::openUrl(QUrl(home)); });
-        row->addWidget(gh, 0, Qt::AlignTop);
-        const QString link = QStringLiteral("<a style=\"color:#8ab4f8;\" href=\"%1\">%2</a>");
-        auto* about = new QLabel(
-            QStringLiteral("Poe Trade Search는 %1 자유 소프트웨어이며 %2를 C++ / Qt 6로 다시 만든 것입니다.<br>"
-                           "Qt 6 (%3), 옵션 매칭 데이터(Awakened PoE Trade, Exiled Exchange 2, MIT)를 사용합니다. %4<br>"
-                           "Path of Exile은 Grinding Gear Games의 상표이며, 이 프로그램은 Grinding Gear Games 및 "
-                           "카카오게임즈와 관계가 없습니다.")
-                .arg(link.arg(home + QStringLiteral("/blob/master/LICENSE"), QStringLiteral("GPL-3.0")),
-                     link.arg(QStringLiteral("https://github.com/phiDelPark/PoeTradeSearch"),
-                              QStringLiteral("phiDelPark/PoeTradeSearch")),
-                     link.arg(QStringLiteral("https://www.qt.io/licensing/open-source-lgpl-obligations"),
-                              QStringLiteral("LGPL-3.0")),
-                     link.arg(home + QStringLiteral("/blob/master/THIRD_PARTY_NOTICES.md"),
-                              QStringLiteral("오픈소스 고지"))),
-            basic);
-        about->setObjectName(QStringLiteral("aboutText"));
-        about->setTextFormat(Qt::RichText);
-        about->setOpenExternalLinks(true);
-        about->setWordWrap(true);
-        about->setStyleSheet(QStringLiteral("color:#b4b4b4;"));
-        row->addWidget(about, 1);
+        row->addWidget(gh);
+        row->addStretch(1);
         f->addRow(row);
     }
     basicScroll->setWidget(basic);

@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.51
-git push origin v0.0.51
+git tag v0.0.52
+git push origin v0.0.52
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,13 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.51
+
+- 설정 창 기본 탭의 GitHub 아이콘과 라이선스 안내 문구를 GitHub 뱃지 버튼 하나로 바꿨습니다 (사용자 요청). 라이선스·상표 고지는 README 와 `THIRD_PARTY_NOTICES.md`, 배포 zip 에만 둡니다. [설정 창](../src/ui/SettingsDialog.cpp)
+- 속도 측정 기록 (리눅스 Release 빌드, 오프스크린, 임시 계측 후 되돌림): 시작 시 데이터 로드 PoE1 약 445ms + PoE2 약 165ms (UI 스레드), RSS 43MB → 데이터 로드 후 127MB (옵션 매칭 데이터가 약 24MB·270ms 차지). 아이템 파싱 약 1ms, 팝업 표시 첫 회 약 70ms·이후 약 9ms. 첫 시세 조회는 환율(일괄 교환 2건)을 먼저 받느라 약 1.9초, 환율 캐시 뒤에는 약 1.0초.
+
+**검증.** 코어 테스트 78개, UI 테스트 9개가 통과했습니다. 설정 창을 오프스크린으로 찍어 뱃지를 확인했습니다.
 
 ### v0.0.50
 
