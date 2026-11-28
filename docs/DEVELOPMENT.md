@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.54
-git push origin v0.0.54
+git tag v0.0.55
+git push origin v0.0.55
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,12 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.54
+
+- 용병 소환장의 보조 기술 줄을 기본으로 꺼 두고 스킬만 체크합니다 (사용자 결정). 보조 기술을 전부 요구하면 같은 용병이 거의 없어 매물이 0 에 가까웠습니다 (실측: 악명 높은 독성학자는 넓게로도 0, 스킬만 40). 이제 빌드+스킬 매물에서 시작해 값어치 있는 보조 기술만 체크해 좁힙니다. 등급 콤보는 체크한 보조 기술에만 적용됩니다. [파서](../src/core/ItemParser.cpp) · [팝업](../src/ui/MainPopup.cpp)
+
+**검증.** 코어 테스트 `mercenaryWarrant` 가 기본 체크(스킬만)와 기본 쿼리에 count 그룹이 없는 것을 확인하고, 보조 기술을 모두 켠 경우의 등급 모드 검사는 그대로 유지합니다. 코어 테스트 79개, UI 테스트 10개가 통과했습니다.
 
 ### v0.0.53
 

@@ -222,16 +222,20 @@ private slots:
             int skills = 0;
             for (const ParsedMod& m : it->mods) {
                 QVERIFY2(!m.unmatched, qPrintable(m.raw));
-                QVERIFY(m.checked);
+                QCOMPARE(m.checked, m.tier == 0); // 기본은 기술만, 보조 기술은 꺼 둠
                 if (m.tier == 0)
                     ++skills;
             }
             QCOMPARE(skills, 6);
 
-            const ItemFilterState st = defaultFilterState(*it);
-            const QJsonObject q = searchQuery(*it, st);
+            QCOMPARE(searchQuery(*it, defaultFilterState(*it)).value(QStringLiteral("stats")).toArray().size(), 1);
+            ParsedItem on = *it; // 보조 기술을 다 켠 경우
+            for (ParsedMod& m : on.mods)
+                m.checked = true;
+            const ItemFilterState st = defaultFilterState(on);
+            const QJsonObject q = searchQuery(on, st);
             const QJsonObject type = q.value(QStringLiteral("type")).toObject();
-            QCOMPARE(type.value(QStringLiteral("option")).toString(), it->type);
+            QCOMPARE(type.value(QStringLiteral("option")).toString(), on.type);
             QCOMPARE(type.value(QStringLiteral("discriminator")).toString(), QStringLiteral("mercenary_warrant"));
             const QJsonArray groups = q.value(QStringLiteral("stats")).toArray();
             QVERIFY(groups.size() <= 2); // 비로그인 한도 안
@@ -260,6 +264,8 @@ private slots:
         // 사혈자: 2등급 보조를 하나 끄면 count 최소값이 줄어듦 (같은 보조가 두 기술에 있으면 하나로 셈)
         auto b = parse(QStringLiteral("poe1_ko_warrant_bleed.txt"), Game::Poe1);
         QVERIFY(b);
+        for (ParsedMod& m : b->mods)
+            m.checked = true;
         auto countMin = [&](const ParsedItem& item) {
             const QJsonArray g = searchQuery(item, defaultFilterState(item)).value(QStringLiteral("stats")).toArray();
             return g.size() < 2 ? 0 : g.at(1).toObject().value(QStringLiteral("value")).toObject().value(QStringLiteral("min")).toInt();

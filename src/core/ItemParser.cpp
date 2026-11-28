@@ -515,7 +515,8 @@ void ItemParser::parseWarrant(ParsedItem& it, const QVector<QStringList>& sectio
             m.statKey = e.id.section(QLatin1Char('.'), 1);
             m.optionStat = true;
             m.rangeLocked = true;
-            m.checked = true;
+            // 기본은 기술만 (사용자 결정). 보조 기술까지 다 요구하면 같은 용병이 거의 없어 매물이 0 에 가까움
+            m.checked = m.tier == 0;
             for (int k : idx)
                 m.exactIds << db.stat(k).id;
             m.exactIds.removeDuplicates();

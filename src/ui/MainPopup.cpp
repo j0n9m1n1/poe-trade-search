@@ -837,8 +837,9 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
             m_range->addItem(QStringLiteral("등급 이상"), 1);
             m_range->addItem(QStringLiteral("등급 이상 (넓게)"), 2);
             m_range->setCurrentIndex(1);
-            m_range->setToolTip(QStringLiteral("보조 기술 조건: 정확히는 같은 등급만, 이상은 같거나 높은 등급, "
-                                               "넓게는 보조 기술이 2개까지 없어도 찾습니다"));
+            m_range->setToolTip(QStringLiteral("체크한 보조 기술 조건: 정확히는 같은 등급만, 이상은 같거나 높은 등급, "
+                                               "넓게는 그중 2개까지 없어도 찾습니다. 보조 기술은 기본으로 꺼져 있으니 "
+                                               "값어치 있는 것만 체크해서 좁히세요"));
             m_preset->setVisible(false);
             m_range->setVisible(true);
             m_range->setEnabled(true);
