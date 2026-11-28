@@ -78,8 +78,8 @@ master 푸시와 PR에서는 GitHub Actions가 Windows 빌드와 테스트만 �
 
 ```sh
 # CMakeLists.txt 의 project(... VERSION x.y.z) 도 같이 올리기
-git tag v0.0.43
-git push origin v0.0.43
+git tag v0.0.44
+git push origin v0.0.44
 ```
 
 Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각의 `.sha256` 파일이 올라갑니다.
@@ -101,6 +101,14 @@ Release에는 `PoeTradeSearch-Setup.exe`, `PoeTradeSearch-win64.zip`과 각각�
 ## 에이전트 작업 이력
 
 에이전트가 수정한 항목만 버전별로 기록한다. 다음 작업부터는 변경 내용, 검증 방법, 남은 확인을 여기에 이어서 적는다.
+
+### v0.0.43
+
+- 쌓이지 않는 교환 아이템(절규하는 초대 같은 초대장 등)은 기본으로 일반 검색을 합니다 (사용자 요청). 일괄 교환은 매물이 적어 이상값(9c, 10c) 하나에 추정가가 흔들렸습니다. 카카오 실측으로 즉시 구입 기준 절규하는 초대는 교환 13건, 일반 검색 2467건이었습니다. 쌓이는 화폐(신성한 오브, 에센스, 화석 등)는 즉시 구입 일반 검색 매물이 0건이라 지금처럼 교환 시세가 기본입니다. 교환 콤보는 그대로 남아 있어 직접 고르면 교환 시세도 볼 수 있습니다. [팝업](../src/ui/MainPopup.cpp)
+
+**검증.** UI 테스트 `exchangeDefaultOnlyForStackable` 추가: 스택 크기가 없는 초대장은 교환 화폐가 비어(일반 검색) 있고, 스택 크기가 있는 화폐는 카오스 오브가 기본인지 확인합니다. 수정을 빼면 실패하는 것을 확인했습니다. 코어 테스트 75개, UI 테스트 8개가 통과했습니다.
+
+**남은 확인.** Windows 실기에서 초대장 일반 검색 결과와 추정가.
 
 ### v0.0.42
 

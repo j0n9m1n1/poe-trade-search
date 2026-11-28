@@ -14,6 +14,7 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPushButton>
@@ -129,6 +130,44 @@ private slots:
         QVERIFY(!poe1Btn->isEnabled());
         dlg.setDataUpdateFinished(0);
         QVERIFY(poe1Btn->isEnabled());
+    }
+
+    // 일괄 교환 기본값: 쌓이는 화폐는 교환 시세, 안 쌓이는 템(초대장 등)은 일반 검색
+    void exchangeDefaultOnlyForStackable()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QFile f(dir.filePath(QStringLiteral("static.json")));
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(QByteArray("{\"result\":[{\"id\":\"Currency\",\"label\":\"화폐\",\"entries\":[{\"id\":\"chaos\",\"text\":\"카오스 오브\"},{\"id\":\"divine\",\"text\":\"신성한 오브\"},{\"id\":\"alch\",\"text\":\"연금술의 오브\"}]},{\"id\":\"Maps\",\"label\":\"지도\",\"entries\":[{\"id\":\"screaming-invitation\",\"text\":\"절규하는 초대\"}]}]}"));
+        f.close();
+        QFile sf(dir.filePath(QStringLiteral("stats.json")));
+        QVERIFY(sf.open(QIODevice::WriteOnly));
+        sf.write(QByteArray("{\"result\":[{\"id\":\"explicit\",\"label\":\"Explicit\",\"entries\":[{\"id\":\"explicit.stat_1\",\"text\":\"+# to maximum Life\",\"type\":\"explicit\"}]}]}"));
+        sf.close();
+        GameDb gdb;
+        QString err;
+        QVERIFY2(gdb[Lang::Ko].load(dir.path(), &err), qPrintable(err));
+        QVERIFY(gdb[Lang::Ko].staticById(QStringLiteral("chaos")));
+        MainPopup popup(m_kw);
+        Config cfg = Config::defaults();
+
+        ParsedItem inv;
+        inv.game = Game::Poe1;
+        inv.lang = Lang::Ko;
+        inv.rarityId = QStringLiteral("normal");
+        inv.type = inv.rawType = QStringLiteral("절규하는 초대");
+        inv.exchangeId = QStringLiteral("screaming-invitation");
+        popup.showItem(inv, &gdb, cfg, Lang::Ko);
+        QVERIFY(popup.exchangeWant().isEmpty());
+
+        ParsedItem cur = inv;
+        cur.rarityId = QStringLiteral("currency");
+        cur.type = cur.rawType = QStringLiteral("연금술의 오브");
+        cur.exchangeId = QStringLiteral("alch");
+        cur.stackSize = 3;
+        popup.showItem(cur, &gdb, cfg, Lang::Ko);
+        QCOMPARE(popup.exchangeWant(), QStringLiteral("chaos"));
     }
 
     // 떠 있는 팝업에 옵션 많은 아이템을 띄우면 창이 커져서 옵션 영역이 최소 높이로 눌리지 않아야 함

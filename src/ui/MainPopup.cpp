@@ -883,12 +883,16 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
                     m_want2->addItem(s.text, s.id);
             }
             m_want2->setVisible(m_want2->count() > 1);
-            QString def = Rates::baseFor(it.game);
-            if (it.exchangeId == def)
-                def = QStringLiteral("divine");
-            const int di = m_want1->findData(def);
-            if (di > 0)
-                m_want1->setCurrentIndex(di);
+            // 쌓이는 화폐만 기본으로 교환 시세. 초대장처럼 안 쌓이는 템은 교환 매물이 거의 없어 일반 검색이 기본
+            // (예: 절규하는 초대 교환 13건 vs 즉시 구입 2467건). 쌓이는 화폐는 즉시 구입 일반 검색 매물이 0건이라 교환 유지
+            if (it.stackSize > 0) {
+                QString def = Rates::baseFor(it.game);
+                if (it.exchangeId == def)
+                    def = QStringLiteral("divine");
+                const int di = m_want1->findData(def);
+                if (di > 0)
+                    m_want1->setCurrentIndex(di);
+            }
         }
     }
 
