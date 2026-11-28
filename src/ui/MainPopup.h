@@ -73,7 +73,7 @@ public:
                    double noteAmount = 0, const QString& noteCurrency = QString());
     void pricePageStatus(bool hasMore, int loaded, int total, const QString& status = {}, int exchangeCount = -1);
     void priceIdle(const QString& msg);
-    void showCopyFeedback(const QString& note);
+    void showCopyFeedback(const QString& msg, bool ok = true);
     void clearPrices() { priceBusy(m_idleText); }
     void setSearchBusy(bool busy);
 
@@ -96,6 +96,7 @@ signals:
     void leagueRequested(Game game, const QString& league);
     void rememberToggled(const QString& statKey, const QString& top, bool on);
     void copyPriceNoteRequested(const QString& note);
+    void copyTextRequested(const QString& text, const QString& message);
     void popupHidden();
 
 protected:
@@ -117,6 +118,7 @@ private:
     void markStale();
     void applyPresetAndRender();
     void applyRangeAndRender();
+    void copyWarrantEnglish();
     void renderRows();
     void renderMisc(const ItemFilterState& st);
     void applyRarityColor(const ParsedItem& it);
@@ -237,6 +239,7 @@ private:
     QLabel* m_priceCount;
 
     QPushButton* m_search;
+    QPushButton* m_copyEnglish;
 };
 
 } // namespace pts

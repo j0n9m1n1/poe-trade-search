@@ -149,6 +149,7 @@ bool Application::start(QString* error)
     });
     connect(m_popup, &MainPopup::rememberToggled, this, &Application::onRemember);
     connect(m_popup, &MainPopup::copyPriceNoteRequested, this, &Application::copyPriceNote);
+    connect(m_popup, &MainPopup::copyTextRequested, this, &Application::copyText);
     connect(m_popup, &MainPopup::popupHidden, this, [this]() {
         m_priceRefreshTimer.stop();
         ++m_popupSeq;
@@ -1304,15 +1305,21 @@ void Application::appendPriceListings(Game game, Lang server, const Rates& rates
 
 void Application::copyPriceNote(const QString& note)
 {
-    if (note.isEmpty())
+    copyText(note, QStringLiteral("가격 노트를 복사했습니다: %1").arg(note));
+}
+
+// 앱이 넣은 클립보드 내용은 아이템 감지에서 무시
+void Application::copyText(const QString& text, const QString& message)
+{
+    if (text.isEmpty())
         return;
-    m_selfClipboardText = note;
+    m_selfClipboardText = text;
     m_selfClipboardAt = QDateTime::currentMSecsSinceEpoch();
     m_ignoreClipboard = true;
-    QGuiApplication::clipboard()->setText(note);
+    QGuiApplication::clipboard()->setText(text);
     m_ignoreClipboard = false;
     if (m_popup)
-        m_popup->showCopyFeedback(note);
+        m_popup->showCopyFeedback(message);
 }
 
 // ------------------------------------------------------------ 아이콘

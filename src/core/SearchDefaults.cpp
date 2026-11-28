@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/SearchDefaults.h"
 
+#include <QRegularExpression>
+#include <QSet>
+
+#include <algorithm>
 #include <cmath>
 
 #include "core/Keywords.h"
@@ -74,6 +78,13 @@ ItemFilterState defaultFilterState(const ParsedItem& it)
 
 ParsedItem applyPreset(const ParsedItem& parsed, Preset p, int rangePct, ItemFilterState* st)
 {
+    if (parsed.isWarrant) { // 용병 소환장은 범위 콤보가 보조 기술 등급 모드 (0/1/2)
+        ParsedItem it = parsed;
+        it.warrantMode = qBound(0, rangePct, 2);
+        if (st)
+            *st = defaultFilterState(it);
+        return it;
+    }
     ParsedItem it = parsed;
     switch (p) {
     case Preset::Default:
@@ -86,7 +97,7 @@ ParsedItem applyPreset(const ParsedItem& parsed, Preset p, int rangePct, ItemFil
         for (const ParsedMod& m : it.mods)
             anyTier = anyTier || m.tier > 0;
         for (ParsedMod& m : it.mods) {
-            if (m.unmatched)
+            if (m.unmatched || it.isWarrant) // 용병 기술/보조 기술은 체크 그대로
                 continue;
             m.totalRes = false;
             m.resistance = false;
@@ -157,6 +168,56 @@ ParsedItem applyPreset(const ParsedItem& parsed, Preset p, int rangePct, ItemFil
     return it;
 }
 
+// 용병 소환장 count 그룹
+//  - 문구가 같은 id 가 여럿인 기술: 그중 하나 (min 1)
+//  - 보조 기술: 모드 0 은 그 등급 그대로, 1·2 는 같은 계열 그 등급 이상 아무거나. 체크한 보조 기술 수만큼 (모드 2 는 2개 덜)
+//  거래소 쿼리는 보조 기술이 어느 기술에 붙었는지는 못 거름. 비로그인은 count 그룹이 많으면 거부돼서 보조 기술은 하나로 묶음
+static void addWarrantGroups(const ParsedItem& it, SearchRequest& r)
+{
+    QSet<QString> andIds;
+    for (const StatQuery& q : r.stats) {
+        if (!q.disabled)
+            andIds.insert(q.id);
+    }
+    QSet<QString> seen;
+    StatCountGroup sup;
+    sup.min = 0;
+    for (const ParsedMod& m : it.mods) {
+        if (!m.checked || m.lockedOff || m.unmatched)
+            continue;
+        if (m.tier == 0) {
+            if (m.exactIds.size() > 1) {
+                QStringList key = m.exactIds;
+                key.sort();
+                if (!seen.contains(QStringLiteral("s:") + key.join(QLatin1Char(',')))) {
+                    seen.insert(QStringLiteral("s:") + key.join(QLatin1Char(',')));
+                    r.countGroups.push_back({m.exactIds, 1});
+                }
+            }
+            continue;
+        }
+        const QStringList& ids = it.warrantMode == 0 || m.anyOf.isEmpty() ? m.exactIds : m.anyOf;
+        QStringList key = ids;
+        key.sort();
+        const QString k = key.join(QLatin1Char(','));
+        bool covered = false;
+        for (const QString& id : ids)
+            covered = covered || andIds.contains(id);
+        if (ids.isEmpty() || covered || seen.contains(k))
+            continue;
+        seen.insert(k);
+        ++sup.min;
+        for (const QString& id : ids) {
+            if (!sup.ids.contains(id))
+                sup.ids << id;
+        }
+    }
+    if (it.warrantMode == 2)
+        sup.min = sup.min > 0 ? qMax(1, sup.min - 2) : 0;
+    if (sup.min > 0)
+        r.countGroups.push_back(sup);
+}
+
 SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const Keywords& kw, const GameDb* gdb,
                           const RequestContext& ctx, QString* warning)
 {
@@ -174,7 +235,8 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
     r.type = it.type;
     r.disc = it.disc;
     // 이름도 베이스도 안 보내는 분류 검색이면 번역이 필요 없음 -> 번역 실패로 서버를 바꾸지 않음
-    const bool sendsText = !st.byCategory && (st.useName || st.useType || it.category.isEmpty());
+    // 용병 소환장 type 은 언어와 무관한 빌드 id
+    const bool sendsText = !st.byCategory && (st.useName || st.useType || it.category.isEmpty()) && !it.isWarrant;
     if (ctx.server != it.lang && sendsText) {
         QString t, n;
         if (gdb && gdb->translateItem(it.lang, ctx.server, it.type, it.name, &t, &n)) {
@@ -269,6 +331,8 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
             resAny = true;
             continue;
         }
+        if (it.isWarrant && (m.tier > 0 || m.exactIds.size() > 1)) // 아래에서 count 그룹으로
+            continue;
         StatQuery q;
         q.id = c->id;
         q.disabled = !m.checked || m.lockedOff;
@@ -278,8 +342,17 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
             q.min = m.min;
             q.max = m.max;
         }
+        if (it.isWarrant) { // 같은 보조 기술이 두 기술에 붙어 있으면 한 번만 (같은 id 두 번이면 거래소가 거부)
+            auto same = std::find_if(r.stats.begin(), r.stats.end(), [&](const StatQuery& o) { return o.id == q.id; });
+            if (same != r.stats.end()) {
+                same->disabled = same->disabled && q.disabled;
+                continue;
+            }
+        }
         r.stats.push_back(q);
     }
+    if (it.isWarrant)
+        addWarrantGroups(it, r);
     if (resAny) {
         StatQuery q;
         q.id = QStringLiteral("pseudo.pseudo_total_resistance");
@@ -291,6 +364,48 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
     if (it.emptySuffixes > 0 && st.emptySuffixes.use && st.emptySuffixes.min > 0)
         r.stats.push_back({QStringLiteral("pseudo.pseudo_number_of_empty_suffix_mods"), st.emptySuffixes.min, std::nullopt, {}});
     return r;
+}
+
+QString warrantEnglishText(const ParsedItem& it, const TradeDb& en)
+{
+    if (!it.isWarrant || !en.isLoaded())
+        return QString();
+    QString build;
+    for (int i : en.itemsByType(it.type)) {
+        const ItemEntry& e = en.item(i);
+        const int a = e.text.indexOf(QLatin1Char('('));
+        if (e.disc == it.disc && a > 0 && e.text.endsWith(QLatin1Char(')')))
+            build = e.text.mid(a + 1, e.text.size() - a - 2);
+    }
+    if (build.isEmpty())
+        return QString();
+    static const QRegularExpression tierRe(QStringLiteral("\\(Tier (\\d)\\)$"));
+    QStringList out{QStringLiteral("Item Class: Map Fragments"), QStringLiteral("Rarity: Normal"),
+                    QStringLiteral("Mercenary Warrant"), QStringLiteral("--------"),
+                    QStringLiteral("Build: ") + build};
+    if (it.mercenaryLevel > 0)
+        out << QStringLiteral("Mercenary Level: %1").arg(it.mercenaryLevel);
+    bool any = false;
+    for (const ParsedMod& m : it.mods) {
+        const ModCandidate* c = m.current();
+        const int si = c ? en.findStat(c->id) : -1;
+        if (si < 0) {
+            if (m.tier == 0) // 기술을 못 찾으면 보조 기술이 엉뚱한 기술에 붙으므로 포기
+                return QString();
+            continue;
+        }
+        QString text = en.stat(si).text;
+        if (m.tier == 0) {
+            out << QStringLiteral("--------");
+            any = true;
+        } else {
+            text.replace(tierRe, QStringLiteral("(Tier: \\1)"));
+        }
+        out << text;
+    }
+    if (!any)
+        return QString();
+    return out.join(QLatin1Char('\n'));
 }
 
 } // namespace pts

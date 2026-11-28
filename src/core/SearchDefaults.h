@@ -6,6 +6,8 @@
 
 namespace pts {
 
+class TradeDb;
+
 class Keywords;
 struct GameDb;
 
@@ -79,5 +81,9 @@ SearchRequest makeRequest(const ParsedItem& it, const ItemFilterState& st, const
                           const RequestContext& ctx, QString* warning = nullptr);
 
 SearchRequest::LevelKind levelKindFor(const ParsedItem& it);
+
+// 용병 소환장을 영문 게임 문구로 (영문 용병 가격 사이트에 붙여 넣기용). 용병 이름과 설명은 번역할 수 없어 뺌.
+// 빌드나 기술을 영문 데이터에서 못 찾으면 빈 문자열
+QString warrantEnglishText(const ParsedItem& it, const TradeDb& en);
 
 } // namespace pts

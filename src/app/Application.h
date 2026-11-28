@@ -68,6 +68,7 @@ private:
     void updateListingPageStatus(const QString& status = {});
     void appendPriceListings(Game game, Lang server, const Rates& rates, const QVector<Listing>& listings);
     void copyPriceNote(const QString& note);
+    void copyText(const QString& text, const QString& message);
     void openSettings();
 
     // 프로그램 업데이트 (GitHub Release)

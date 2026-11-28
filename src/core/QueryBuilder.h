@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 namespace pts {
@@ -27,6 +28,12 @@ struct PropQuery {
 };
 
 // UI 에서 사용자가 고른 값 그대로
+// "이 중 min 개 이상" 그룹 (용병 소환장 보조 기술: 같은 등급 이상 아무거나)
+struct StatCountGroup {
+    QStringList ids;
+    int min = 1;
+};
+
 struct SearchRequest {
     Game game = Game::Poe1;
     Lang lang = Lang::En;
@@ -76,6 +83,7 @@ struct SearchRequest {
 
     QVector<PropQuery> props;
     QVector<StatQuery> stats;
+    QVector<StatCountGroup> countGroups;
     bool includeDisabledStats = true; // 브라우저용은 꺼진 옵션도 같이 보냄
 
     QString indexed; // "" = any

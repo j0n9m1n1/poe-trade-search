@@ -24,6 +24,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QUrlQuery>
 #include <QtTest>
@@ -196,6 +197,112 @@ private slots:
         QVERIFY2(!d.isNull(), qPrintable(err));
         QCOMPARE(d.object().value(QStringLiteral("a")).toArray().size(), 2);
         QCOMPARE(d.object().value(QStringLiteral("b")).toString(), QStringLiteral("x,]"));
+    }
+
+    // 용병 소환장: 빌드 type, 기술 AND, 3등급 보조 AND, 1·2등급 보조는 count 그룹 하나
+    void mercenaryWarrant()
+    {
+        if (!haveData)
+            QSKIP("PTS_TEST_DATA 없음");
+        struct Case {
+            const char* file;
+            const char* build;
+        };
+        for (const Case c : {Case{"poe1_ko_warrant_bleed.txt", "PhysicalDuelistBleed"},
+                             Case{"poe1_ko_warrant_abyss.txt", "AbyssalTemplar"},
+                             Case{"poe1_ko_warrant_noble.txt", nullptr}}) {
+            auto it = parse(QString::fromLatin1(c.file), Game::Poe1);
+            QVERIFY2(it, c.file);
+            QVERIFY2(it->isWarrant, c.file);
+            QCOMPARE(it->disc, QStringLiteral("mercenary_warrant"));
+            if (c.build)
+                QCOMPARE(it->type, QString::fromLatin1(c.build));
+            else
+                QVERIFY2(it->type.endsWith(QStringLiteral("Noble")), qPrintable(it->type));
+            int skills = 0;
+            for (const ParsedMod& m : it->mods) {
+                QVERIFY2(!m.unmatched, qPrintable(m.raw));
+                QVERIFY(m.checked);
+                if (m.tier == 0)
+                    ++skills;
+            }
+            QCOMPARE(skills, 6);
+
+            const ItemFilterState st = defaultFilterState(*it);
+            const QJsonObject q = searchQuery(*it, st);
+            const QJsonObject type = q.value(QStringLiteral("type")).toObject();
+            QCOMPARE(type.value(QStringLiteral("option")).toString(), it->type);
+            QCOMPARE(type.value(QStringLiteral("discriminator")).toString(), QStringLiteral("mercenary_warrant"));
+            const QJsonArray groups = q.value(QStringLiteral("stats")).toArray();
+            QVERIFY(groups.size() <= 2); // 비로그인 한도 안
+            QSet<QString> andIds;
+            for (const QJsonValue f : groups.at(0).toObject().value(QStringLiteral("filters")).toArray()) {
+                const QString id = f.toObject().value(QStringLiteral("id")).toString();
+                QVERIFY2(!andIds.contains(id), qPrintable(id));
+                andIds.insert(id);
+            }
+            QVERIFY(andIds.size() >= 6);
+            if (groups.size() == 2) {
+                const QJsonObject cg = groups.at(1).toObject();
+                QCOMPARE(cg.value(QStringLiteral("type")).toString(), QStringLiteral("count"));
+                const int min = cg.value(QStringLiteral("value")).toObject().value(QStringLiteral("min")).toInt();
+                const QJsonArray fs = cg.value(QStringLiteral("filters")).toArray();
+                QVERIFY(min >= 1 && min <= fs.size());
+                QSet<QString> ids;
+                for (const QJsonValue f : fs) {
+                    const QString id = f.toObject().value(QStringLiteral("id")).toString();
+                    QVERIFY2(!ids.contains(id) && !andIds.contains(id), qPrintable(id));
+                    ids.insert(id);
+                }
+            }
+        }
+
+        // 사혈자: 2등급 보조를 하나 끄면 count 최소값이 줄어듦 (같은 보조가 두 기술에 있으면 하나로 셈)
+        auto b = parse(QStringLiteral("poe1_ko_warrant_bleed.txt"), Game::Poe1);
+        QVERIFY(b);
+        auto countMin = [&](const ParsedItem& item) {
+            const QJsonArray g = searchQuery(item, defaultFilterState(item)).value(QStringLiteral("stats")).toArray();
+            return g.size() < 2 ? 0 : g.at(1).toObject().value(QStringLiteral("value")).toObject().value(QStringLiteral("min")).toInt();
+        };
+        const int before = countMin(*b);
+        QVERIFY(before > 0);
+        ParsedItem off = *b;
+        for (ParsedMod& m : off.mods) {
+            if (!m.anyOf.isEmpty() && m.text.startsWith(QStringLiteral("출혈 확률"))) {
+                m.checked = false;
+                break;
+            }
+        }
+        QCOMPARE(countMin(off), before - 1);
+
+        // 등급 모드: 0 정확히 / 1 이상 (기본) / 2 이상 + 2개까지 빠져도 됨. 셋 다 같은 개수를 세고 1·2 는 후보 id 가 더 많음
+        auto countGroup = [&](int mode) {
+            const ParsedItem item = applyPreset(*b, Preset::Default, mode, nullptr);
+            if (item.warrantMode != mode)
+                return QJsonObject();
+            const QJsonArray g = searchQuery(item, defaultFilterState(item)).value(QStringLiteral("stats")).toArray();
+            return g.size() < 2 ? QJsonObject() : g.at(1).toObject();
+        };
+        auto minOf = [](const QJsonObject& g) { return g.value(QStringLiteral("value")).toObject().value(QStringLiteral("min")).toInt(); };
+        const QJsonObject exact = countGroup(0), atLeast = countGroup(1), wide = countGroup(2);
+        QCOMPARE(b->warrantMode, 1);
+        QCOMPARE(minOf(atLeast), before);
+        QCOMPARE(minOf(atLeast), 11); // 사혈자: 서로 다른 보조 기술 11개 (거래소 실측: 매물 4)
+        QCOMPARE(minOf(exact), 11);
+        QCOMPARE(minOf(wide), 9);
+        QVERIFY(exact.value(QStringLiteral("filters")).toArray().size()
+                < atLeast.value(QStringLiteral("filters")).toArray().size());
+
+        // 영문 문구: 빌드 / 레벨 / 기술마다 구분선 / 보조 기술은 "(Tier: N)"
+        QCOMPARE(b->mercenaryLevel, 83);
+        const QString en = warrantEnglishText(*b, dbs[0][Lang::En]);
+        QVERIFY2(en.startsWith(QStringLiteral("Item Class: Map Fragments\nRarity: Normal\nMercenary Warrant\n--------\n"
+                                              "Build: Bloodletter\nMercenary Level: 83\n--------\nBloodthirst\n")),
+                 qPrintable(en));
+        QCOMPARE(en.count(QStringLiteral("--------")), 7);
+        QCOMPARE(en.count(QStringLiteral("(Tier: ")), b->mods.size() - 6);
+        QVERIFY(!en.contains(QStringLiteral("(Tier ")));
+        QVERIFY(warrantEnglishText(*parse(QStringLiteral("poe1_ko_unique_claw.txt"), Game::Poe1), dbs[0][Lang::En]).isEmpty());
     }
 
     // 코드 점검(v0.0.48)에서 찾은 코어 버그 회귀 테스트

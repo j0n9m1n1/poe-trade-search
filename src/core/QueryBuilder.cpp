@@ -322,7 +322,18 @@ QJsonObject QueryBuilder::build(const SearchRequest& r, const TradeDb* db)
     QJsonObject and_;
     and_.insert(QStringLiteral("type"), QStringLiteral("and"));
     and_.insert(QStringLiteral("filters"), statFilters);
-    query.insert(QStringLiteral("stats"), QJsonArray{and_});
+    QJsonArray groups{and_};
+    for (const StatCountGroup& g : r.countGroups) {
+        if (g.ids.isEmpty() || g.min <= 0)
+            continue;
+        QJsonArray fl;
+        for (const QString& id : g.ids)
+            fl.append(QJsonObject{{QStringLiteral("id"), id}});
+        groups.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("count")},
+                                  {QStringLiteral("value"), QJsonObject{{QStringLiteral("min"), g.min}}},
+                                  {QStringLiteral("filters"), fl}});
+    }
+    query.insert(QStringLiteral("stats"), groups);
 
     QJsonObject root;
     root.insert(QStringLiteral("query"), query);

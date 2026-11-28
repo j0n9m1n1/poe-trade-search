@@ -420,6 +420,121 @@ ParsedMod ItemParser::buildMod(const ParsedItem& it, const TradeDb& db, const Ma
     return mod;
 }
 
+// 용병 소환장 (PoE1): "빌드: X" 줄로 빌드별 type 을 찾고, 기술 블록(첫 줄 기술, 나머지 "보조 (등급: N)")을
+// 용병 stat 으로. 보조 기술 1·2등급은 같은 계열의 그 등급 이상 아무거나(anyOf), 3등급은 그 id 하나
+void ItemParser::parseWarrant(ParsedItem& it, const QVector<QStringList>& sections, const TradeDb& db) const
+{
+    static const QString kGroup = QStringLiteral("mercenary");
+    if (it.game != Game::Poe1 || !db.hasGroup(kGroup))
+        return;
+    int buildSection = -1;
+    for (int s = 1; s < sections.size() && buildSection < 0; ++s) {
+        for (const QString& l : sections[s]) {
+            const int c = l.indexOf(QStringLiteral(": "));
+            if (c <= 0)
+                continue;
+            for (int i : db.itemsByText(it.type + QStringLiteral(" (") + l.mid(c + 2) + QStringLiteral(")"))) {
+                const ItemEntry& e = db.item(i);
+                if (e.disc == QStringLiteral("mercenary_warrant")) {
+                    it.type = e.type; // 빌드 id (언어 무관, 검색용)
+                    it.disc = e.disc;
+                    it.rawType = e.text; // 표시용: 용병 소환장 (사혈자)
+                    buildSection = s;
+                    break;
+                }
+            }
+            if (buildSection >= 0)
+                break;
+        }
+    }
+    if (buildSection < 0)
+        return;
+    it.isWarrant = true;
+    it.detail = false;
+    it.exchangeId.clear();
+    static const QRegularExpression levelRe(QStringLiteral("^(?:용병 레벨|Mercenary Level): (\\d+)$"));
+    for (const QString& l : sections[buildSection]) {
+        const auto lv = levelRe.match(l);
+        if (lv.hasMatch())
+            it.mercenaryLevel = lv.captured(1).toInt();
+    }
+
+    // 보조 기술 stat 문구: "[하위|상위 ]이름 (N등급)" / "[Lesser|Greater ]Name (Tier N)"
+    static const QRegularExpression supRe(
+        QStringLiteral("^(?:(?:하위|상위|Lesser|Greater) )?(.*) \\((?:(\\d)등급|Tier (\\d))\\)$"));
+    // 아이템 문구: "이름 (등급: N)" / "Name (Tier: N)"
+    static const QRegularExpression lineRe(QStringLiteral("^(.*?)\\s*\\((?:등급|Tier):\\s*(\\d)\\)$"));
+    QHash<QString, QVector<int>> byText;
+    QHash<QString, QVector<QPair<int, int>>> family; // 계열 -> (등급, stat 인덱스)
+    for (int i = 0; i < db.statCount(); ++i) {
+        const StatEntry& e = db.stat(i);
+        if (e.group != kGroup)
+            continue;
+        byText[e.text].push_back(i);
+        if (e.id.startsWith(QStringLiteral("mercenary.support_"))) {
+            const auto m = supRe.match(e.text);
+            if (m.hasMatch())
+                family[m.captured(1)].push_back({(m.captured(2) + m.captured(3)).toInt(), i});
+        }
+    }
+    const QString label = db.groupLabel(kGroup);
+    const bool ko = it.lang == Lang::Ko;
+
+    for (int s = buildSection + 1; s < sections.size(); ++s) {
+        const QStringList& sec = sections[s];
+        if (sec.isEmpty())
+            continue;
+        bool hasSupport = false;
+        for (int i = 1; i < sec.size(); ++i)
+            hasSupport = hasSupport || lineRe.match(sec[i]).hasMatch();
+        // 기술로 못 찾고 보조 기술 줄도 없으면 설명문
+        if (byText.value(sec[0]).isEmpty() && !hasSupport)
+            continue;
+        for (int i = 0; i < sec.size(); ++i) {
+            const QString& l = sec[i];
+            ParsedMod m;
+            m.raw = l;
+            m.text = l;
+            m.shown = l;
+            const auto lm = i > 0 ? lineRe.match(l) : QRegularExpressionMatch();
+            if (lm.hasMatch()) {
+                m.tier = lm.captured(2).toInt();
+                m.text = ko ? QStringLiteral("%1 (%2등급)").arg(lm.captured(1)).arg(m.tier)
+                            : QStringLiteral("%1 (Tier %2)").arg(lm.captured(1)).arg(m.tier);
+                m.shown = QStringLiteral("└ ") + lm.captured(1);
+            }
+            const QVector<int> idx = byText.value(m.text);
+            if (idx.isEmpty()) {
+                m.unmatched = true;
+                m.lockedOff = true;
+                it.mods.push_back(m);
+                continue;
+            }
+            const StatEntry& e = db.stat(idx[0]);
+            m.cands.push_back({idx[0], kGroup, label, e.id, QJsonValue()});
+            m.statKey = e.id.section(QLatin1Char('.'), 1);
+            m.optionStat = true;
+            m.rangeLocked = true;
+            m.checked = true;
+            for (int k : idx)
+                m.exactIds << db.stat(k).id;
+            m.exactIds.removeDuplicates();
+            if (m.tier > 0) {
+                m.anyOf = m.exactIds;
+                const auto fm = supRe.match(m.text);
+                if (fm.hasMatch()) {
+                    for (const auto& [t, k] : family.value(fm.captured(1))) {
+                        if (t >= m.tier)
+                            m.anyOf << db.stat(k).id;
+                    }
+                }
+                m.anyOf.removeDuplicates();
+            }
+            it.mods.push_back(m);
+        }
+    }
+}
+
 std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, const ParseOptions& opt,
                                             QString* error) const
 {
@@ -716,6 +831,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     it.isHeist = props.contains(QStringLiteral("heist_target")) || it.top == QStringLiteral("heistmission");
     it.isUltimatum = props.contains(QStringLiteral("ultimatum_challenge"));
     it.detail = it.isGem || it.isMapFragment || (it.isCurrency && !it.isUltimatum) || it.isCard;
+    parseWarrant(it, sections, db);
 
     if (const StaticEntry* se = db.staticByText(it.rawType.isEmpty() ? type : it.rawType))
         it.exchangeId = se->id;
@@ -727,7 +843,7 @@ std::optional<ParsedItem> ItemParser::parse(const QString& input, Game game, con
     // ---- 옵션 줄
     bool optionStatSeen = false;
     int prefixes = 0, suffixes = 0;
-    if (modStartSection > 0 && !it.detail) {
+    if (modStartSection > 0 && !it.detail && !it.isWarrant) {
         static const QRegularExpression suffixRe(QStringLiteral("\\s\\(([a-z]+)\\)$"));
         static const QRegularExpression headerRe(QStringLiteral("^\\{\\s*(.*?)\\s*\\}$"));
         QStringList tierWords = m_kw.kw(QStringLiteral("option_tier")).t[li(L)];

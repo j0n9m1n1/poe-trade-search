@@ -47,6 +47,8 @@ struct ParsedMod {
     QString color;            // implicit / crafted / enchant / scourge / rune / desecrated / fractured / ambiguous / ""
     QString shown;            // 화면 표시용: 실제 수치가 들어간 게임 문구 (여러 줄은 " / ")
     QString affix;            // 고급 설명 기준 prefix / suffix / "" (모름)
+    QStringList exactIds;     // 용병 기술/보조 기술: 문구가 같은 id 전부 (보통 하나)
+    QStringList anyOf;        // 용병 보조 기술: 같은 계열 그 등급 이상 id 전부 (exactIds 포함)
 
     const ModCandidate* current() const { return selected >= 0 && selected < cands.size() ? &cands[selected] : nullptr; }
 };
@@ -109,6 +111,9 @@ struct ParsedItem {
     bool isGem = false, isCurrency = false, isCard = false, isMap = false, isWaystone = false, isMapFragment = false;
     bool isGear = false, isWeapon = false, isJewel = false, isFlask = false, isHeist = false, isUltimatum = false;
     bool isBeast = false;
+    bool isWarrant = false; // 용병 소환장 (type = 빌드 id, mods = 기술/보조 기술)
+    int warrantMode = 1;    // 보조 기술 등급: 0 정확히, 1 이상, 2 이상 + 2개까지 빠져도 됨
+    int mercenaryLevel = 0;
 
     bool detail = false; // 옵션 대신 설명 표시
     QString detailText;
@@ -161,6 +166,7 @@ public:
     Game guessGame(const QString& text, Game fallback) const;
 
 private:
+    void parseWarrant(ParsedItem& it, const QVector<QStringList>& sections, const TradeDb& db) const;
     struct CleanLine {
         QString text;
         QString raw;

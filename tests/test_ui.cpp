@@ -297,6 +297,64 @@ private slots:
         QCOMPARE(more.count(), 0);
     }
 
+    // 용병 소환장: 범위 콤보가 등급 조건 3단계로 바뀌고 프리셋은 숨김, 영문 복사 버튼은 소환장에서만 보임
+    void warrantPopupControls()
+    {
+        MainPopup popup(m_kw);
+        GameDb gdb;
+        Config cfg = Config::defaults();
+        ParsedItem w;
+        w.game = Game::Poe1;
+        w.lang = Lang::Ko;
+        w.rarityId = QStringLiteral("normal");
+        w.rarityText = QStringLiteral("일반");
+        w.type = QStringLiteral("PhysicalDuelistBleed");
+        w.rawType = QStringLiteral("용병 소환장 (사혈자)");
+        w.disc = QStringLiteral("mercenary_warrant");
+        w.isWarrant = true;
+        ParsedMod skill;
+        skill.raw = skill.text = skill.shown = QStringLiteral("피의 갈증");
+        skill.optionStat = skill.rangeLocked = skill.checked = true;
+        w.mods.push_back(skill);
+        popup.showItem(w, &gdb, cfg, Lang::Ko);
+
+        QComboBox* range = nullptr;
+        for (QComboBox* c : popup.findChildren<QComboBox*>()) {
+            if (c->findText(QStringLiteral("등급 이상")) >= 0)
+                range = c;
+        }
+        QVERIFY(range);
+        QCOMPARE(range->count(), 3);
+        QCOMPARE(range->currentData().toInt(), 1);
+        QVERIFY(!range->isHidden());
+        QPushButton* copy = nullptr;
+        for (QPushButton* b : popup.findChildren<QPushButton*>()) {
+            if (b->text() == QStringLiteral("영문 복사"))
+                copy = b;
+        }
+        QVERIFY(copy);
+        QVERIFY(!copy->isHidden());
+        for (QComboBox* c : popup.findChildren<QComboBox*>())
+            QVERIFY(c->findText(QStringLiteral("베이스")) < 0 || c->isHidden());
+        QCOMPARE(range->findText(QStringLiteral("등급 정확히")), 0);
+        QCOMPARE(range->findText(QStringLiteral("등급 이상 (넓게)")), 2);
+
+        // 일반 아이템으로 바꾸면 원래 범위 콤보와 프리셋, 버튼 숨김
+        ParsedItem ring = w;
+        ring.isWarrant = false;
+        ring.rarityId = QStringLiteral("rare");
+        ring.type = ring.rawType = QStringLiteral("반지");
+        ring.disc.clear();
+        ring.mods[0].cands.clear();
+        popup.showItem(ring, &gdb, cfg, Lang::Ko);
+        QVERIFY(copy->isHidden());
+        QCOMPARE(range->findText(QStringLiteral("일치")), 0);
+        bool presetShown = false;
+        for (QComboBox* c : popup.findChildren<QComboBox*>())
+            presetShown = presetShown || (c->findText(QStringLiteral("베이스")) >= 0 && !c->isHidden());
+        QVERIFY(presetShown);
+    }
+
     // #3, #9, #13, #15: MainPopup onlineleague 유지, syncConfig, 반짝이 콤보 폭, stale 클릭 재조회
     void mainPopupFixes()
     {

@@ -52,6 +52,8 @@
 namespace pts {
 
 namespace {
+
+const QString kRangeTip = QStringLiteral("옵션 값 완화: 최소값을 N% 낮춰서 검색 (고유는 롤 범위 폭 기준)");
 constexpr int kMaxFilterViewportHeight = 420;
 constexpr int kPriceAmountRole = Qt::UserRole + 1;
 constexpr int kPriceCurrencyRole = Qt::UserRole + 2;
@@ -231,7 +233,7 @@ void MainPopup::buildUi()
                                         "정확: 원래 옵션, T1~T2 만 체크 (등급 모르면 일반 옵션 전부), 값 일치\n"
                                         "베이스: 옵션을 모두 끄고 아이템 레벨·영향 위주로 검색"));
     m_range = new QComboBox(this);
-    m_range->setToolTip(QStringLiteral("옵션 값 완화: 최소값을 N% 낮춰서 검색 (고유는 롤 범위 폭 기준)"));
+    m_range->setToolTip(kRangeTip);
 
     m_league = new QComboBox(this);
     m_league->setSizeAdjustPolicy(QComboBox::AdjustToContents);
@@ -561,7 +563,14 @@ void MainPopup::buildUi()
         QFont bf = m_search->font();
         bf.setBold(true);
         m_search->setFont(bf);
+        // 용병 소환장만: 영문 문구로 복사 (영문 시세 사이트에 붙여 넣기용)
+        m_copyEnglish = new QPushButton(QStringLiteral("영문 복사"), this);
+        m_copyEnglish->setToolTip(QStringLiteral("소환장 내용을 영문 게임 문구로 바꿔 클립보드에 복사합니다"));
+        m_copyEnglish->setCursor(Qt::PointingHandCursor);
+        m_copyEnglish->hide();
+        connect(m_copyEnglish, &QPushButton::clicked, this, &MainPopup::copyWarrantEnglish);
         pl->addWidget(m_refresh);
+        pl->addWidget(m_copyEnglish);
         pl->addWidget(m_search);
         root->addLayout(pl);
     }
@@ -772,7 +781,7 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     {
         const bool unique = it.rarityId == QStringLiteral("unique") && !it.name.isEmpty();
         const bool rareName = !unique && it.rarityId == QStringLiteral("rare") && !it.rawName.isEmpty() && it.rawName != it.rawType;
-        QString base = it.transfigured ? it.rawType : it.type;
+        QString base = it.transfigured || it.isWarrant ? it.rawType : it.type;
         if (base.isEmpty())
             base = it.rawType;
         m_useName->setText(it.name);
@@ -821,15 +830,30 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
         QSignalBlocker b1(m_preset), b2(m_range);
         m_preset->setCurrentIndex(0);
         m_range->clear();
-        const int base = m_cfgRange > 0 ? m_cfgRange : 10;
-        m_range->addItem(QStringLiteral("일치"), 0);
-        m_range->addItem(QStringLiteral("-%1%").arg(base), base);
-        m_range->addItem(QStringLiteral("-%1% (넓게)").arg(base * 2), base * 2);
-        m_range->setCurrentIndex(m_cfgRange > 0 ? 1 : 0);
         const bool hasMods = !it.mods.isEmpty();
-        m_preset->setVisible(hasMods);
-        m_range->setVisible(hasMods);
-        m_range->setEnabled(!exactValuesOnly(it));
+        if (it.isWarrant) {
+            // 소환장: 값 범위 대신 보조 기술 등급 조건 (data 가 그대로 warrantMode)
+            m_range->addItem(QStringLiteral("등급 정확히"), 0);
+            m_range->addItem(QStringLiteral("등급 이상"), 1);
+            m_range->addItem(QStringLiteral("등급 이상 (넓게)"), 2);
+            m_range->setCurrentIndex(1);
+            m_range->setToolTip(QStringLiteral("보조 기술 조건: 정확히는 같은 등급만, 이상은 같거나 높은 등급, "
+                                               "넓게는 보조 기술이 2개까지 없어도 찾습니다"));
+            m_preset->setVisible(false);
+            m_range->setVisible(true);
+            m_range->setEnabled(true);
+        } else {
+            const int base = m_cfgRange > 0 ? m_cfgRange : 10;
+            m_range->addItem(QStringLiteral("일치"), 0);
+            m_range->addItem(QStringLiteral("-%1%").arg(base), base);
+            m_range->addItem(QStringLiteral("-%1% (넓게)").arg(base * 2), base * 2);
+            m_range->setCurrentIndex(m_cfgRange > 0 ? 1 : 0);
+            m_range->setToolTip(kRangeTip);
+            m_preset->setVisible(hasMods);
+            m_range->setVisible(hasMods);
+            m_range->setEnabled(!exactValuesOnly(it));
+        }
+        m_copyEnglish->setVisible(it.isWarrant);
     }
 
     if (it.hasDps)
@@ -1737,10 +1761,22 @@ void MainPopup::priceIdle(const QString& msg)
     setPriceText(msg);
 }
 
-void MainPopup::showCopyFeedback(const QString& note)
+void MainPopup::copyWarrantEnglish()
 {
-    const QString msg = QStringLiteral("가격 노트를 복사했습니다: %1").arg(note);
-    m_price->setStyleSheet(QStringLiteral("QLabel{padding:2px 4px; color:#6fd08c;}"));
+    if (!m_hasItem || !m_item.isWarrant || !m_gdb)
+        return;
+    const QString text = warrantEnglishText(collectItem(), (*m_gdb)[Lang::En]);
+    if (text.isEmpty()) {
+        showCopyFeedback(QStringLiteral("영문 문구를 만들지 못했습니다. 영문 거래소 데이터를 확인하세요."), false);
+        return;
+    }
+    emit copyTextRequested(text, QStringLiteral("영문 소환장 문구를 복사했습니다"));
+}
+
+void MainPopup::showCopyFeedback(const QString& msg, bool ok)
+{
+    m_price->setStyleSheet(ok ? QStringLiteral("QLabel{padding:2px 4px; color:#6fd08c;}")
+                              : QStringLiteral("QLabel{padding:2px 4px; color:#e07a6f;}"));
     m_price->setTextFormat(Qt::PlainText);
     m_price->setText(msg);
     m_copyFeedbackTimer.start(2500);
