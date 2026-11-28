@@ -132,6 +132,10 @@ SettingsDialog::SettingsDialog(const Config& cfg, const GameDb* dbs, CheckedStor
     m_autoPriceRefresh = new QCheckBox(QStringLiteral("검색 조건을 바꾸면 시세를 자동으로 다시 조회합니다."), basic);
     m_autoPriceRefresh->setChecked(cfg.autoPriceRefresh);
     f->addRow(m_autoPriceRefresh);
+    m_exchangeSearch = new QCheckBox(QStringLiteral("화폐·조각처럼 일괄 교환되는 아이템은 교환 매물도 함께 조회합니다."), basic);
+    m_exchangeSearch->setToolTip(QStringLiteral("시세 목록의 '구분' 열에 일반/교환으로 표시합니다. 끄면 일반 검색만 합니다."));
+    m_exchangeSearch->setChecked(cfg.exchangeSearch);
+    f->addRow(m_exchangeSearch);
     m_popupPos = new QComboBox(basic);
     m_popupPos->addItem(QStringLiteral("화면 가운데"), QStringLiteral("center"));
     m_popupPos->addItem(QStringLiteral("마우스 커서 근처"), QStringLiteral("cursor"));
@@ -357,6 +361,7 @@ Config SettingsDialog::result() const
     c.collapseListings = m_collapse->isChecked();
     c.autoPriceCheck = m_autoPrice->isChecked();
     c.autoPriceRefresh = m_autoPriceRefresh->isChecked();
+    c.exchangeSearch = m_exchangeSearch->isChecked();
     c.popupPosition = m_popupPos->currentData().toString();
     c.closeOnOutsideClick = m_outsideClose->isChecked();
     c.clipboardWatch = m_clipWatch->isChecked();

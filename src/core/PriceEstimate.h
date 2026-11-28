@@ -19,6 +19,12 @@ struct Rates {
     QDateTime at;
 
     static QString baseFor(Game g) { return g == Game::Poe1 ? QStringLiteral("chaos") : QStringLiteral("exalted"); }
+    // 일괄 교환 시세에서 낼 화폐: 기준 화폐, 아이템이 기준 화폐 자신이면 신성
+    static QString exchangePayFor(Game g, const QString& item)
+    {
+        const QString b = baseFor(g);
+        return item == b ? QStringLiteral("divine") : b;
+    }
     bool valid() const { return !base.isEmpty(); }
     bool fresh(int maxAgeSec = 1800) const { return valid() && at.isValid() && at.secsTo(QDateTime::currentDateTimeUtc()) < maxAgeSec; }
     bool convert(double amount, const QString& currency, double* out) const;

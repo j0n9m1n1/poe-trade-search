@@ -168,6 +168,7 @@ bool Config::load(const QString& path, QString* error)
     dataMaxAgeDays = i("data_max_age_days", d.dataMaxAgeDays);
     autoPriceCheck = b("auto_price_check", d.autoPriceCheck);
     autoPriceRefresh = b("auto_price_refresh", d.autoPriceRefresh);
+    exchangeSearch = b("exchange_search", d.exchangeSearch);
     popupPosition = s("popup_position", b("popup_near_cursor", true) ? QStringLiteral("cursor") : QStringLiteral("last"));
     if (popupPosition != QStringLiteral("cursor") && popupPosition != QStringLiteral("last"))
         popupPosition = QStringLiteral("center");
@@ -213,6 +214,7 @@ bool Config::save(const QString& path, QString* error) const
     o.insert(QStringLiteral("search_auto_delay"), searchAutoDelay);
     o.insert(QStringLiteral("auto_price_check"), autoPriceCheck);
     o.insert(QStringLiteral("auto_price_refresh"), autoPriceRefresh);
+    o.insert(QStringLiteral("exchange_search"), exchangeSearch);
     o.insert(QStringLiteral("popup_position"), popupPosition);
     o.insert(QStringLiteral("close_on_outside_click"), closeOnOutsideClick);
     o.insert(QStringLiteral("clipboard_watch"), clipboardWatch);

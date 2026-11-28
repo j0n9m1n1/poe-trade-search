@@ -324,18 +324,6 @@ void MainPopup::buildUi()
     scroll->viewport()->installEventFilter(this);
     p1->addWidget(scroll, 1);
 
-    // 일괄 교환
-    m_exchangeBox = new QWidget(page1);
-    auto* ex = new QHBoxLayout(m_exchangeBox);
-    ex->setContentsMargins(0, 0, 0, 0);
-    m_want1 = new QComboBox(m_exchangeBox);
-    m_want2 = new QComboBox(m_exchangeBox);
-    m_want1->setToolTip(QStringLiteral("이 화폐로 파는 일괄 교환 매물을 봅니다. '일반 검색'을 고르면 아이템으로 검색합니다"));
-    m_want2->setToolTip(QStringLiteral("같은 종류의 다른 아이템으로 파는 일괄 교환 매물을 봅니다"));
-    ex->addWidget(m_want1, 1);
-    ex->addWidget(m_want2, 1);
-    p1->addWidget(m_exchangeBox);
-
     p1->addWidget(hline(page1));
 
     // ---- 아이템 속성 줄 (PoE Overlay 처럼 옵션 목록 위에 한 줄씩, 옵션 줄과 같은 최소/최대 열)
@@ -610,18 +598,6 @@ void MainPopup::buildUi()
         applyPresetAndRender();
         markStale();
     });
-    auto exch = [this](QComboBox* other) {
-        return [this, other](int idx) {
-            if (idx > 0) {
-                QSignalBlocker b(other);
-                other->setCurrentIndex(0);
-            }
-            markStale();
-        };
-    };
-    connect(m_want1, qOverload<int>(&QComboBox::currentIndexChanged), this, exch(m_want2));
-    connect(m_want2, qOverload<int>(&QComboBox::currentIndexChanged), this, exch(m_want1));
-
     for (QWidget* w : findChildren<QWidget*>()) {
         if (qobject_cast<QLineEdit*>(w) || qobject_cast<QComboBox*>(w))
             installActivator(w);
@@ -774,7 +750,6 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     m_hasItem = true;
     m_cfgRange = cfg.searchStatRange;
     const ParsedItem& it = m_parsed;
-    const TradeDb* db = gdb ? &(*gdb)[it.lang] : nullptr;
 
     // 이름 (고유: 이름 체크 + 베이스 체크 / 희귀: 이름 표시 + 베이스 체크 / 그 외: 베이스 체크)
     {
@@ -862,39 +837,6 @@ void MainPopup::showItemImpl(const ParsedItem& parsed, const GameDb* gdb, Lang s
     // 젬/화폐/카드 설명 문단은 안 보여 줌 (게임에서 보면 됨)
     m_detail->clear();
     m_detail->setVisible(false);
-
-    // 일괄 교환: 교환 가능한 템이면 기본으로 기준 화폐 교환 시세 (R6)
-    const bool exchange = !it.exchangeId.isEmpty() && db;
-    m_exchangeBox->setVisible(exchange);
-    {
-        QSignalBlocker b1(m_want1), b2(m_want2);
-        m_want1->clear();
-        m_want2->clear();
-        if (exchange) {
-            const StaticEntry* self = db->staticById(it.exchangeId);
-            m_want1->addItem(QStringLiteral("일반 검색 (교환 안 함)"), QString());
-            m_want2->addItem(QStringLiteral("같은 종류와 교환"), QString());
-            for (const StaticEntry& s : db->statics()) {
-                if (s.id == it.exchangeId)
-                    continue;
-                if (s.group == QStringLiteral("Currency"))
-                    m_want1->addItem(s.text, s.id);
-                else if (self && s.group == self->group)
-                    m_want2->addItem(s.text, s.id);
-            }
-            m_want2->setVisible(m_want2->count() > 1);
-            // 쌓이는 화폐만 기본으로 교환 시세. 초대장처럼 안 쌓이는 템은 교환 매물이 거의 없어 일반 검색이 기본
-            // (예: 절규하는 초대 교환 13건 vs 즉시 구입 2467건). 쌓이는 화폐는 즉시 구입 일반 검색 매물이 0건이라 교환 유지
-            if (it.stackSize > 0) {
-                QString def = Rates::baseFor(it.game);
-                if (it.exchangeId == def)
-                    def = QStringLiteral("divine");
-                const int di = m_want1->findData(def);
-                if (di > 0)
-                    m_want1->setCurrentIndex(di);
-            }
-        }
-    }
 
     // 시세 영역
     m_prices->clear();
@@ -1337,17 +1279,6 @@ QString MainPopup::indexed() const
     return m_indexed->currentData().toString();
 }
 
-QString MainPopup::exchangeWant() const
-{
-    if (m_exchangeBox->isHidden())
-        return {};
-    if (m_want1->currentIndex() > 0)
-        return m_want1->currentData().toString();
-    if (m_want2->currentIndex() > 0)
-        return m_want2->currentData().toString();
-    return {};
-}
-
 void MainPopup::setIcon(const QString& imagePath)
 {
     QPixmap px(imagePath);
@@ -1712,10 +1643,12 @@ void MainPopup::priceDone(const QString& summary, const QString& count, const QS
     m_prices->scrollToTop();
 }
 
-void MainPopup::pricePageStatus(bool hasMore, int loaded, int total, const QString& status)
+void MainPopup::pricePageStatus(bool hasMore, int loaded, int total, const QString& status, int exchangeCount)
 {
     m_priceMoreAvailable = hasMore;
-    const QString count = QStringLiteral("%1/%2 검색").arg(loaded).arg(total);
+    QString count = QStringLiteral("%1/%2 검색").arg(loaded).arg(total);
+    if (exchangeCount >= 0)
+        count += QStringLiteral(" · 교환 %1건").arg(exchangeCount);
     m_priceCount->setText(status.isEmpty() ? count : count + QStringLiteral(" · ") + status);
     m_priceCount->setToolTip(hasMore ? QStringLiteral("목록 맨 아래에서 더 불러오기") : QString());
     if (m_prices->rowCount() > 0)

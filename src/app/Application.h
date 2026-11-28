@@ -143,6 +143,7 @@ private:
         TradeClient::SearchResult search;
         int next = 0;
         int loaded = 0;
+        int exchangeCount = -1; // 함께 조회한 교환 매물 수 (-1: 없음)
         bool loading = false;
     };
     std::optional<ListingPages> m_listingPages;

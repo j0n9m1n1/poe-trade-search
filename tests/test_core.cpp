@@ -146,13 +146,26 @@ private slots:
         Config config;
         QVERIFY(config.load(path));
         QVERIFY(config.autoPriceRefresh);
+        QVERIFY(config.exchangeSearch);
         QVERIFY(!config.migrated);
 
         config.autoPriceRefresh = false;
+        config.exchangeSearch = false;
         QVERIFY(config.save(path));
         Config reloaded;
         QVERIFY(reloaded.load(path));
         QVERIFY(!reloaded.autoPriceRefresh);
+        QVERIFY(!reloaded.exchangeSearch);
+    }
+
+    // 일괄 교환 시세에서 낼 화폐: 기준 화폐, 기준 화폐 자신이면 신성
+    void exchangePayCurrency()
+    {
+        QCOMPARE(Rates::exchangePayFor(Game::Poe1, QStringLiteral("alch")), QStringLiteral("chaos"));
+        QCOMPARE(Rates::exchangePayFor(Game::Poe1, QStringLiteral("screaming-invitation")), QStringLiteral("chaos"));
+        QCOMPARE(Rates::exchangePayFor(Game::Poe1, QStringLiteral("chaos")), QStringLiteral("divine"));
+        QCOMPARE(Rates::exchangePayFor(Game::Poe2, QStringLiteral("chaos")), QStringLiteral("exalted"));
+        QCOMPARE(Rates::exchangePayFor(Game::Poe2, QStringLiteral("exalted")), QStringLiteral("divine"));
     }
 
     void normalize()

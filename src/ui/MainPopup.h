@@ -60,8 +60,6 @@ public:
     QString indexed() const;       // 등록 기간 ("" = 언제든)
 
     // 일괄 교환: 선택된 받을 화폐 static id (없으면 빈 문자열)
-    QString exchangeWant() const;
-    QString exchangeHave() const { return m_parsed.exchangeId; }
 
     void setIcon(const QString& imagePath);
 
@@ -73,7 +71,7 @@ public:
                      double priceAmount = 0, const QString& priceCurrency = QString());
     void priceDone(const QString& summary, const QString& count, const QString& tooltip = QString(),
                    double noteAmount = 0, const QString& noteCurrency = QString());
-    void pricePageStatus(bool hasMore, int loaded, int total, const QString& status = {});
+    void pricePageStatus(bool hasMore, int loaded, int total, const QString& status = {}, int exchangeCount = -1);
     void priceIdle(const QString& msg);
     void showCopyFeedback(const QString& note);
     void clearPrices() { priceBusy(m_idleText); }
@@ -194,9 +192,6 @@ private:
     QVector<FilterRow*> m_rows;
     QLabel* m_detail;
 
-    QWidget* m_exchangeBox;
-    QComboBox* m_want1;
-    QComboBox* m_want2;
 
     QWidget* m_miscBox;
     QLineEdit* m_lvMin;
